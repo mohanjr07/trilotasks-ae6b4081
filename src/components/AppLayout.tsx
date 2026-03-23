@@ -1,23 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Shield, Settings, User, Bell, LogOut, Menu, X, Search,
+  Settings, User, Bell, LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
+import NotificationBell from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 
-type NavItem = { label: string; path: string; icon: typeof LayoutDashboard; badge?: number; roles?: string[] };
+type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
 
 const adminNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
-  { label: "Team", path: "/team", icon: Users },
+  { label: "Users", path: "/users", icon: Users },
   { label: "Leave", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
-  { label: "Users", path: "/user-management", icon: Shield, roles: ["super_admin"] },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -33,9 +33,8 @@ export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
+  const isAdmin = profile?.role === "admin";
   const nav = isAdmin ? adminNav : employeeNav;
-  const filteredNav = nav.filter((item) => !item.roles || item.roles.includes(profile?.role ?? ""));
 
   const handleSignOut = async () => {
     await signOut();
@@ -55,7 +54,7 @@ export default function AppLayout() {
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
-            {filteredNav.map((item) => {
+            {nav.map((item) => {
               const active = location.pathname === item.path;
               return (
                 <li key={item.path}>
@@ -87,7 +86,7 @@ export default function AppLayout() {
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-ink-primary">{profile?.full_name}</p>
-              <p className="truncate text-xs text-ink-muted capitalize">{profile?.role?.replace("_", " ")}</p>
+              <p className="truncate text-xs text-ink-muted capitalize">{profile?.role}</p>
             </div>
             <button onClick={handleSignOut} className="text-ink-muted hover:text-destructive transition-colors" title="Sign out">
               <LogOut className="h-4 w-4" />
@@ -128,7 +127,7 @@ export default function AppLayout() {
             </div>
             <nav className="flex-1 overflow-y-auto px-3 py-4">
               <ul className="space-y-1">
-                {filteredNav.map((item) => {
+                {nav.map((item) => {
                   const active = location.pathname === item.path;
                   return (
                     <li key={item.path}>
@@ -160,12 +159,10 @@ export default function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="font-heading text-lg font-semibold text-ink-primary hidden md:block">
-            {filteredNav.find((n) => n.path === location.pathname)?.label ?? ""}
+            {nav.find((n) => n.path === location.pathname)?.label ?? ""}
           </h1>
           <div className="flex-1" />
-          <Link to="/notifications" className="relative text-ink-secondary hover:text-ink-primary transition-colors">
-            <Bell className="h-5 w-5" />
-          </Link>
+          <NotificationBell />
           <Link to="/profile">
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
           </Link>
@@ -178,7 +175,7 @@ export default function AppLayout() {
 
       {/* Mobile bottom tab bar */}
       <div className="fixed bottom-0 left-0 right-0 flex md:hidden border-t border-border bg-card z-30">
-        {filteredNav.slice(0, 5).map((item) => {
+        {nav.slice(0, 5).map((item) => {
           const active = location.pathname === item.path;
           return (
             <Link

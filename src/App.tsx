@@ -11,9 +11,11 @@ import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import AdminDashboard from "@/pages/AdminDashboard";
 import EmployeeDashboard from "@/pages/EmployeeDashboard";
 import TasksPage from "@/pages/TasksPage";
-import TeamPage from "@/pages/TeamPage";
+import UsersPage from "@/pages/UsersPage";
 import AdminLeavePage from "@/pages/AdminLeavePage";
 import EmployeeLeavePage from "@/pages/EmployeeLeavePage";
+import ReportsPage from "@/pages/ReportsPage";
+import SettingsPage from "@/pages/SettingsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import NotFound from "@/pages/NotFound";
@@ -40,10 +42,13 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
 
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><TasksPage /></ProtectedRoute>} />
-              <Route path="/team" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><TeamPage /></ProtectedRoute>} />
-              <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><AdminLeavePage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
+              <Route path="/team" element={<ProtectedRoute allowedRoles={["admin"]}><Navigate to="/users" replace /></ProtectedRoute>} />
+              <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin"]}><AdminLeavePage /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin"]}><ReportsPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeLeavePage /></ProtectedRoute>} />

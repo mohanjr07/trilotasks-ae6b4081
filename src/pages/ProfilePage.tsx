@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -10,11 +10,9 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function ProfilePage() {
-  const { profile, user } = useAuth();
-  const queryClient = useQueryClient();
+  const { profile, user, refreshProfile } = useAuth();
   const [fullName, setFullName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
 
@@ -22,16 +20,17 @@ export default function ProfilePage() {
     mutationFn: async () => {
       await supabase.from("profiles").update({ full_name: fullName, phone }).eq("id", user!.id);
     },
-    onSuccess: () => { toast.success("Profile updated"); },
+    onSuccess: () => { toast.success("Profile updated"); refreshProfile(); },
   });
 
   const changePw = useMutation({
     mutationFn: async () => {
       if (newPw !== confirmPw) throw new Error("Passwords don't match");
+      if (newPw.length < 8) throw new Error("Password must be at least 8 characters");
       const { error } = await supabase.auth.updateUser({ password: newPw });
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Password updated"); setCurrentPw(""); setNewPw(""); setConfirmPw(""); },
+    onSuccess: () => { toast.success("Password updated"); setNewPw(""); setConfirmPw(""); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -44,7 +43,7 @@ export default function ProfilePage() {
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="xl" />
             <div>
               <h1 className="font-heading text-2xl font-bold text-ink-primary">{profile?.full_name}</h1>
-              <p className="text-sm text-ink-muted capitalize">{profile?.role?.replace("_", " ")} {profile?.department ? `· ${profile.department}` : ""}</p>
+              <p className="text-sm text-ink-muted capitalize">{profile?.role} {profile?.department ? `· ${profile.department}` : ""}</p>
             </div>
           </div>
 
@@ -81,7 +80,7 @@ export default function ProfilePage() {
           className="rounded-card bg-card p-6 shadow-card">
           <h3 className="font-heading text-lg font-semibold text-ink-primary mb-4">Change Password</h3>
           <div className="space-y-3">
-            <Input type="password" placeholder="New password" value={newPw} onChange={(e) => setNewPw(e.target.value)} className="h-10" />
+            <Input type="password" placeholder="New password (min 8 chars)" value={newPw} onChange={(e) => setNewPw(e.target.value)} className="h-10" />
             <Input type="password" placeholder="Confirm new password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} className="h-10" />
             <Button onClick={() => changePw.mutate()} disabled={changePw.isPending || !newPw}>
               {changePw.isPending ? "Updating..." : "Update Password"}
