@@ -1,17 +1,23 @@
 import { motion } from "framer-motion";
-import { CheckSquare, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckSquare, Clock, CheckCircle2, AlertTriangle, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
+import { format, subDays } from "date-fns";
 import AnimatedPage, { staggerContainer } from "@/components/AnimatedPage";
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import PriorityBadge from "@/components/PriorityBadge";
 import UserAvatar from "@/components/UserAvatar";
+import EmptyState from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 const COLORS = ["hsl(224,72%,53%)", "hsl(142,72%,39%)", "hsl(32,95%,44%)", "hsl(0,72%,51%)"];
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
+
   const { data: tasks = [] } = useQuery({
     queryKey: ["admin-tasks"],
     queryFn: async () => {
@@ -32,11 +38,28 @@ export default function AdminDashboard() {
     { name: "Completed", value: completed },
   ].filter(d => d.value > 0);
 
-  // Fake trend data for demo
-  const trendData = Array.from({ length: 7 }, (_, i) => ({
-    day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i],
-    completed: Math.floor(Math.random() * 5) + 1,
-  }));
+  // Build real trend data from tasks
+  const trendData = Array.from({ length: 7 }, (_, i) => {
+    const date = subDays(new Date(), 6 - i);
+    const dayStr = format(date, "yyyy-MM-dd");
+    const count = tasks.filter((t: any) => t.status === "completed" && t.updated_at && format(new Date(t.updated_at), "yyyy-MM-dd") === dayStr).length;
+    return { day: format(date, "EEE"), completed: count };
+  });
+
+  if (total === 0) {
+    return (
+      <AnimatedPage>
+        <h1 className="font-heading text-[28px] font-bold text-ink-primary mb-6">Dashboard</h1>
+        <EmptyState
+          icon={CheckSquare}
+          title="Welcome to TaskFlow!"
+          description="Get started by creating your first task or adding team members."
+          actionLabel="Create your first task"
+          onAction={() => navigate("/tasks")}
+        />
+      </AnimatedPage>
+    );
+  }
 
   return (
     <AnimatedPage>
@@ -70,22 +93,28 @@ export default function AdminDashboard() {
 
         <div className="lg:col-span-2 rounded-card bg-card p-5 shadow-card">
           <h3 className="text-sm font-semibold text-ink-primary mb-4">By Status</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={statusData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value">
-                {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap gap-3 justify-center mt-2">
-            {statusData.map((d, i) => (
-              <div key={d.name} className="flex items-center gap-1.5 text-xs text-ink-secondary">
-                <span className="h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                {d.name}: {d.value}
+          {statusData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value">
+                    {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-3 justify-center mt-2">
+                {statusData.map((d, i) => (
+                  <div key={d.name} className="flex items-center gap-1.5 text-xs text-ink-secondary">
+                    <span className="h-2 w-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                    {d.name}: {d.value}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <p className="text-center text-sm text-ink-muted py-8">No data yet</p>
+          )}
         </div>
       </div>
 

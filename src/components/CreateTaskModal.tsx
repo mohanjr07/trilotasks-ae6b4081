@@ -12,6 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
+import { format } from "date-fns";
+
+const today = () => format(new Date(), "yyyy-MM-dd");
 
 const schema = z.object({
   title: z.string().min(1, "Title is required").max(200),
@@ -19,12 +22,21 @@ const schema = z.object({
   assigned_to: z.string().min(1, "Assignee is required"),
   priority: z.enum(["low", "medium", "high"]),
   status: z.enum(["todo", "in_progress", "on_hold", "completed"]),
-  deadline: z.string().min(1, "Deadline is required"),
+  deadline: z.string().min(1, "Deadline is required").refine(
+    (d) => d >= today(),
+    "Deadline must be today or a future date"
+  ),
   category: z.string().max(50).optional(),
 });
 type FormData = z.infer<typeof schema>;
 
-export default function CreateTaskModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  preselectedAssignee?: string;
+};
+
+export default function CreateTaskModal({ open, onClose, preselectedAssignee }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -39,7 +51,7 @@ export default function CreateTaskModal({ open, onClose }: { open: boolean; onCl
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { priority: "medium", status: "todo" },
+    defaultValues: { priority: "medium", status: "todo", assigned_to: preselectedAssignee ?? "" },
   });
 
   const createTask = useMutation({
@@ -102,7 +114,7 @@ export default function CreateTaskModal({ open, onClose }: { open: boolean; onCl
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To *</label>
                 <Select onValueChange={(v) => setValue("assigned_to", v)} value={watch("assigned_to")}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select employee" /></SelectTrigger>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select member" /></SelectTrigger>
                   <SelectContent>
                     {employees.map((emp: any) => (
                       <SelectItem key={emp.id} value={emp.id}>
@@ -143,7 +155,7 @@ export default function CreateTaskModal({ open, onClose }: { open: boolean; onCl
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline *</label>
-                  <Input {...register("deadline")} type="date" className="h-10" />
+                  <Input {...register("deadline")} type="date" min={today()} className="h-10" />
                   {errors.deadline && <p className="mt-1 text-xs text-destructive">{errors.deadline.message}</p>}
                 </div>
               </div>

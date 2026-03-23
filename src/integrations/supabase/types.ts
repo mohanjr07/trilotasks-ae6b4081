@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      leave_policy: {
+        Row: {
+          allowed_days: number | null
+          id: string
+          is_enabled: boolean | null
+          leave_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          allowed_days?: number | null
+          id?: string
+          is_enabled?: boolean | null
+          leave_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          allowed_days?: number | null
+          id?: string
+          is_enabled?: boolean | null
+          leave_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           admin_note: string | null
@@ -74,6 +98,38 @@ export type Database = {
           {
             foreignKeyName: "leave_requests_reviewed_by_fkey"
             columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          id: string
+          is_enabled: boolean | null
+          pref_key: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_enabled?: boolean | null
+          pref_key: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_enabled?: boolean | null
+          pref_key?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
