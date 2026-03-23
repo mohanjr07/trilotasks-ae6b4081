@@ -44,12 +44,16 @@ export default function CreateTaskModal({ open, onClose }: { open: boolean; onCl
 
   const createTask = useMutation({
     mutationFn: async (data: FormData) => {
-      const { error } = await supabase.from("tasks").insert({
-        ...data,
+      const { error } = await supabase.from("tasks").insert([{
+        title: data.title,
         description: data.description || null,
+        assigned_to: data.assigned_to,
+        priority: data.priority,
+        status: data.status,
+        deadline: data.deadline,
         category: data.category || null,
         assigned_by: user!.id,
-      });
+      }]);
       if (error) throw error;
     },
     onSuccess: () => {
