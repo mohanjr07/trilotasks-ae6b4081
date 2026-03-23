@@ -1,24 +1,59 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import Index from "./pages/Index.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import AppLayout from "@/components/AppLayout";
+import LoginPage from "@/pages/LoginPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import AdminDashboard from "@/pages/AdminDashboard";
+import EmployeeDashboard from "@/pages/EmployeeDashboard";
+import TasksPage from "@/pages/TasksPage";
+import TeamPage from "@/pages/TeamPage";
+import AdminLeavePage from "@/pages/AdminLeavePage";
+import EmployeeLeavePage from "@/pages/EmployeeLeavePage";
+import NotificationsPage from "@/pages/NotificationsPage";
+import ProfilePage from "@/pages/ProfilePage";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function RootRedirect() {
+  const { profile, loading } = useAuth();
+  if (loading) return null;
+  if (!profile) return <Navigate to="/login" replace />;
+  return profile.role === "employee" ? <Navigate to="/my-dashboard" replace /> : <Navigate to="/dashboard" replace />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
+      <Sonner position="bottom-right" />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/" element={<RootRedirect />} />
+
+            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/team" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><TeamPage /></ProtectedRoute>} />
+              <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin","super_admin"]}><AdminLeavePage /></ProtectedRoute>} />
+              <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
+              <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeLeavePage /></ProtectedRoute>} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
