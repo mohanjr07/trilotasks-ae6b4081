@@ -19,6 +19,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import CalendarPage from "@/pages/CalendarPage";
+import TeamsPage from "@/pages/TeamsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
