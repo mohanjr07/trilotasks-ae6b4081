@@ -58,19 +58,24 @@ export default function TeamsPage() {
   const { data: participants = [] } = useQuery({
     queryKey: ["meeting-participants", selectedMeeting],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("team_meeting_participants")
-        .select("*, profiles:profiles!team_meeting_participants_user_id_fkey(full_name, email)")
+        .select("*")
         .eq("meeting_id", selectedMeeting!);
-      if (error) {
-        // Fallback without join if FK doesn't exist
-        const { data: d2 } = await supabase
-          .from("team_meeting_participants")
-          .select("*")
-          .eq("meeting_id", selectedMeeting!);
-        return (d2 ?? []) as Participant[];
-      }
-      return (data ?? []) as Participant[];
+      
+      // Fetch profile info for each participant
+      const parts = data ?? [];
+      if (!parts.length) return [] as Participant[];
+      const userIds = parts.map((p: any) => p.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+      const profileMap = Object.fromEntries((profiles ?? []).map((p: any) => [p.id, p]));
+      return parts.map((p: any) => ({
+        ...p,
+        profiles: profileMap[p.user_id] ?? null,
+      })) as Participant[];
     },
     enabled: !!selectedMeeting,
   });
