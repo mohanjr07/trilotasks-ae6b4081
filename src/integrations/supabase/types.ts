@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      holidays: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          date: string
+          description: string | null
+          id: string
+          is_recurring: boolean | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          date: string
+          description?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          title: string
+          type?: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          date?: string
+          description?: string | null
+          id?: string
+          is_recurring?: boolean | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       leave_policy: {
         Row: {
           allowed_days: number | null
