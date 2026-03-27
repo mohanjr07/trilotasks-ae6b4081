@@ -26,6 +26,7 @@ const adminNav: NavItem[] = [
 const employeeNav: NavItem[] = [
   { label: "Dashboard", path: "/my-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
+  { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
   { label: "Profile", path: "/profile", icon: User },
