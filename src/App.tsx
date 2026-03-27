@@ -55,6 +55,7 @@ const App = () => (
               <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/profile" element={<ProfilePage />} />
