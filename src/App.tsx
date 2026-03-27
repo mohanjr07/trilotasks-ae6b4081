@@ -49,6 +49,7 @@ const App = () => (
               <Route path="/team" element={<ProtectedRoute allowedRoles={["admin"]}><Navigate to="/users" replace /></ProtectedRoute>} />
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin"]}><AdminLeavePage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin"]}><ReportsPage /></ProtectedRoute>} />
+              <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee"]}><TasksPage /></ProtectedRoute>} />
