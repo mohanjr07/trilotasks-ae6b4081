@@ -21,6 +21,18 @@ export default function AdminLeavePage() {
   const [search, setSearch] = useState("");
   const [reviewReq, setReviewReq] = useState<any>(null);
 
+  const clearRequest = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leave_requests").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
+      toast.success("Request cleared");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: requests = [] } = useQuery({
     queryKey: ["admin-leave"],
     queryFn: async () => {
