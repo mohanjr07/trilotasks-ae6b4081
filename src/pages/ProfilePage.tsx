@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import AnimatedPage from "@/components/AnimatedPage";
-import UserAvatar from "@/components/UserAvatar";
+import AvatarUpload from "@/components/AvatarUpload";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";

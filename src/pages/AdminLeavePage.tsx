@@ -103,6 +103,12 @@ export default function AdminLeavePage() {
                   onClick={() => setReviewReq({ ...req, action: "rejected" })}>✗</Button>
               </div>
             )}
+            {req.status !== "pending" && (
+              <Button size="sm" variant="ghost" className="text-ink-muted hover:text-destructive"
+                onClick={(e) => { e.stopPropagation(); clearRequest.mutate(req.id); }}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </motion.div>
         ))}
         {filtered.length === 0 && <div className="py-16 text-center text-sm text-ink-muted">No requests found</div>}
