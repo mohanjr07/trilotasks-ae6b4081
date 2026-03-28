@@ -118,9 +118,7 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                  <CheckSquare className="h-4 w-4 text-primary-foreground" />
-                </div>
+                <img src="/logo.png" alt="TaskFlow" className="h-8 w-8" />
                 <span className="font-heading text-lg font-bold text-ink-primary">TaskFlow</span>
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
