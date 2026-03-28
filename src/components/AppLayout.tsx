@@ -117,8 +117,7 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="TaskFlow" className="h-8 w-8" />
-                <span className="font-heading text-lg font-bold text-ink-primary">TaskFlow</span>
+                <img src="/logo.png" alt="Trilo Automation" className="h-10 object-contain" />
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
                 <X className="h-5 w-5" />
