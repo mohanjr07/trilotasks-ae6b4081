@@ -47,9 +47,7 @@ export default function LoginPage() {
         className="w-full max-w-[420px] rounded-modal bg-card p-8 shadow-modal"
       >
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <CheckSquare className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="TaskFlow" className="mx-auto mb-4 h-12 w-12" />
           <h1 className="font-heading text-2xl font-bold text-ink-primary">TaskFlow</h1>
           <p className="mt-1 text-sm text-ink-muted">Organize work. Track everything.</p>
         </div>
