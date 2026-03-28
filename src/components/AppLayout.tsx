@@ -50,9 +50,7 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card z-30">
         <div className="flex h-[60px] items-center gap-2 px-5 border-b border-border">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <CheckSquare className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src="/logo.png" alt="TaskFlow" className="h-8 w-8" />
           <span className="font-heading text-lg font-bold text-ink-primary">TaskFlow</span>
         </div>
 
@@ -120,9 +118,7 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                  <CheckSquare className="h-4 w-4 text-primary-foreground" />
-                </div>
+                <img src="/logo.png" alt="TaskFlow" className="h-8 w-8" />
                 <span className="font-heading text-lg font-bold text-ink-primary">TaskFlow</span>
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
