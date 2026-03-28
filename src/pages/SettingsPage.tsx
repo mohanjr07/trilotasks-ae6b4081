@@ -96,7 +96,7 @@ function ProfileSettings() {
     <div className="space-y-6">
       <div className="rounded-card bg-card p-6 shadow-card">
         <div className="flex items-center gap-4 mb-6">
-          <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="xl" />
+          <AvatarUpload size="xl" />
           <div>
             <h3 className="font-heading text-lg font-semibold text-ink-primary">{profile?.full_name}</h3>
             <p className="text-xs text-ink-muted capitalize">{profile?.role}</p>
