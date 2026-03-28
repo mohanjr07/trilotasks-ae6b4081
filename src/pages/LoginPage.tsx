@@ -47,9 +47,7 @@ export default function LoginPage() {
         className="w-full max-w-[420px] rounded-modal bg-card p-8 shadow-modal"
       >
         <div className="mb-8 text-center">
-          <img src="/logo.png" alt="TaskFlow" className="mx-auto mb-4 h-12 w-12" />
-          <h1 className="font-heading text-2xl font-bold text-ink-primary">TaskFlow</h1>
-          <p className="mt-1 text-sm text-ink-muted">Organize work. Track everything.</p>
+          <img src="/logo.png" alt="Trilo Automation" className="mx-auto mb-4 h-20 object-contain" />
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
