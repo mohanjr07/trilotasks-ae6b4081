@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import AnimatedPage from "@/components/AnimatedPage";
-import UserAvatar from "@/components/UserAvatar";
+import AvatarUpload from "@/components/AvatarUpload";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ export default function ProfilePage() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-card bg-card p-6 shadow-card mb-6">
           <div className="flex items-center gap-4 mb-6">
-            <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="xl" />
+            <AvatarUpload size="xl" />
             <div>
               <h1 className="font-heading text-2xl font-bold text-ink-primary">{profile?.full_name}</h1>
               <p className="text-sm text-ink-muted capitalize">{profile?.role} {profile?.department ? `· ${profile.department}` : ""}</p>
