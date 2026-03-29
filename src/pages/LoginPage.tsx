@@ -29,13 +29,15 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     const { error } = await signIn(data.email, data.password);
-    setLoading(false);
     if (error) {
+      setLoading(false);
       toast.error("Invalid email or password");
       return;
     }
-    // Role-based redirect happens in App.tsx
-    navigate("/");
+    // Wait briefly for auth state to propagate before navigating
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    navigate("/", { replace: true });
+    setLoading(false);
   };
 
   return (
