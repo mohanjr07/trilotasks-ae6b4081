@@ -112,39 +112,71 @@ export default function EmployeeLeavePage() {
 function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [type, setType] = useState<"leave" | "permission">("leave");
-  const [category, setCategory] = useState("annual");
+  const [category, setCategory] = useState("casual_leave");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
   const [reason, setReason] = useState("");
+
+  // Check how many casual leave days were approved this month
+  const { data: approvedCasualDays = 0 } = useQuery({
+    queryKey: ["casual-leave-usage", user?.id],
+    queryFn: async () => {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("leave_requests")
+        .select("start_date, end_date")
+        .eq("employee_id", user!.id)
+        .eq("type", "leave")
+        .eq("leave_category", "casual_leave")
+        .eq("status", "approved")
+        .gte("start_date", monthStart)
+        .lte("start_date", monthEnd);
+      if (!data) return 0;
+      let total = 0;
+      data.forEach((r: any) => {
+        const s = new Date(r.start_date);
+        const e = r.end_date ? new Date(r.end_date) : s;
+        total += Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+      });
+      return total;
+    },
+    enabled: !!user,
+  });
+
+  const casualDisabled = approvedCasualDays >= 2;
+
+  // Auto-switch away from casual if disabled
+  const effectiveCategory = casualDisabled && category === "casual_leave" ? "on_duty" : category;
 
   const submit = useMutation({
     mutationFn: async () => {
       const payload: any = {
         employee_id: user!.id,
-        type,
+        type: "leave",
         reason,
         start_date: startDate,
+        end_date: endDate || startDate,
+        leave_category: effectiveCategory,
       };
-      if (type === "leave") {
-        payload.leave_category = category;
-        payload.end_date = endDate;
-      } else {
-        payload.start_time = startTime;
-        payload.end_time = endTime;
-      }
       const { error } = await supabase.from("leave_requests").insert([payload]);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-leave"] });
+      queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
       toast.success("Request submitted successfully");
       onClose();
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const categories = [
+    { value: "casual_leave", label: "Casual Leave", disabled: casualDisabled, hint: casualDisabled ? `Limit reached (${approvedCasualDays}/2 days this month)` : `${2 - approvedCasualDays} day(s) remaining this month` },
+    { value: "on_duty", label: "On Duty", disabled: false },
+    { value: "unauthorised_leave", label: "Unauthorised Leave", disabled: false },
+  ];
 
   return (
     <AnimatePresence>
@@ -157,57 +189,39 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
             className="relative w-full md:max-w-[500px] rounded-t-modal md:rounded-modal bg-card p-6 shadow-modal"
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-heading text-xl font-bold text-ink-primary">New Request</h2>
+              <h2 className="font-heading text-xl font-bold text-ink-primary">New Leave Request</h2>
               <button onClick={onClose} className="text-ink-muted"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {(["leave", "permission"] as const).map((t) => (
-                <button key={t} onClick={() => setType(t)}
-                  className={`rounded-lg border p-4 text-center text-sm font-medium transition-all ${type === t ? "border-primary bg-accent-light text-primary" : "border-border text-ink-secondary"}`}>
-                  {t === "leave" ? "🏖 Leave" : "⏰ Permission"}
-                </button>
-              ))}
-            </div>
-
             <div className="space-y-4">
-              {type === "leave" && (
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Category</label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["annual", "sick", "emergency", "unpaid", "other"].map((c) => (
-                        <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className={type === "leave" ? "grid grid-cols-2 gap-3" : ""}>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">{type === "leave" ? "Start Date" : "Date"}</label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
-                </div>
-                {type === "leave" && (
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
-                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
-                  </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Leave Type</label>
+                <Select value={effectiveCategory} onValueChange={setCategory}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.value} value={c.value} disabled={c.disabled}>
+                        {c.label}{c.disabled ? " (Limit reached)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {categories.find(c => c.value === effectiveCategory)?.hint && (
+                  <p className="mt-1 text-xs text-ink-muted">{categories.find(c => c.value === effectiveCategory)?.hint}</p>
                 )}
               </div>
-              {type === "permission" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Time</label>
-                    <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-10" />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Time</label>
-                    <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-10" />
-                  </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Date</label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
                 </div>
-              )}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
+                </div>
+              </div>
+
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Reason</label>
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Explain your reason..." />
