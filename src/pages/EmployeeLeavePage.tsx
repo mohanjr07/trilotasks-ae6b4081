@@ -83,8 +83,9 @@ export default function EmployeeLeavePage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="flex gap-2 mb-1">
-                  <span className="text-xs font-medium bg-accent-light text-primary px-2 py-0.5 rounded-pill capitalize">{req.type}</span>
-                  {req.leave_category && <span className="text-xs text-ink-muted capitalize">{req.leave_category}</span>}
+                  <span className="text-xs font-medium bg-accent-light text-primary px-2 py-0.5 rounded-pill capitalize">
+                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category ?? req.type}
+                  </span>
                 </div>
                 <p className="text-sm text-ink-primary font-medium">
                   {req.start_date && format(new Date(req.start_date), "MMM d, yyyy")}
