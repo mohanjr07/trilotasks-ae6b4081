@@ -1,0 +1,1 @@
+ALTER TABLE public.leave_requests DROP CONSTRAINT IF EXISTS leave_requests_leave_category_check;
