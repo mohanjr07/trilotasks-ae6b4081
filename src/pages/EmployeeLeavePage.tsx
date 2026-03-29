@@ -145,6 +145,8 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       return total;
     },
     enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const casualDisabled = approvedCasualDays >= 2;
