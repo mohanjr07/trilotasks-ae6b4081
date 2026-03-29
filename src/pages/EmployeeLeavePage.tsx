@@ -33,7 +33,7 @@ export default function EmployeeLeavePage() {
 
   const filtered = requests.filter((r: any) => {
     if (tab === "all") return true;
-    if (tab === "leave" || tab === "permission") return r.type === tab;
+    if (tab === "casual_leave" || tab === "on_duty" || tab === "unauthorised_leave") return r.leave_category === tab;
     return r.status === tab;
   });
 
@@ -42,8 +42,9 @@ export default function EmployeeLeavePage() {
 
   const tabs = [
     { key: "all", label: "All" },
-    { key: "leave", label: "Leave" },
-    { key: "permission", label: "Permission" },
+    { key: "casual_leave", label: "Casual" },
+    { key: "on_duty", label: "On Duty" },
+    { key: "unauthorised_leave", label: "Unauthorised" },
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
   ];
