@@ -99,8 +99,8 @@ export default function AdminLeavePage() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ink-primary">{req.employee?.full_name}</p>
               <p className="text-xs text-ink-muted">
-                <span className="capitalize">{req.type}</span>
-                {req.leave_category && ` · ${req.leave_category}`}
+                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category ?? req.type}
+                {" · "}
                 {" · "}
                 {req.start_date && format(new Date(req.start_date), "MMM d")}
                 {req.end_date && req.end_date !== req.start_date && `–${format(new Date(req.end_date), "MMM d")}`}
