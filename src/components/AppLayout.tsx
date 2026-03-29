@@ -50,7 +50,7 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card z-30">
         <div className="flex h-[60px] items-center gap-2 px-5 border-b border-border">
-          <img src="/logo.png" alt="Trilo Automation" className="h-14 object-contain" />
+          <img src="/logo.png" alt="Trilo Automation" className="h-20 object-contain" />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -117,7 +117,7 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Trilo Automation" className="h-12 object-contain" />
+                <img src="/logo.png" alt="Trilo Automation" className="h-16 object-contain" />
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
                 <X className="h-5 w-5" />
