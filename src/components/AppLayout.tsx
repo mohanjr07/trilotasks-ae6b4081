@@ -50,7 +50,7 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card z-30">
         <div className="flex h-[60px] items-center gap-2 px-5 border-b border-border">
-          <img src="/logo.png" alt="Trilo Automation" className="h-10 object-contain" />
+          <img src="/logo.png" alt="Trilo Automation" className="h-14 object-contain" />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
