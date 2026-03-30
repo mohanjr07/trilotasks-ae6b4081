@@ -60,6 +60,7 @@ export default function UsersPage() {
 
   const totalUsers = profiles.length;
   const adminCount = profiles.filter((p: any) => p.role === "admin").length;
+  const managerCount = profiles.filter((p: any) => p.role === "manager").length;
   const employeeCount = profiles.filter((p: any) => p.role === "employee").length;
   const activeCount = profiles.filter((p: any) => p.is_active).length;
 
@@ -120,6 +121,7 @@ export default function UsersPage() {
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="employee">Employee</SelectItem>
           </SelectContent>
         </Select>
@@ -177,7 +179,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                        p.role === "admin" ? "bg-accent-light text-primary" : "bg-muted text-ink-secondary"
+                        p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
                       }`}>{p.role}</span>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-ink-secondary">{p.department ?? "—"}</td>
@@ -234,7 +236,7 @@ export default function UsersPage() {
                     <p className="text-xs text-ink-muted">{p.department ?? p.email}</p>
                   </div>
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                    p.role === "admin" ? "bg-accent-light text-primary" : "bg-muted text-ink-secondary"
+                    p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
                   }`}>{p.role}</span>
                 </div>
               </motion.div>
@@ -258,7 +260,7 @@ export default function UsersPage() {
 const addUserSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email").max(255),
-  role: z.enum(["admin", "employee"]),
+  role: z.enum(["admin", "manager", "employee"]),
   department: z.string().max(100).optional(),
   position: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
@@ -337,15 +339,15 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Role *</label>
-            <div className="grid grid-cols-2 gap-3">
-              {(["admin", "employee"] as const).map((r) => (
+            <div className="grid grid-cols-3 gap-3">
+              {(["admin", "manager", "employee"] as const).map((r) => (
                 <button key={r} type="button" onClick={() => setValue("role", r)}
                   className={`rounded-lg border p-4 text-left transition-all ${selectedRole === r ? "border-primary bg-accent-light" : "border-border"}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
+                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
                     <span className="text-sm font-semibold capitalize text-ink-primary">{r}</span>
                   </div>
-                  <p className="text-xs text-ink-muted">{r === "admin" ? "Can manage users, tasks & approvals" : "Can view tasks & submit requests"}</p>
+                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : "View tasks & submit requests"}</p>
                 </button>
               ))}
             </div>
@@ -449,6 +451,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
               </SelectContent>
             </Select>
@@ -525,7 +528,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
               <div>
                 <p className="font-heading text-xl font-bold text-ink-primary">{selectedUser.full_name}</p>
                 <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : "bg-muted text-ink-secondary"
+                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : selectedUser.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
                 }`}>{selectedUser.role}</span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className={`h-2 w-2 rounded-full ${selectedUser.is_active ? "bg-success" : "bg-ink-muted"}`} />

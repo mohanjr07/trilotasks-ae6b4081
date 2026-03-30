@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
-  X, MapPin, Trash2,
+  X, Trash2, Search,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth,
@@ -19,16 +19,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import StatusBadge from "@/components/StatusBadge";
 import PriorityBadge from "@/components/PriorityBadge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function CalendarPage() {
   const { profile } = useAuth();
+  const queryClient = useQueryClient();
+  const isAdminOrManager = profile?.role === "admin" || profile?.role === "manager";
   const isAdmin = profile?.role === "admin";
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [goToDate, setGoToDate] = useState("");
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -44,7 +48,7 @@ export default function CalendarPage() {
         .select("id, title, deadline, status, priority, assigned_to, assigned_by, profiles:profiles!tasks_assigned_to_fkey(full_name)")
         .gte("deadline", format(calStart, "yyyy-MM-dd"))
         .lte("deadline", format(calEnd, "yyyy-MM-dd"));
-      if (!isAdmin) q = q.eq("assigned_to", profile!.id);
+      if (!isAdminOrManager) q = q.eq("assigned_to", profile!.id);
       const { data } = await q;
       return data ?? [];
     },
@@ -60,7 +64,7 @@ export default function CalendarPage() {
         .eq("status", "approved")
         .lte("start_date", format(calEnd, "yyyy-MM-dd"))
         .gte("end_date", format(calStart, "yyyy-MM-dd"));
-      if (!isAdmin) q = q.eq("employee_id", profile!.id);
+      if (!isAdminOrManager) q = q.eq("employee_id", profile!.id);
       const { data } = await q;
       return data ?? [];
     },
@@ -80,10 +84,31 @@ export default function CalendarPage() {
     },
   });
 
+  // Delete leave mutation
+  const deleteLeave = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leave_requests").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-leaves"] });
+      toast.success("Leave entry deleted");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // Go to date handler
+  const handleGoToDate = () => {
+    if (!goToDate) return;
+    const d = parseISO(goToDate);
+    setCurrentMonth(startOfMonth(d));
+    setSelectedDate(d);
+    setGoToDate("");
+  };
+
   // Build a map of date → events
   const dateEvents = useMemo(() => {
     const map: Record<string, { tasks: any[]; leaves: any[]; holidays: any[] }> = {};
-    const getKey = (d: string) => d;
     const ensure = (k: string) => {
       if (!map[k]) map[k] = { tasks: [], leaves: [], holidays: [] };
       return map[k];
@@ -112,11 +137,27 @@ export default function CalendarPage() {
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">Calendar</h1>
-        {isAdmin && (
-          <Button onClick={() => setShowHolidayModal(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1.5" /> Add Holiday
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Go to Date */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Search className="h-4 w-4 mr-1.5" /> Go to Date
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="end">
+              <div className="flex items-center gap-2">
+                <Input type="date" value={goToDate} onChange={(e) => setGoToDate(e.target.value)} className="h-9" />
+                <Button size="sm" onClick={handleGoToDate} disabled={!goToDate}>Go</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {isAdminOrManager && (
+            <Button onClick={() => setShowHolidayModal(true)} size="sm">
+              <Plus className="h-4 w-4 mr-1.5" /> Add Holiday
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Month Navigation */}
@@ -141,14 +182,12 @@ export default function CalendarPage() {
 
       {/* Calendar Grid */}
       <div className="rounded-card bg-card shadow-card overflow-hidden">
-        {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-border">
           {DAY_NAMES.map((d) => (
             <div key={d} className="py-2 text-center text-xs font-semibold text-ink-muted">{d}</div>
           ))}
         </div>
 
-        {/* Day cells */}
         <div className="grid grid-cols-7">
           {days.map((day, i) => {
             const key = format(day, "yyyy-MM-dd");
@@ -184,7 +223,7 @@ export default function CalendarPage() {
                     ))}
                     {events.leaves.slice(0, 1).map((l: any, idx: number) => (
                       <div key={idx} className="truncate text-[10px] md:text-xs rounded px-1 py-0.5 bg-success/10 text-success">
-                        {isAdmin ? (l as any).employee?.full_name : l.type}
+                        {isAdminOrManager ? (l as any).employee?.full_name : l.type}
                       </div>
                     ))}
                     {(events.tasks.length + events.leaves.length + events.holidays.length) > 3 && (
@@ -237,7 +276,7 @@ export default function CalendarPage() {
                     <div key={t.id} className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-ink-primary truncate">{t.title}</p>
-                        {isAdmin && t.profiles && <p className="text-xs text-ink-muted">{(t.profiles as any)?.full_name}</p>}
+                        {isAdminOrManager && t.profiles && <p className="text-xs text-ink-muted">{(t.profiles as any)?.full_name}</p>}
                       </div>
                       <StatusBadge status={t.status ?? "todo"} />
                       <PriorityBadge priority={t.priority ?? "medium"} />
@@ -253,14 +292,22 @@ export default function CalendarPage() {
                 <h4 className="text-xs font-semibold text-ink-muted uppercase mb-2">Approved Leave ({selectedEvents.leaves.length})</h4>
                 <div className="space-y-2">
                   {selectedEvents.leaves.map((l: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-3 rounded-lg bg-success/5 border border-success/20 p-3">
+                    <div key={`${l.id}-${idx}`} className="flex items-center gap-3 rounded-lg bg-success/5 border border-success/20 p-3">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-ink-primary">
-                          {isAdmin ? (l as any).employee?.full_name : "Your leave"}
+                          {isAdminOrManager ? (l as any).employee?.full_name : "Your leave"}
                         </p>
                         <p className="text-xs text-ink-muted capitalize">{l.type}{l.leave_category ? ` · ${l.leave_category}` : ""}</p>
                       </div>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">Approved</span>
+                      {isAdminOrManager && (
+                        <button
+                          onClick={() => { if (confirm("Delete this leave entry?")) deleteLeave.mutate(l.id); }}
+                          className="text-ink-muted hover:text-destructive transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -277,16 +324,16 @@ export default function CalendarPage() {
       {/* Upcoming Holidays Section */}
       <div className="mt-6">
         <h3 className="font-heading text-lg font-bold text-ink-primary mb-3">Upcoming Holidays</h3>
-        <UpcomingHolidays isAdmin={isAdmin} />
+        <UpcomingHolidays isAdminOrManager={isAdminOrManager} />
       </div>
 
       {/* Add Holiday Modal */}
-      {isAdmin && <AddHolidayModal open={showHolidayModal} onClose={() => setShowHolidayModal(false)} />}
+      {isAdminOrManager && <AddHolidayModal open={showHolidayModal} onClose={() => setShowHolidayModal(false)} />}
     </AnimatedPage>
   );
 }
 
-function UpcomingHolidays({ isAdmin }: { isAdmin: boolean }) {
+function UpcomingHolidays({ isAdminOrManager }: { isAdminOrManager: boolean }) {
   const queryClient = useQueryClient();
   const { data: holidays = [], isLoading } = useQuery({
     queryKey: ["upcoming-holidays"],
@@ -340,7 +387,7 @@ function UpcomingHolidays({ isAdmin }: { isAdmin: boolean }) {
             h.type === "company" ? "bg-primary/10 text-primary" :
             "bg-warning/10 text-warning"
           }`}>{h.type}</span>
-          {isAdmin && (
+          {isAdminOrManager && (
             <button onClick={() => { if (confirm("Delete this holiday?")) deleteHoliday.mutate(h.id); }}
               className="text-ink-muted hover:text-destructive transition-colors">
               <Trash2 className="h-4 w-4" />
@@ -359,10 +406,13 @@ function AddHolidayModal({ open, onClose }: { open: boolean; onClose: () => void
   const [date, setDate] = useState("");
   const [type, setType] = useState("government");
   const [description, setDescription] = useState("");
+  const [autoCreateLeave, setAutoCreateLeave] = useState(true);
 
   const create = useMutation({
     mutationFn: async () => {
       if (!title.trim() || !date) { toast.error("Title and date are required"); return; }
+      
+      // Create the holiday
       const { error } = await supabase.from("holidays").insert([{
         title: title.trim(),
         date,
@@ -371,12 +421,51 @@ function AddHolidayModal({ open, onClose }: { open: boolean; onClose: () => void
         created_by: user!.id,
       }]);
       if (error) throw error;
+
+      // Auto-create leave entries for government holidays
+      if (type === "government" && autoCreateLeave) {
+        // Get all active employees
+        const { data: employees } = await supabase.from("profiles")
+          .select("id")
+          .eq("is_active", true);
+        
+        if (employees && employees.length > 0) {
+          // Check for existing holiday leaves on this date to prevent duplicates
+          const { data: existingLeaves } = await supabase.from("leave_requests")
+            .select("employee_id")
+            .eq("start_date", date)
+            .eq("end_date", date)
+            .eq("type", "holiday")
+            .eq("status", "approved");
+          
+          const existingEmployeeIds = new Set((existingLeaves ?? []).map((l: any) => l.employee_id));
+          
+          const newLeaves = employees
+            .filter((e: any) => !existingEmployeeIds.has(e.id))
+            .map((e: any) => ({
+              employee_id: e.id,
+              type: "holiday" as string,
+              leave_category: "government_holiday" as string,
+              reason: `Government Holiday: ${title.trim()}`,
+              start_date: date,
+              end_date: date,
+              status: "approved" as string,
+              reviewed_by: user!.id,
+              reviewed_at: new Date().toISOString(),
+            }));
+          
+          if (newLeaves.length > 0) {
+            await supabase.from("leave_requests").insert(newLeaves);
+          }
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-holidays"] });
       queryClient.invalidateQueries({ queryKey: ["upcoming-holidays"] });
-      toast.success("Holiday added");
-      setTitle(""); setDate(""); setType("government"); setDescription("");
+      queryClient.invalidateQueries({ queryKey: ["calendar-leaves"] });
+      toast.success("Holiday added" + (type === "government" && autoCreateLeave ? " & leave auto-created for all employees" : ""));
+      setTitle(""); setDate(""); setType("government"); setDescription(""); setAutoCreateLeave(true);
       onClose();
     },
     onError: (e: any) => toast.error(e.message),
@@ -415,6 +504,12 @@ function AddHolidayModal({ open, onClose }: { open: boolean; onClose: () => void
                   </SelectContent>
                 </Select>
               </div>
+              {type === "government" && (
+                <label className="flex items-center gap-2 text-sm text-ink-secondary cursor-pointer">
+                  <input type="checkbox" checked={autoCreateLeave} onChange={(e) => setAutoCreateLeave(e.target.checked)} className="accent-primary rounded" />
+                  Auto-create approved leave for all employees
+                </label>
+              )}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Description</label>
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Optional description..." />

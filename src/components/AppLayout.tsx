@@ -23,6 +23,16 @@ const adminNav: NavItem[] = [
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
+const managerNav: NavItem[] = [
+  { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { label: "Tasks", path: "/tasks", icon: CheckSquare },
+  { label: "Teams", path: "/teams", icon: Video },
+  { label: "Calendar", path: "/calendar", icon: Calendar },
+  { label: "Leave", path: "/leave", icon: Calendar },
+  { label: "Reports", path: "/reports", icon: BarChart3 },
+  { label: "Settings", path: "/settings", icon: Settings },
+];
+
 const employeeNav: NavItem[] = [
   { label: "Dashboard", path: "/my-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
@@ -38,7 +48,8 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = profile?.role === "admin";
-  const nav = isAdmin ? adminNav : employeeNav;
+  const isManager = profile?.role === "manager";
+  const nav = isAdmin ? adminNav : isManager ? managerNav : employeeNav;
 
   const handleSignOut = async () => {
     await signOut();

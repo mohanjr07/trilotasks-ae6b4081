@@ -479,6 +479,7 @@ export type Database = {
     Functions: {
       get_user_role: { Args: { uid: string }; Returns: string }
       is_admin: { Args: { uid: string }; Returns: boolean }
+      is_strict_admin: { Args: { uid: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never

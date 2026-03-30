@@ -44,15 +44,15 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
 
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
-              <Route path="/team" element={<ProtectedRoute allowedRoles={["admin"]}><Navigate to="/users" replace /></ProtectedRoute>} />
-              <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin"]}><AdminLeavePage /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin"]}><ReportsPage /></ProtectedRoute>} />
+              <Route path="/team" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Navigate to="/users" replace /></ProtectedRoute>} />
+              <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ReportsPage /></ProtectedRoute>} />
               <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/teams" element={<ProtectedRoute allowedRoles={["admin"]}><TeamsPage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin"]}><SettingsPage /></ProtectedRoute>} />
+              <Route path="/teams" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TeamsPage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><SettingsPage /></ProtectedRoute>} />
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />

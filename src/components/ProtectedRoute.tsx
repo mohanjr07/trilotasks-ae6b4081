@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 type Props = {
   children: React.ReactNode;
-  allowedRoles?: ("admin" | "employee")[];
+  allowedRoles?: ("admin" | "manager" | "employee")[];
 };
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
@@ -22,6 +22,11 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     const dest = profile.role === "employee" ? "/my-dashboard" : "/dashboard";
     return <Navigate to={dest} replace />;
+  }
+
+  // Block manager from user management routes
+  if (profile?.role === "manager" && (window.location.pathname === "/users")) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;
