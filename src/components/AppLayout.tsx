@@ -48,7 +48,8 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const isAdmin = profile?.role === "admin";
-  const nav = isAdmin ? adminNav : employeeNav;
+  const isManager = profile?.role === "manager";
+  const nav = isAdmin ? adminNav : isManager ? managerNav : employeeNav;
 
   const handleSignOut = async () => {
     await signOut();
