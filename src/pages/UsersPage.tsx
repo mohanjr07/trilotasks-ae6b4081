@@ -121,6 +121,7 @@ export default function UsersPage() {
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="employee">Employee</SelectItem>
           </SelectContent>
         </Select>
