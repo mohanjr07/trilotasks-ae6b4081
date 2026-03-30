@@ -179,7 +179,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                        p.role === "admin" ? "bg-accent-light text-primary" : "bg-muted text-ink-secondary"
+                        p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
                       }`}>{p.role}</span>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-ink-secondary">{p.department ?? "—"}</td>
