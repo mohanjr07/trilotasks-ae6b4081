@@ -60,6 +60,7 @@ export default function UsersPage() {
 
   const totalUsers = profiles.length;
   const adminCount = profiles.filter((p: any) => p.role === "admin").length;
+  const managerCount = profiles.filter((p: any) => p.role === "manager").length;
   const employeeCount = profiles.filter((p: any) => p.role === "employee").length;
   const activeCount = profiles.filter((p: any) => p.is_active).length;
 
