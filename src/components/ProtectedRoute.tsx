@@ -24,5 +24,10 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     return <Navigate to={dest} replace />;
   }
 
+  // Block manager from user management routes
+  if (profile?.role === "manager" && (window.location.pathname === "/users")) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <>{children}</>;
 }
