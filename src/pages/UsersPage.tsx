@@ -337,15 +337,15 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Role *</label>
-            <div className="grid grid-cols-2 gap-3">
-              {(["admin", "employee"] as const).map((r) => (
+            <div className="grid grid-cols-3 gap-3">
+              {(["admin", "manager", "employee"] as const).map((r) => (
                 <button key={r} type="button" onClick={() => setValue("role", r)}
                   className={`rounded-lg border p-4 text-left transition-all ${selectedRole === r ? "border-primary bg-accent-light" : "border-border"}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
+                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
                     <span className="text-sm font-semibold capitalize text-ink-primary">{r}</span>
                   </div>
-                  <p className="text-xs text-ink-muted">{r === "admin" ? "Can manage users, tasks & approvals" : "Can view tasks & submit requests"}</p>
+                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : "View tasks & submit requests"}</p>
                 </button>
               ))}
             </div>
