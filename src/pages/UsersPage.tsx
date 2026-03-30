@@ -528,7 +528,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
               <div>
                 <p className="font-heading text-xl font-bold text-ink-primary">{selectedUser.full_name}</p>
                 <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : "bg-muted text-ink-secondary"
+                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : selectedUser.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
                 }`}>{selectedUser.role}</span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className={`h-2 w-2 rounded-full ${selectedUser.is_active ? "bg-success" : "bg-ink-muted"}`} />
