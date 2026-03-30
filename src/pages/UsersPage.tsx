@@ -449,6 +449,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
               <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
               </SelectContent>
             </Select>
