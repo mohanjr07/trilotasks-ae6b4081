@@ -21,6 +21,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
+async function getFunctionAuthHeaders() {
+  const { data, error } = await supabase.auth.getSession();
+
+  if (error) throw error;
+
+  const accessToken = data.session?.access_token;
+  if (!accessToken) throw new Error("Your session expired. Please sign in again.");
+
+  return {
+    Authorization: `Bearer ${accessToken}`,
+  };
+}
+
 export default function UsersPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -288,6 +301,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
       }
 
       const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
+        headers: await getFunctionAuthHeaders(),
         body: {
           full_name: data.full_name,
           email: data.email,
@@ -414,18 +428,28 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
 
   const updateUser = useMutation({
     mutationFn: async (data: any) => {
-      await supabase.from("profiles").update({
-        full_name: data.full_name,
-        role: data.role,
-        department: data.department || null,
-        position: data.position || null,
-        phone: data.phone || null,
-      }).eq("id", editingUser.id);
+      const { data: response, error } = await supabase.functions.invoke("admin-update-user", {
+        headers: await getFunctionAuthHeaders(),
+        body: {
+          userId: editingUser.id,
+          full_name: data.full_name,
+          role: data.role,
+          department: data.department || null,
+          position: data.position || null,
+          phone: data.phone || null,
+        },
+      });
+
+      if (error) throw error;
+      if (response?.error) throw new Error(typeof response.error === "string" ? response.error : "Failed to update user");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
       toast.success("User updated");
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error(error?.message ?? "Failed to update user");
     },
   });
 
