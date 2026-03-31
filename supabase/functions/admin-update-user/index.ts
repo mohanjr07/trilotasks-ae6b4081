@@ -6,24 +6,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const CreateUserSchema = z.object({
+const UpdateUserSchema = z.object({
+  userId: z.string().uuid(),
   full_name: z.string().trim().min(1).max(100),
-  email: z.string().trim().email().max(255),
   role: z.enum(["admin", "manager", "employee"]),
   department: z.string().trim().max(100).nullable().optional(),
   position: z.string().trim().max(100).nullable().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
-  passwordMode: z.enum(["email", "password"]),
-  password: z.string().min(8).optional(),
-  redirectTo: z.string().url().optional(),
-}).superRefine((value, ctx) => {
-  if (value.passwordMode === "password" && !value.password) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Password must be at least 8 characters",
-      path: ["password"],
-    });
-  }
 });
 
 const json = (body: Record<string, unknown>, status = 200) =>
@@ -50,7 +39,7 @@ Deno.serve(async (req) => {
       return json({ error: "Missing backend configuration" }, 500);
     }
 
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return json({ error: "Unauthorized" }, 401);
     }
 
@@ -59,83 +48,53 @@ Deno.serve(async (req) => {
         headers: { Authorization: authHeader },
       },
     });
-
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const token = authHeader.replace(/^Bearer\s+/i, "");
     const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    const userId = claimsData?.claims?.sub;
+    const callerId = claimsData?.claims?.sub;
 
-    if (claimsError || !userId) {
+    if (claimsError || !callerId) {
       return json({ error: "Unauthorized" }, 401);
     }
 
     const { data: callerProfile, error: callerError } = await adminClient
       .from("profiles")
       .select("role")
-      .eq("id", userId)
+      .eq("id", callerId)
       .maybeSingle();
 
     if (callerError || !callerProfile || !["admin", "super_admin"].includes(callerProfile.role ?? "")) {
-      return json({ error: "Only admins can create users" }, 403);
+      return json({ error: "Only admins can update users" }, 403);
     }
 
-    const parsedBody = CreateUserSchema.safeParse(await req.json());
+    const parsedBody = UpdateUserSchema.safeParse(await req.json());
     if (!parsedBody.success) {
       return json({ error: parsedBody.error.flatten().fieldErrors }, 400);
     }
 
     const body = parsedBody.data;
 
-    let createdUserId: string | null = null;
-
-    if (body.passwordMode === "email") {
-      const { data, error } = await adminClient.auth.admin.inviteUserByEmail(body.email, {
-        data: { full_name: body.full_name },
-        redirectTo: body.redirectTo,
-      });
-
-      if (error) {
-        return json({ error: error.message }, 400);
-      }
-
-      createdUserId = data.user?.id ?? null;
-    } else {
-      const { data, error } = await adminClient.auth.admin.createUser({
-        email: body.email,
-        password: body.password!,
-        email_confirm: true,
-        user_metadata: { full_name: body.full_name },
-      });
-
-      if (error) {
-        return json({ error: error.message }, 400);
-      }
-
-      createdUserId = data.user?.id ?? null;
+    if (body.userId === callerId && body.role !== "admin") {
+      return json({ error: "You cannot remove your own admin role" }, 400);
     }
 
-    if (!createdUserId) {
-      return json({ error: "Failed to create user" }, 500);
+    const { error: updateError } = await adminClient
+      .from("profiles")
+      .update({
+        full_name: body.full_name,
+        role: body.role,
+        department: body.department || null,
+        position: body.position || null,
+        phone: body.phone || null,
+      })
+      .eq("id", body.userId);
+
+    if (updateError) {
+      return json({ error: updateError.message }, 400);
     }
 
-    const { error: profileError } = await adminClient.from("profiles").upsert({
-      id: createdUserId,
-      email: body.email,
-      full_name: body.full_name,
-      role: body.role,
-      department: body.department || null,
-      position: body.position || null,
-      phone: body.phone || null,
-      created_by: userId,
-      is_active: true,
-    });
-
-    if (profileError) {
-      return json({ error: profileError.message }, 400);
-    }
-
-    return json({ success: true, userId: createdUserId, mode: body.passwordMode });
+    return json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);
