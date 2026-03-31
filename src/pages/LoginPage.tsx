@@ -34,8 +34,6 @@ export default function LoginPage() {
       toast.error("Invalid email or password");
       return;
     }
-    // Wait briefly for auth state to propagate before navigating
-    await new Promise((resolve) => setTimeout(resolve, 500));
     navigate("/", { replace: true });
     setLoading(false);
   };

@@ -283,27 +283,29 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
       const { data: existing } = await supabase.from("profiles").select("id").eq("email", data.email).maybeSingle();
       if (existing) throw new Error("Email already in use");
 
-      // Create auth user via edge function or direct signup
-      const password = passwordMode === "password" ? data.password! : Math.random().toString(36).slice(-12) + "A1!";
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password,
-        options: { data: { full_name: data.full_name } },
-      });
-      if (authError) throw authError;
-      if (!authData.user) throw new Error("Failed to create user");
+      if (passwordMode === "password" && !data.password) {
+        throw new Error("Temporary password is required");
+      }
 
-      // Update profile with role and other info
-      await supabase.from("profiles").update({
-        role: data.role,
-        department: data.department || null,
-        position: data.position || null,
-        phone: data.phone || null,
-        created_by: user!.id,
-      }).eq("id", authData.user.id);
+      const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
+        body: {
+          full_name: data.full_name,
+          email: data.email,
+          role: data.role,
+          department: data.department || null,
+          position: data.position || null,
+          phone: data.phone || null,
+          passwordMode,
+          password: passwordMode === "password" ? data.password : undefined,
+          redirectTo: `${window.location.origin}/reset-password`,
+        },
+      });
+
+      if (error) throw error;
+      if (response?.error) throw new Error(response.error);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
       toast.success("User created successfully");
       if (passwordMode === "email") toast.info("Setup email sent");
       reset();
