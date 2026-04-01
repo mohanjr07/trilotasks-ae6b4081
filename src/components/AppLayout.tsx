@@ -28,7 +28,8 @@ const managerNav: NavItem[] = [
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
-  { label: "Leave", path: "/leave", icon: Calendar },
+  { label: "All Leaves", path: "/leave", icon: Calendar },
+  { label: "My Leave", path: "/my-leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
