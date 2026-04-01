@@ -97,10 +97,14 @@ export default function UsersPage() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
+    onSuccess: async (_, deletedUserId) => {
+      queryClient.setQueryData<any[]>(["users-profiles"], (current = []) =>
+        current.filter((profile) => profile.id !== deletedUserId),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
       toast.success("User deleted");
       setSelectedUser(null);
+      setEditUser(null);
     },
   });
 
@@ -225,11 +229,18 @@ export default function UsersPage() {
                             {p.is_active ? "Deactivate" : "Reactivate"}
                           </DropdownMenuItem>
                           {p.id !== user?.id && (
-                            <DropdownMenuItem className="text-destructive" onClick={() => {
-                              if (confirm("This will permanently delete the user and their data. This cannot be undone.")) {
-                                deleteUser.mutate(p.id);
-                              }
-                            }}>Delete User</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              disabled={deleteUser.isPending}
+                              onSelect={() => {
+                                if (deleteUser.isPending) return;
+                                if (confirm("This will permanently delete the user and their data. This cannot be undone.")) {
+                                  deleteUser.mutate(p.id);
+                                }
+                              }}
+                            >
+                              {deleteUser.isPending ? "Deleting..." : "Delete User"}
+                            </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
