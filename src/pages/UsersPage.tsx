@@ -89,7 +89,13 @@ export default function UsersPage() {
 
   const deleteUser = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("profiles").delete().eq("id", id);
+      const headers = await getFunctionAuthHeaders();
+      const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+        body: { userId: id },
+        headers,
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
