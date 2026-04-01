@@ -15,8 +15,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export default function AdminLeavePage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
+  const isStrictAdmin = profile?.role === "admin";
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [reviewReq, setReviewReq] = useState<any>(null);
@@ -107,7 +108,7 @@ export default function AdminLeavePage() {
               </p>
             </div>
             <StatusBadge status={req.status ?? "pending"} />
-            {req.status === "pending" && (
+            {isStrictAdmin && req.status === "pending" && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="text-success border-success/30 hover:bg-success-light"
                   onClick={() => setReviewReq({ ...req, action: "approved" })}>✓</Button>
@@ -115,7 +116,7 @@ export default function AdminLeavePage() {
                   onClick={() => setReviewReq({ ...req, action: "rejected" })}>✗</Button>
               </div>
             )}
-            {req.status !== "pending" && (
+            {isStrictAdmin && req.status !== "pending" && (
               <Button size="sm" variant="ghost" className="text-ink-muted hover:text-destructive"
                 onClick={(e) => { e.stopPropagation(); clearRequest.mutate(req.id); }}>
                 <X className="h-4 w-4" />
