@@ -97,10 +97,14 @@ export default function UsersPage() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
+    onSuccess: async (_, deletedUserId) => {
+      queryClient.setQueryData<any[]>(["users-profiles"], (current = []) =>
+        current.filter((profile) => profile.id !== deletedUserId),
+      );
+      await queryClient.invalidateQueries({ queryKey: ["users-profiles"] });
       toast.success("User deleted");
       setSelectedUser(null);
+      setEditUser(null);
     },
   });
 
