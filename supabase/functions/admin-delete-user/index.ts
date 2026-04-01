@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
-    if (deleteError) {
+    if (deleteError && !/user not found/i.test(deleteError.message)) {
       return json({ error: deleteError.message }, 400);
     }
 
