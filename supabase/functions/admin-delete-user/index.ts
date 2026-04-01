@@ -14,6 +14,12 @@ const json = (body: Record<string, unknown>, status = 200) =>
 
 const BodySchema = z.object({ userId: z.string().uuid() });
 
+const throwIfError = (step: string, error: { message: string } | null) => {
+  if (error) {
+    throw new Error(`${step}: ${error.message}`);
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -32,7 +38,6 @@ Deno.serve(async (req) => {
       return json({ error: "Unauthorized" }, 401);
     }
 
-    // Verify caller is admin
     const userClient = createClient(supabaseUrl, publishableKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -67,7 +72,39 @@ Deno.serve(async (req) => {
       return json({ error: "You cannot delete your own account" }, 400);
     }
 
-    // Delete from auth (cascades to profiles via FK)
+    const [{ error: clearCreatedByError }, { error: clearReviewedByError }] = await Promise.all([
+      adminClient.from("profiles").update({ created_by: null }).eq("created_by", userId),
+      adminClient.from("leave_requests").update({ reviewed_by: null }).eq("reviewed_by", userId),
+    ]);
+
+    throwIfError("Failed to clear profile creator references", clearCreatedByError);
+    throwIfError("Failed to clear leave reviewer references", clearReviewedByError);
+
+    const [{ error: deletePrefsError }, { error: deleteNotificationsError }, { error: deleteOwnLeavesError }] = await Promise.all([
+      adminClient.from("notification_preferences").delete().eq("user_id", userId),
+      adminClient.from("notifications").delete().eq("user_id", userId),
+      adminClient.from("leave_requests").delete().eq("employee_id", userId),
+    ]);
+
+    throwIfError("Failed to delete notification preferences", deletePrefsError);
+    throwIfError("Failed to delete notifications", deleteNotificationsError);
+    throwIfError("Failed to delete leave requests", deleteOwnLeavesError);
+
+    const { error: deleteTasksError } = await adminClient
+      .from("tasks")
+      .delete()
+      .or(`assigned_to.eq.${userId},assigned_by.eq.${userId}`);
+
+    throwIfError("Failed to delete tasks", deleteTasksError);
+
+    const [{ error: deleteCommentsError }, { error: deleteAttachmentsError }] = await Promise.all([
+      adminClient.from("task_comments").delete().eq("user_id", userId),
+      adminClient.from("task_attachments").delete().eq("uploaded_by", userId),
+    ]);
+
+    throwIfError("Failed to delete task comments", deleteCommentsError);
+    throwIfError("Failed to delete task attachments", deleteAttachmentsError);
+
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
     if (deleteError) {
