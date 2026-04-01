@@ -22,7 +22,13 @@ import CalendarPage from "@/pages/CalendarPage";
 import TeamsPage from "@/pages/TeamsPage";
 import NotFound from "@/pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function RootRedirect() {
   const { profile, loading } = useAuth();
