@@ -35,7 +35,7 @@ type Participant = {
 
 export default function TeamsPage() {
   const { profile, user } = useAuth();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<string | null>(null);
