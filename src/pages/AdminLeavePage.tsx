@@ -15,8 +15,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export default function AdminLeavePage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
+  const isStrictAdmin = profile?.role === "admin";
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [reviewReq, setReviewReq] = useState<any>(null);
