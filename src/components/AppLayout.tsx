@@ -156,6 +156,18 @@ export default function AppLayout() {
                 })}
               </ul>
             </nav>
+            <div className="border-t border-border p-3">
+              <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+                <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink-primary">{profile?.full_name}</p>
+                  <p className="truncate text-xs text-ink-muted capitalize">{profile?.role}</p>
+                </div>
+                <button onClick={handleSignOut} className="text-ink-muted hover:text-destructive transition-colors" title="Sign out">
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </motion.aside>
         )}
       </AnimatePresence>
