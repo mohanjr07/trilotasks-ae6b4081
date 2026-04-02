@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { useState } from "react";
 
+const TASK_DRAFT_KEY = "tasks:create-draft";
 const today = () => format(new Date(), "yyyy-MM-dd");
 
 const schema = z.object({
@@ -37,10 +38,47 @@ type Props = {
   preselectedAssignee?: string;
 };
 
+const getInitialDraft = (preselectedAssignee?: string): FormData => {
+  if (typeof window !== "undefined") {
+    const stored = sessionStorage.getItem(TASK_DRAFT_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Partial<FormData>;
+        return {
+          title: parsed.title ?? "",
+          description: parsed.description ?? "",
+          assigned_to: Array.isArray(parsed.assigned_to)
+            ? parsed.assigned_to
+            : preselectedAssignee
+              ? [preselectedAssignee]
+              : [],
+          priority: parsed.priority ?? "medium",
+          status: parsed.status ?? "todo",
+          deadline: parsed.deadline ?? "",
+          category: parsed.category ?? "",
+        };
+      } catch {
+        sessionStorage.removeItem(TASK_DRAFT_KEY);
+      }
+    }
+  }
+
+  return {
+    title: "",
+    description: "",
+    assigned_to: preselectedAssignee ? [preselectedAssignee] : [],
+    priority: "medium",
+    status: "todo",
+    deadline: "",
+    category: "",
+  };
+};
+
 export default function CreateTaskModal({ open, onClose, preselectedAssignee }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list"],
@@ -53,31 +91,55 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      priority: "medium",
-      status: "todo",
-      assigned_to: preselectedAssignee ? [preselectedAssignee] : [],
-    },
+    defaultValues: initialDraft,
   });
 
-  const selectedAssignees = watch("assigned_to") || [];
+  const draft = watch();
+  const selectedAssignees = draft.assigned_to || [];
+
+  useEffect(() => {
+    if (!open) return;
+    reset(getInitialDraft(preselectedAssignee));
+  }, [open, preselectedAssignee, reset]);
+
+  useEffect(() => {
+    if (!open) return;
+    sessionStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(draft));
+  }, [draft, open]);
+
+  const clearDraft = () => {
+    sessionStorage.removeItem(TASK_DRAFT_KEY);
+    reset({
+      title: "",
+      description: "",
+      assigned_to: preselectedAssignee ? [preselectedAssignee] : [],
+      priority: "medium",
+      status: "todo",
+      deadline: "",
+      category: "",
+    });
+  };
+
+  const handleClose = () => {
+    setAssigneeDropdownOpen(false);
+    onClose();
+  };
 
   const toggleAssignee = (id: string) => {
     const current = selectedAssignees;
     if (current.includes(id)) {
-      setValue("assigned_to", current.filter((a) => a !== id), { shouldValidate: true });
+      setValue("assigned_to", current.filter((a) => a !== id), { shouldValidate: true, shouldDirty: true });
     } else {
-      setValue("assigned_to", [...current, id], { shouldValidate: true });
+      setValue("assigned_to", [...current, id], { shouldValidate: true, shouldDirty: true });
     }
   };
 
   const createTask = useMutation({
     mutationFn: async (data: FormData) => {
-      // Create one task per assignee, or one task with multiple assignees via junction table
       const { data: taskData, error } = await supabase.from("tasks").insert([{
         title: data.title,
         description: data.description || null,
-        assigned_to: data.assigned_to[0], // primary assignee for backward compat
+        assigned_to: data.assigned_to[0],
         priority: data.priority,
         status: data.status,
         deadline: data.deadline,
@@ -86,7 +148,6 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       }]).select("id").single();
       if (error) throw error;
 
-      // Insert all assignees into junction table
       const assigneeRows = data.assigned_to.map((userId) => ({
         task_id: taskData.id,
         user_id: userId,
@@ -97,22 +158,25 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
+      clearDraft();
       toast.success("Task created successfully");
-      reset();
-      onClose();
+      handleClose();
     },
     onError: (e: any) => toast.error(e.message),
   });
 
   const priorities = ["low", "medium", "high"] as const;
-  const priorityColors = { low: "bg-success-light text-success border-success/20", medium: "bg-warning-light text-warning border-warning/20", high: "bg-destructive-light text-destructive border-destructive/20" };
+  const priorityColors = {
+    low: "bg-success-light text-success border-success/20",
+    medium: "bg-warning-light text-warning border-warning/20",
+    high: "bg-destructive-light text-destructive border-destructive/20",
+  };
 
   return (
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-ink-primary/30" onClick={handleClose} />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -122,10 +186,10 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Create Task</h2>
-              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
+              <button onClick={handleClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
             </div>
 
-            <form onSubmit={handleSubmit((d) => createTask.mutate(d))} className="space-y-4">
+            <form onSubmit={handleSubmit((formData) => createTask.mutate(formData))} className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Title *</label>
                 <Input {...register("title")} autoFocus className="h-10" />
@@ -137,7 +201,6 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                 <Textarea {...register("description")} rows={3} />
               </div>
 
-              {/* Multi-select assignees */}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To * <span className="text-ink-muted font-normal">(select multiple)</span></label>
                 <div className="relative">
@@ -151,11 +214,11 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {selectedAssignees.map((id) => {
-                          const emp = employees.find((e: any) => e.id === id);
+                          const emp = employees.find((employee: any) => employee.id === id);
                           return (
                             <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
                               {emp?.full_name ?? "Unknown"}
-                              <button type="button" onClick={(e) => { e.stopPropagation(); toggleAssignee(id); }}>
+                              <button type="button" onClick={(event) => { event.stopPropagation(); toggleAssignee(id); }}>
                                 <X className="h-3 w-3" />
                               </button>
                             </span>
@@ -192,10 +255,14 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Priority *</label>
                 <div className="flex gap-2">
-                  {priorities.map((p) => (
-                    <button key={p} type="button" onClick={() => setValue("priority", p)}
-                      className={`flex-1 rounded-lg border py-2 text-sm font-medium capitalize transition-all ${watch("priority") === p ? priorityColors[p] + " border-current" : "border-border text-ink-secondary hover:bg-muted"}`}>
-                      {p}
+                  {priorities.map((priority) => (
+                    <button
+                      key={priority}
+                      type="button"
+                      onClick={() => setValue("priority", priority, { shouldDirty: true })}
+                      className={`flex-1 rounded-lg border py-2 text-sm font-medium capitalize transition-all ${draft.priority === priority ? `${priorityColors[priority]} border-current` : "border-border text-ink-secondary hover:bg-muted"}`}
+                    >
+                      {priority}
                     </button>
                   ))}
                 </div>
@@ -204,7 +271,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-ink-primary">Status</label>
-                  <Select onValueChange={(v: any) => setValue("status", v)} value={watch("status")}>
+                  <Select onValueChange={(value: FormData["status"]) => setValue("status", value, { shouldDirty: true })} value={draft.status}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todo">To Do</SelectItem>
@@ -226,7 +293,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+                <Button type="button" variant="outline" onClick={handleClose} className="flex-1">Cancel</Button>
                 <Button type="submit" disabled={createTask.isPending} className="flex-1">
                   {createTask.isPending ? "Creating..." : "Create Task"}
                 </Button>

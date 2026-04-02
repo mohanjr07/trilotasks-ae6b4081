@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, X as XIcon, CheckSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CreateTaskModal from "@/components/CreateTaskModal";
 import TaskDetailModal from "@/components/TaskDetailModal";
 
+const TASK_CREATE_OPEN_KEY = "tasks:create-open";
+
 export default function TasksPage() {
   const { isAdmin, user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,8 +26,12 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const assigneeFilter = searchParams.get("assignee") || "all";
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(() => sessionStorage.getItem(TASK_CREATE_OPEN_KEY) === "1");
   const [selectedTask, setSelectedTask] = useState<any>(null);
+
+  useEffect(() => {
+    sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
+  }, [createOpen]);
 
   const canCreateTasks = profile?.role === "admin" || profile?.role === "manager";
 
@@ -33,29 +39,27 @@ export default function TasksPage() {
     queryKey: ["tasks", isAdmin, user?.id],
     queryFn: async () => {
       if (isAdmin) {
-        // Admin/manager sees all tasks with their assignees
         const { data } = await supabase
           .from("tasks")
           .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
-          .order("created_at", { ascending: false });
-        return data ?? [];
-      } else {
-        // Employee sees only tasks assigned to them via task_assignees
-        const { data: assignedTaskIds } = await supabase
-          .from("task_assignees")
-          .select("task_id")
-          .eq("user_id", user!.id);
-        
-        if (!assignedTaskIds?.length) return [];
-        
-        const taskIds = assignedTaskIds.map((a: any) => a.task_id);
-        const { data } = await supabase
-          .from("tasks")
-          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
-          .in("id", taskIds)
           .order("created_at", { ascending: false });
         return data ?? [];
       }
+
+      const { data: assignedTaskIds } = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", user!.id);
+
+      if (!assignedTaskIds?.length) return [];
+
+      const taskIds = assignedTaskIds.map((a: any) => a.task_id);
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+        .in("id", taskIds)
+        .order("created_at", { ascending: false });
+      return data ?? [];
     },
     enabled: !!user,
   });
@@ -102,10 +106,10 @@ export default function TasksPage() {
     setAssignee("all");
   };
 
-  // Helper to get assignee display info from task_assignees
-  const getAssignees = (task: any) => {
-    return task.task_assignees?.map((a: any) => a.user) ?? [];
-  };
+  const getAssignees = (task: any) => task.task_assignees?.map((a: any) => a.user) ?? [];
+
+  const handleOpenCreate = () => setCreateOpen(true);
+  const handleCloseCreate = () => setCreateOpen(false);
 
   return (
     <AnimatedPage>
@@ -114,13 +118,12 @@ export default function TasksPage() {
           {canCreateTasks ? "Tasks" : "My Tasks"}
         </h1>
         {canCreateTasks && (
-          <Button onClick={() => setCreateOpen(true)} className="gap-2">
+          <Button onClick={handleOpenCreate} className="gap-2">
             <Plus className="h-4 w-4" /> Create Task
           </Button>
         )}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
@@ -163,7 +166,6 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Active filter chips */}
       {activeFilters.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {activeFilters.map((f) => (
@@ -176,7 +178,6 @@ export default function TasksPage() {
         </div>
       )}
 
-      {/* Task list */}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -190,7 +191,7 @@ export default function TasksPage() {
             title="No tasks yet"
             description={canCreateTasks ? "Create your first task to get started." : "You don't have any tasks assigned yet."}
             actionLabel={canCreateTasks ? "Create Task" : undefined}
-            onAction={canCreateTasks ? () => setCreateOpen(true) : undefined}
+            onAction={canCreateTasks ? handleOpenCreate : undefined}
           />
         ) : (
           <EmptyState icon={Search} title="No matching tasks" description="Try adjusting your filters." />
@@ -223,17 +224,14 @@ export default function TasksPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
                   <p className="text-xs text-ink-muted">
-                    {assignees.length === 1
-                      ? primaryAssignee?.full_name
-                      : `${primaryAssignee?.full_name} +${assignees.length - 1} more`}
+                    {assignees.length === 1 ? primaryAssignee?.full_name : `${primaryAssignee?.full_name} +${assignees.length - 1} more`}
                   </p>
                 </div>
                 <PriorityBadge priority={task.priority ?? "medium"} />
                 <StatusBadge status={task.status ?? "todo"} />
                 <div className="hidden md:flex items-center gap-2 text-xs text-ink-muted w-24">
                   <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }}
-                      transition={{ duration: 0.6 }} className="h-full rounded-full bg-primary" />
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }} transition={{ duration: 0.6 }} className="h-full rounded-full bg-primary" />
                   </div>
                   {task.progress ?? 0}%
                 </div>
@@ -250,7 +248,7 @@ export default function TasksPage() {
         </motion.div>
       )}
 
-      <CreateTaskModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateTaskModal open={createOpen} onClose={handleCloseCreate} />
       <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
     </AnimatedPage>
   );
