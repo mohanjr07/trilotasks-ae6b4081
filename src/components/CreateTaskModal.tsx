@@ -3,7 +3,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -13,13 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useState } from "react";
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
 const schema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   description: z.string().max(2000).optional(),
-  assigned_to: z.string().min(1, "Assignee is required"),
+  assigned_to: z.array(z.string()).min(1, "At least one assignee is required"),
   priority: z.enum(["low", "medium", "high"]),
   status: z.enum(["todo", "in_progress", "on_hold", "completed"]),
   deadline: z.string().min(1, "Deadline is required").refine(
@@ -39,6 +40,7 @@ type Props = {
 export default function CreateTaskModal({ open, onClose, preselectedAssignee }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list"],
@@ -51,22 +53,46 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { priority: "medium", status: "todo", assigned_to: preselectedAssignee ?? "" },
+    defaultValues: {
+      priority: "medium",
+      status: "todo",
+      assigned_to: preselectedAssignee ? [preselectedAssignee] : [],
+    },
   });
+
+  const selectedAssignees = watch("assigned_to") || [];
+
+  const toggleAssignee = (id: string) => {
+    const current = selectedAssignees;
+    if (current.includes(id)) {
+      setValue("assigned_to", current.filter((a) => a !== id), { shouldValidate: true });
+    } else {
+      setValue("assigned_to", [...current, id], { shouldValidate: true });
+    }
+  };
 
   const createTask = useMutation({
     mutationFn: async (data: FormData) => {
-      const { error } = await supabase.from("tasks").insert([{
+      // Create one task per assignee, or one task with multiple assignees via junction table
+      const { data: taskData, error } = await supabase.from("tasks").insert([{
         title: data.title,
         description: data.description || null,
-        assigned_to: data.assigned_to,
+        assigned_to: data.assigned_to[0], // primary assignee for backward compat
         priority: data.priority,
         status: data.status,
         deadline: data.deadline,
         category: data.category || null,
         assigned_by: user!.id,
-      }]);
+      }]).select("id").single();
       if (error) throw error;
+
+      // Insert all assignees into junction table
+      const assigneeRows = data.assigned_to.map((userId) => ({
+        task_id: taskData.id,
+        user_id: userId,
+      }));
+      const { error: assignError } = await supabase.from("task_assignees").insert(assigneeRows);
+      if (assignError) throw assignError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -111,21 +137,55 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                 <Textarea {...register("description")} rows={3} />
               </div>
 
+              {/* Multi-select assignees */}
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To *</label>
-                <Select onValueChange={(v) => setValue("assigned_to", v)} value={watch("assigned_to")}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select member" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map((emp: any) => (
-                      <SelectItem key={emp.id} value={emp.id}>
-                        <div className="flex items-center gap-2">
-                          <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
-                          <span>{emp.full_name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To * <span className="text-ink-muted font-normal">(select multiple)</span></label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                    className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    {selectedAssignees.length === 0 ? (
+                      <span className="text-muted-foreground">Select members...</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedAssignees.map((id) => {
+                          const emp = employees.find((e: any) => e.id === id);
+                          return (
+                            <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
+                              {emp?.full_name ?? "Unknown"}
+                              <button type="button" onClick={(e) => { e.stopPropagation(); toggleAssignee(id); }}>
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </button>
+                  {assigneeDropdownOpen && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-[200px] overflow-y-auto">
+                      {employees.map((emp: any) => {
+                        const selected = selectedAssignees.includes(emp.id);
+                        return (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => toggleAssignee(emp.id)}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                          >
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                              {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                            </div>
+                            <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
+                            <span className="text-ink-primary">{emp.full_name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 {errors.assigned_to && <p className="mt-1 text-xs text-destructive">{errors.assigned_to.message}</p>}
               </div>
 

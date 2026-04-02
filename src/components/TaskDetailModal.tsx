@@ -144,12 +144,26 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
               <div className="rounded-lg bg-muted p-4 space-y-3">
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Assigned to</p>
-                  <div className="flex items-center gap-2">
-                    <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
-                    <div>
-                      <p className="text-sm font-medium text-ink-primary">{task.assigned?.full_name}</p>
-                      <p className="text-xs text-ink-muted">{task.assigned?.email}</p>
-                    </div>
+                  <div className="space-y-2">
+                    {(task.task_assignees && task.task_assignees.length > 0) ? (
+                      task.task_assignees.map((a: any) => (
+                        <div key={a.user_id} className="flex items-center gap-2">
+                          <UserAvatar name={a.user?.full_name ?? "?"} avatarUrl={a.user?.avatar_url} size="sm" />
+                          <div>
+                            <p className="text-sm font-medium text-ink-primary">{a.user?.full_name}</p>
+                            <p className="text-xs text-ink-muted">{a.user?.email}</p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
+                        <div>
+                          <p className="text-sm font-medium text-ink-primary">{task.assigned?.full_name}</p>
+                          <p className="text-xs text-ink-muted">{task.assigned?.email}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
