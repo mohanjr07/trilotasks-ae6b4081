@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, X as XIcon, CheckSquare } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,13 +14,11 @@ import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
 import CreateTaskModal from "@/components/CreateTaskModal";
 import TaskDetailModal from "@/components/TaskDetailModal";
 
 export default function TasksPage() {
-  const { isAdmin, user } = useAuth();
-  const queryClient = useQueryClient();
+  const { isAdmin, user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -29,13 +27,35 @@ export default function TasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
 
+  const canCreateTasks = profile?.role === "admin" || profile?.role === "manager";
+
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks", isAdmin, user?.id],
     queryFn: async () => {
-      let q = supabase.from("tasks").select("*, assigned:profiles!tasks_assigned_to_fkey(id, full_name, avatar_url, email), assigner:profiles!tasks_assigned_by_fkey(full_name)");
-      if (!isAdmin) q = q.eq("assigned_to", user!.id);
-      const { data } = await q.order("created_at", { ascending: false });
-      return data ?? [];
+      if (isAdmin) {
+        // Admin/manager sees all tasks with their assignees
+        const { data } = await supabase
+          .from("tasks")
+          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      } else {
+        // Employee sees only tasks assigned to them via task_assignees
+        const { data: assignedTaskIds } = await supabase
+          .from("task_assignees")
+          .select("task_id")
+          .eq("user_id", user!.id);
+        
+        if (!assignedTaskIds?.length) return [];
+        
+        const taskIds = assignedTaskIds.map((a: any) => a.task_id);
+        const { data } = await supabase
+          .from("tasks")
+          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+          .in("id", taskIds)
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      }
     },
     enabled: !!user,
   });
@@ -53,7 +73,10 @@ export default function TasksPage() {
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    if (assigneeFilter !== "all" && t.assigned_to !== assigneeFilter) return false;
+    if (assigneeFilter !== "all") {
+      const assignees = t.task_assignees?.map((a: any) => a.user_id) ?? [];
+      if (!assignees.includes(assigneeFilter)) return false;
+    }
     return true;
   });
 
@@ -79,13 +102,18 @@ export default function TasksPage() {
     setAssignee("all");
   };
 
+  // Helper to get assignee display info from task_assignees
+  const getAssignees = (task: any) => {
+    return task.task_assignees?.map((a: any) => a.user) ?? [];
+  };
+
   return (
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">
-          {isAdmin ? "Tasks" : "My Tasks"}
+          {canCreateTasks ? "Tasks" : "My Tasks"}
         </h1>
-        {isAdmin && (
+        {canCreateTasks && (
           <Button onClick={() => setCreateOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Create Task
           </Button>
@@ -160,48 +188,65 @@ export default function TasksPage() {
           <EmptyState
             icon={CheckSquare}
             title="No tasks yet"
-            description={isAdmin ? "Create your first task to get started." : "You don't have any tasks assigned yet."}
-            actionLabel={isAdmin ? "Create Task" : undefined}
-            onAction={isAdmin ? () => setCreateOpen(true) : undefined}
+            description={canCreateTasks ? "Create your first task to get started." : "You don't have any tasks assigned yet."}
+            actionLabel={canCreateTasks ? "Create Task" : undefined}
+            onAction={canCreateTasks ? () => setCreateOpen(true) : undefined}
           />
         ) : (
           <EmptyState icon={Search} title="No matching tasks" description="Try adjusting your filters." />
         )
       ) : (
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
-          {filteredTasks.map((task: any) => (
-            <motion.div
-              key={task.id}
-              variants={staggerItem}
-              whileHover={{ scale: 1.002 }}
-              onClick={() => setSelectedTask(task)}
-              className="flex items-center gap-3 rounded-card bg-card p-4 shadow-card cursor-pointer hover:shadow-card-hover transition-shadow"
-            >
-              <div className="hidden sm:block">
-                <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
-                <p className="text-xs text-ink-muted">{task.assigned?.full_name}</p>
-              </div>
-              <PriorityBadge priority={task.priority ?? "medium"} />
-              <StatusBadge status={task.status ?? "todo"} />
-              <div className="hidden md:flex items-center gap-2 text-xs text-ink-muted w-24">
-                <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }}
-                    transition={{ duration: 0.6 }} className="h-full rounded-full bg-primary" />
+          {filteredTasks.map((task: any) => {
+            const assignees = getAssignees(task);
+            const primaryAssignee = assignees[0];
+            return (
+              <motion.div
+                key={task.id}
+                variants={staggerItem}
+                whileHover={{ scale: 1.002 }}
+                onClick={() => setSelectedTask(task)}
+                className="flex items-center gap-3 rounded-card bg-card p-4 shadow-card cursor-pointer hover:shadow-card-hover transition-shadow"
+              >
+                <div className="hidden sm:flex items-center -space-x-2">
+                  {assignees.slice(0, 3).map((a: any) => (
+                    <div key={a?.id} className="ring-2 ring-card rounded-full">
+                      <UserAvatar name={a?.full_name ?? "?"} avatarUrl={a?.avatar_url} size="sm" />
+                    </div>
+                  ))}
+                  {assignees.length > 3 && (
+                    <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium text-ink-muted ring-2 ring-card">
+                      +{assignees.length - 3}
+                    </div>
+                  )}
                 </div>
-                {task.progress ?? 0}%
-              </div>
-              <div className="hidden lg:block text-xs text-ink-muted w-20 text-right">
-                {task.deadline ? (
-                  <span className={new Date(task.deadline) < new Date() && task.status !== "completed" ? "text-destructive font-medium" : ""}>
-                    {format(new Date(task.deadline), "MMM d")}
-                  </span>
-                ) : "—"}
-              </div>
-            </motion.div>
-          ))}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
+                  <p className="text-xs text-ink-muted">
+                    {assignees.length === 1
+                      ? primaryAssignee?.full_name
+                      : `${primaryAssignee?.full_name} +${assignees.length - 1} more`}
+                  </p>
+                </div>
+                <PriorityBadge priority={task.priority ?? "medium"} />
+                <StatusBadge status={task.status ?? "todo"} />
+                <div className="hidden md:flex items-center gap-2 text-xs text-ink-muted w-24">
+                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }}
+                      transition={{ duration: 0.6 }} className="h-full rounded-full bg-primary" />
+                  </div>
+                  {task.progress ?? 0}%
+                </div>
+                <div className="hidden lg:block text-xs text-ink-muted w-20 text-right">
+                  {task.deadline ? (
+                    <span className={new Date(task.deadline) < new Date() && task.status !== "completed" ? "text-destructive font-medium" : ""}>
+                      {format(new Date(task.deadline), "MMM d")}
+                    </span>
+                  ) : "—"}
+                </div>
+              </motion.div>
+            );
+          })}
         </motion.div>
       )}
 

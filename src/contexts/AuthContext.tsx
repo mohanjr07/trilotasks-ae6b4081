@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (event === "INITIAL_SESSION") return;
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
       void syncAuthState(nextSession);
     });
 
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (session?.user) await fetchProfile(session.user.id);
   };
 
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = profile?.role === "admin" || profile?.role === "manager";
 
   return (
     <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signIn, signOut, isAdmin, refreshProfile }}>
