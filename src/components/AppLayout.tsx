@@ -32,6 +32,7 @@ const managerNav: NavItem[] = [
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "My Leave", path: "/my-leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
+  { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
