@@ -184,7 +184,7 @@ export default function NotesPage() {
               />
               <span className="text-xs text-ink-muted whitespace-nowrap flex items-center gap-1">
                 {status === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
-                {status === "saved" && <><Check className="h-3 w-3 text-green-500" /> Saved</>}
+                {status === "saved" && <><Check className="h-3 w-3 text-primary" /> Saved</>}
               </span>
             </div>
             <CardContent className="flex-1 p-0 min-h-0">
