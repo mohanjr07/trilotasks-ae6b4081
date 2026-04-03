@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -20,6 +20,7 @@ const adminNav: NavItem[] = [
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
+  { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -31,6 +32,7 @@ const managerNav: NavItem[] = [
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "My Leave", path: "/my-leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
+  { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -40,6 +42,7 @@ const employeeNav: NavItem[] = [
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
+  { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
 

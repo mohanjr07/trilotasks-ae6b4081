@@ -20,6 +20,7 @@ import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import CalendarPage from "@/pages/CalendarPage";
 import TeamsPage from "@/pages/TeamsPage";
+import NotesPage from "@/pages/NotesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -65,6 +66,7 @@ const App = () => (
               <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/notes" element={<NotesPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
 
