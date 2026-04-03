@@ -20,6 +20,7 @@ import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import CalendarPage from "@/pages/CalendarPage";
 import TeamsPage from "@/pages/TeamsPage";
+import NotesPage from "@/pages/NotesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
