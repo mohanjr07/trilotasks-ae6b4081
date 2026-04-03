@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -33,12 +33,82 @@ type Participant = {
   profiles?: { full_name: string; email: string } | null;
 };
 
+type MeetingDraft = {
+  title: string;
+  description: string;
+  link: string;
+  date: string;
+  time: string;
+  duration: string;
+  selectedUsers: string[];
+};
+
+const TEAM_CREATE_OPEN_KEY = "team-meetings:create-open";
+const TEAM_CREATE_DRAFT_KEY = "team-meetings:create-draft";
+
+const getStoredCreateOpen = () => {
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(TEAM_CREATE_OPEN_KEY) === "true";
+};
+
+const getInitialMeetingDraft = (): MeetingDraft => {
+  if (typeof window !== "undefined") {
+    const stored = sessionStorage.getItem(TEAM_CREATE_DRAFT_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Partial<MeetingDraft>;
+        return {
+          title: parsed.title ?? "",
+          description: parsed.description ?? "",
+          link: parsed.link ?? "",
+          date: parsed.date ?? "",
+          time: parsed.time ?? "10:00",
+          duration: parsed.duration ?? "30",
+          selectedUsers: Array.isArray(parsed.selectedUsers) ? parsed.selectedUsers : [],
+        };
+      } catch {
+        sessionStorage.removeItem(TEAM_CREATE_DRAFT_KEY);
+      }
+    }
+  }
+
+  return {
+    title: "",
+    description: "",
+    link: "",
+    date: "",
+    time: "10:00",
+    duration: "30",
+    selectedUsers: [],
+  };
+};
+
+const clearMeetingDraftStorage = () => {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(TEAM_CREATE_DRAFT_KEY);
+};
+
 export default function TeamsPage() {
   const { profile, user } = useAuth();
   const isAdmin = profile?.role === "admin" || profile?.role === "manager";
   const queryClient = useQueryClient();
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(getStoredCreateOpen);
   const [selectedMeeting, setSelectedMeeting] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (showCreate) {
+      sessionStorage.setItem(TEAM_CREATE_OPEN_KEY, "true");
+      return;
+    }
+    sessionStorage.removeItem(TEAM_CREATE_OPEN_KEY);
+  }, [showCreate]);
+
+  const handleOpenCreate = () => setShowCreate(true);
+  const handleCloseCreate = () => {
+    clearMeetingDraftStorage();
+    setShowCreate(false);
+  };
 
   // Fetch meetings
   const { data: meetings = [], isLoading } = useQuery({
@@ -118,7 +188,7 @@ export default function TeamsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">Teams</h1>
         {isAdmin && (
-          <Button onClick={() => setShowCreate(true)} size="sm">
+          <Button onClick={handleOpenCreate} size="sm">
             <Plus className="h-4 w-4 mr-1.5" /> Create Meeting
           </Button>
         )}
@@ -135,7 +205,7 @@ export default function TeamsPage() {
           <Users className="h-12 w-12 text-ink-muted mx-auto mb-3" />
           <p className="text-ink-muted text-sm">No team meetings yet</p>
           {isAdmin && (
-            <Button onClick={() => setShowCreate(true)} variant="outline" size="sm" className="mt-3">
+            <Button onClick={handleOpenCreate} variant="outline" size="sm" className="mt-3">
               <Plus className="h-4 w-4 mr-1.5" /> Create your first meeting
             </Button>
           )}
@@ -240,7 +310,7 @@ export default function TeamsPage() {
         </div>
       )}
 
-      {isAdmin && <CreateMeetingModal open={showCreate} onClose={() => setShowCreate(false)} />}
+      {isAdmin && <CreateMeetingModal open={showCreate} onClose={handleCloseCreate} />}
     </AnimatedPage>
   );
 }
@@ -313,13 +383,57 @@ function MeetingCard({
 function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [link, setLink] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("10:00");
-  const [duration, setDuration] = useState("30");
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [title, setTitle] = useState(() => getInitialMeetingDraft().title);
+  const [description, setDescription] = useState(() => getInitialMeetingDraft().description);
+  const [link, setLink] = useState(() => getInitialMeetingDraft().link);
+  const [date, setDate] = useState(() => getInitialMeetingDraft().date);
+  const [time, setTime] = useState(() => getInitialMeetingDraft().time);
+  const [duration, setDuration] = useState(() => getInitialMeetingDraft().duration);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>(() => getInitialMeetingDraft().selectedUsers);
+
+  useEffect(() => {
+    if (!open) return;
+    const draft = getInitialMeetingDraft();
+    setTitle(draft.title);
+    setDescription(draft.description);
+    setLink(draft.link);
+    setDate(draft.date);
+    setTime(draft.time);
+    setDuration(draft.duration);
+    setSelectedUsers(draft.selectedUsers);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    sessionStorage.setItem(
+      TEAM_CREATE_DRAFT_KEY,
+      JSON.stringify({
+        title,
+        description,
+        link,
+        date,
+        time,
+        duration,
+        selectedUsers,
+      } satisfies MeetingDraft),
+    );
+  }, [open, title, description, link, date, time, duration, selectedUsers]);
+
+  const resetDraft = () => {
+    clearMeetingDraftStorage();
+    setTitle("");
+    setDescription("");
+    setLink("");
+    setDate("");
+    setTime("10:00");
+    setDuration("30");
+    setSelectedUsers([]);
+  };
+
+  const handleClose = () => {
+    resetDraft();
+    onClose();
+  };
 
   // Fetch employees to invite
   const { data: employees = [] } = useQuery({
@@ -386,8 +500,7 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-meetings"] });
       toast.success("Meeting created & participants notified!");
-      setTitle(""); setDescription(""); setLink(""); setDate(""); setTime("10:00");
-      setDuration("30"); setSelectedUsers([]);
+      resetDraft();
       onClose();
     },
     onError: (e: any) => {
@@ -403,7 +516,7 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-ink-primary/30" onClick={onClose}
+            className="absolute inset-0 bg-ink-primary/30" onClick={handleClose}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
@@ -411,7 +524,7 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Create Meeting</h2>
-              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary">
+              <button onClick={handleClose} className="text-ink-muted hover:text-ink-primary">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -482,7 +595,7 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                <Button variant="outline" onClick={handleClose}>Cancel</Button>
                 <Button onClick={() => create.mutate()} disabled={create.isPending}>
                   {create.isPending ? "Creating..." : "Create Meeting"}
                 </Button>
