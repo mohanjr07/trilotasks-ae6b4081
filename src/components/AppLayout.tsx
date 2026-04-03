@@ -20,6 +20,7 @@ const adminNav: NavItem[] = [
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
+  { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
