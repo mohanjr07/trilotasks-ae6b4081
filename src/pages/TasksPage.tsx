@@ -19,7 +19,7 @@ import TaskDetailModal from "@/components/TaskDetailModal";
 
 const TASK_CREATE_OPEN_KEY = "tasks:create-open";
 
-export default function TasksPage() {
+export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boolean }) {
   const { isAdmin, user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
