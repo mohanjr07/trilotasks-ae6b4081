@@ -1,10 +1,10 @@
 import { motion } from "framer-motion";
-import { CheckSquare, Clock, CheckCircle2, AlertTriangle, Plus } from "lucide-react";
+import { CheckSquare, Clock, CheckCircle2, AlertTriangle, Plus, ClipboardList } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
-import AnimatedPage, { staggerContainer } from "@/components/AnimatedPage";
+import AnimatedPage, { staggerContainer, staggerItem } from "@/components/AnimatedPage";
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import PriorityBadge from "@/components/PriorityBadge";
@@ -12,6 +12,8 @@ import UserAvatar from "@/components/UserAvatar";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import TaskDetailModal from "@/components/TaskDetailModal";
 
 const COLORS = ["hsl(224,72%,53%)", "hsl(142,72%,39%)", "hsl(32,95%,44%)", "hsl(0,72%,51%)"];
 
