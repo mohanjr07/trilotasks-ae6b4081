@@ -144,6 +144,48 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* Manager's own assigned tasks */}
+      {isManager && (
+        <div className="rounded-card bg-card p-5 shadow-card mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardList className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-ink-primary">My Tasks</h3>
+            <span className="ml-auto text-xs text-ink-muted">{myTasks.length} task{myTasks.length !== 1 ? "s" : ""}</span>
+          </div>
+          {myTasks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-ink-muted">No tasks assigned to you yet.</p>
+          ) : (
+            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
+              {myTasks.map((task: any) => (
+                <motion.div
+                  key={task.id}
+                  variants={staggerItem}
+                  onClick={() => setSelectedTask(task)}
+                  className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+                    <p className="text-xs text-ink-muted">Assigned by {task.assigner?.full_name ?? "Admin"}</p>
+                  </div>
+                  <PriorityBadge priority={task.priority ?? "medium"} />
+                  <StatusBadge status={task.status ?? "todo"} />
+                  <div className="hidden sm:flex items-center gap-2 text-xs text-ink-muted w-24">
+                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
+                        className="h-full rounded-full bg-primary" />
+                    </div>
+                    {task.progress ?? 0}%
+                  </div>
+                  <div className="hidden lg:block text-xs text-ink-muted w-20 text-right">
+                    {task.deadline ? format(new Date(task.deadline), "MMM d") : "—"}
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </div>
+      )}
+
       <div className="rounded-card bg-card p-5 shadow-card">
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Recent Tasks</h3>
         <div className="space-y-3">
@@ -170,6 +212,8 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
     </AnimatedPage>
   );
 }
