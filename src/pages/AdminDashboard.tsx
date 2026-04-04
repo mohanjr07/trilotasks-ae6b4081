@@ -32,6 +32,26 @@ export default function AdminDashboard() {
     },
   });
 
+  // Manager's own assigned tasks
+  const { data: myTasks = [] } = useQuery({
+    queryKey: ["manager-my-tasks", user?.id],
+    queryFn: async () => {
+      const { data: assignedIds } = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", user!.id);
+      if (!assignedIds?.length) return [];
+      const ids = assignedIds.map((a: any) => a.task_id);
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
+        .in("id", ids)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+    enabled: isManager && !!user,
+  });
+
   const total = tasks.length;
   const completed = tasks.filter((t: any) => t.status === "completed").length;
   const inProgress = tasks.filter((t: any) => t.status === "in_progress").length;
