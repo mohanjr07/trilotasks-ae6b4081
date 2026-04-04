@@ -111,6 +111,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const clearDraft = () => {
     sessionStorage.removeItem(TASK_DRAFT_KEY);
+    setAttachedFiles([]);
     reset({
       title: "",
       description: "",
