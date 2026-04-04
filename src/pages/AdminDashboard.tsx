@@ -19,6 +19,9 @@ const COLORS = ["hsl(224,72%,53%)", "hsl(142,72%,39%)", "hsl(32,95%,44%)", "hsl(
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { profile, user } = useAuth();
+  const isManager = profile?.role === "manager";
+  const [selectedTask, setSelectedTask] = useState<any>(null);
 
   const { data: tasks = [] } = useQuery({
     queryKey: ["admin-tasks"],
