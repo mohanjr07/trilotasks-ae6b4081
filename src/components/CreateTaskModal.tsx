@@ -310,6 +310,45 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                 <Input {...register("category")} placeholder="e.g. Design, Development" className="h-10" />
               </div>
 
+              {/* Attachments */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Attachments</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setAttachedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1.5"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Attach Files
+                </Button>
+                {attachedFiles.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {attachedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between rounded-md border border-border bg-muted px-3 py-1.5 text-sm">
+                        <span className="truncate text-ink-secondary">{file.name} <span className="text-ink-muted text-xs">({(file.size / 1024).toFixed(1)} KB)</span></span>
+                        <button type="button" onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))} className="text-ink-muted hover:text-destructive ml-2">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={handleClose} className="flex-1">Cancel</Button>
                 <Button type="submit" disabled={createTask.isPending} className="flex-1">
