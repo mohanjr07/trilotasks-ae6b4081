@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check } from "lucide-react";
+import { X, Check, Paperclip, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,8 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
   const { data: employees = [] } = useQuery({
@@ -109,6 +111,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const clearDraft = () => {
     sessionStorage.removeItem(TASK_DRAFT_KEY);
+    setAttachedFiles([]);
     reset({
       title: "",
       description: "",
@@ -154,6 +157,21 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       }));
       const { error: assignError } = await supabase.from("task_assignees").insert(assigneeRows);
       if (assignError) throw assignError;
+
+      // Upload attachments
+      for (const file of attachedFiles) {
+        const filePath = `${taskData.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from("task-attachments").upload(filePath, file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("task-attachments").getPublicUrl(filePath);
+        await supabase.from("task_attachments").insert({
+          task_id: taskData.id,
+          file_name: file.name,
+          file_size: file.size,
+          file_url: urlData.publicUrl,
+          uploaded_by: user!.id,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -290,6 +308,45 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Category</label>
                 <Input {...register("category")} placeholder="e.g. Design, Development" className="h-10" />
+              </div>
+
+              {/* Attachments */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Attachments</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setAttachedFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1.5"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  Attach Files
+                </Button>
+                {attachedFiles.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {attachedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between rounded-md border border-border bg-muted px-3 py-1.5 text-sm">
+                        <span className="truncate text-ink-secondary">{file.name} <span className="text-ink-muted text-xs">({(file.size / 1024).toFixed(1)} KB)</span></span>
+                        <button type="button" onClick={() => setAttachedFiles((prev) => prev.filter((_, i) => i !== idx))} className="text-ink-muted hover:text-destructive ml-2">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-2">

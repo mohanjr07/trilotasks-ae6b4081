@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send } from "lucide-react";
+import { X, Send, Download, Trash2, Paperclip } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,31 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       return data ?? [];
     },
     enabled: !!task,
+  });
+
+  const { data: attachments = [] } = useQuery({
+    queryKey: ["task-attachments", task?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("task_attachments").select("*").eq("task_id", task.id).order("created_at", { ascending: true });
+      return data ?? [];
+    },
+    enabled: !!task,
+  });
+
+  const deleteAttachment = useMutation({
+    mutationFn: async (attachment: any) => {
+      const url = new URL(attachment.file_url);
+      const pathMatch = url.pathname.match(/\/task-attachments\/(.+)$/);
+      if (pathMatch) {
+        await supabase.storage.from("task-attachments").remove([decodeURIComponent(pathMatch[1])]);
+      }
+      await supabase.from("task_attachments").delete().eq("id", attachment.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
+      toast.success("Attachment removed");
+    },
+    onError: () => toast.error("Failed to remove attachment"),
   });
 
   const updateTask = useMutation({
@@ -196,6 +221,32 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   <p className="text-xs text-ink-muted">{format(new Date(task.created_at), "MMM d, yyyy")}</p>
                 </div>
               </div>
+
+              {/* Attachments */}
+              {attachments.length > 0 && (
+                <div className="rounded-lg bg-muted p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2 flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" /> Attachments ({attachments.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {attachments.map((att: any) => (
+                      <div key={att.id} className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-sm">
+                        <span className="truncate text-ink-secondary text-xs">{att.file_name}</span>
+                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                          <a href={att.file_url} target="_blank" rel="noopener noreferrer" download className="text-primary hover:text-primary/80">
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                          {isAdmin && (
+                            <button onClick={() => deleteAttachment.mutate(att)} className="text-ink-muted hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
