@@ -33,12 +33,13 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
   }, [createOpen]);
 
-  const canCreateTasks = profile?.role === "admin" || profile?.role === "manager";
+  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
+  const showAllTasks = isAdmin && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", isAdmin, user?.id],
+    queryKey: ["tasks", showAllTasks, user?.id, myTasksOnly],
     queryFn: async () => {
-      if (isAdmin) {
+      if (showAllTasks) {
         const { data } = await supabase
           .from("tasks")
           .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
