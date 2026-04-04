@@ -157,6 +157,21 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       }));
       const { error: assignError } = await supabase.from("task_assignees").insert(assigneeRows);
       if (assignError) throw assignError;
+
+      // Upload attachments
+      for (const file of attachedFiles) {
+        const filePath = `${taskData.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage.from("task-attachments").upload(filePath, file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("task-attachments").getPublicUrl(filePath);
+        await supabase.from("task_attachments").insert({
+          task_id: taskData.id,
+          file_name: file.name,
+          file_size: file.size,
+          file_url: urlData.publicUrl,
+          uploaded_by: user!.id,
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
