@@ -19,7 +19,7 @@ import TaskDetailModal from "@/components/TaskDetailModal";
 
 const TASK_CREATE_OPEN_KEY = "tasks:create-open";
 
-export default function TasksPage() {
+export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boolean }) {
   const { isAdmin, user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
@@ -33,12 +33,13 @@ export default function TasksPage() {
     sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
   }, [createOpen]);
 
-  const canCreateTasks = profile?.role === "admin" || profile?.role === "manager";
+  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
+  const showAllTasks = isAdmin && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", isAdmin, user?.id],
+    queryKey: ["tasks", showAllTasks, user?.id, myTasksOnly],
     queryFn: async () => {
-      if (isAdmin) {
+      if (showAllTasks) {
         const { data } = await supabase
           .from("tasks")
           .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
@@ -115,7 +116,7 @@ export default function TasksPage() {
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">
-          {canCreateTasks ? "Tasks" : "My Tasks"}
+          {myTasksOnly ? "My Tasks" : canCreateTasks ? "Tasks" : "My Tasks"}
         </h1>
         {canCreateTasks && (
           <Button onClick={handleOpenCreate} className="gap-2">
@@ -148,7 +149,7 @@ export default function TasksPage() {
             <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
-        {isAdmin && (
+        {isAdmin && !myTasksOnly && (
           <Select value={assigneeFilter} onValueChange={setAssignee}>
             <SelectTrigger className="w-[180px] h-10"><SelectValue placeholder="Assignee" /></SelectTrigger>
             <SelectContent>
