@@ -221,6 +221,32 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   <p className="text-xs text-ink-muted">{format(new Date(task.created_at), "MMM d, yyyy")}</p>
                 </div>
               </div>
+
+              {/* Attachments */}
+              {attachments.length > 0 && (
+                <div className="rounded-lg bg-muted p-4">
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2 flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" /> Attachments ({attachments.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {attachments.map((att: any) => (
+                      <div key={att.id} className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-sm">
+                        <span className="truncate text-ink-secondary text-xs">{att.file_name}</span>
+                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                          <a href={att.file_url} target="_blank" rel="noopener noreferrer" download className="text-primary hover:text-primary/80">
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                          {isAdmin && (
+                            <button onClick={() => deleteAttachment.mutate(att)} className="text-ink-muted hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
