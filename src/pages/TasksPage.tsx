@@ -149,7 +149,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
             <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
-        {isAdmin && (
+        {isAdmin && !myTasksOnly && (
           <Select value={assigneeFilter} onValueChange={setAssignee}>
             <SelectTrigger className="w-[180px] h-10"><SelectValue placeholder="Assignee" /></SelectTrigger>
             <SelectContent>
