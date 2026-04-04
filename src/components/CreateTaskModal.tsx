@@ -78,6 +78,8 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
   const { data: employees = [] } = useQuery({
