@@ -116,7 +116,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">
-          {canCreateTasks ? "Tasks" : "My Tasks"}
+          {myTasksOnly ? "My Tasks" : canCreateTasks ? "Tasks" : "My Tasks"}
         </h1>
         {canCreateTasks && (
           <Button onClick={handleOpenCreate} className="gap-2">
