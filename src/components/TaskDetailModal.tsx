@@ -31,6 +31,31 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     enabled: !!task,
   });
 
+  const { data: attachments = [] } = useQuery({
+    queryKey: ["task-attachments", task?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("task_attachments").select("*").eq("task_id", task.id).order("created_at", { ascending: true });
+      return data ?? [];
+    },
+    enabled: !!task,
+  });
+
+  const deleteAttachment = useMutation({
+    mutationFn: async (attachment: any) => {
+      const url = new URL(attachment.file_url);
+      const pathMatch = url.pathname.match(/\/task-attachments\/(.+)$/);
+      if (pathMatch) {
+        await supabase.storage.from("task-attachments").remove([decodeURIComponent(pathMatch[1])]);
+      }
+      await supabase.from("task_attachments").delete().eq("id", attachment.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
+      toast.success("Attachment removed");
+    },
+    onError: () => toast.error("Failed to remove attachment"),
+  });
+
   const updateTask = useMutation({
     mutationFn: async () => {
       await supabase.from("tasks").update({ progress, status }).eq("id", task.id);
