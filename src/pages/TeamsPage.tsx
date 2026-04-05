@@ -542,8 +542,8 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Meeting Link</label>
-                <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://meet.google.com/..." />
-                <p className="text-xs text-ink-muted mt-1">Google Meet, Zoom, Teams, or any URL</p>
+                <Input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://teams.microsoft.com/l/meetup-join/..." />
+                <p className="text-xs text-ink-muted mt-1">Paste your Microsoft Teams meeting link here</p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">

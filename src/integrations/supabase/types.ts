@@ -173,6 +173,7 @@ export type Database = {
         Row: {
           body: string
           created_at: string | null
+          email_sent: boolean | null
           id: string
           is_read: boolean | null
           reference_id: string | null
@@ -183,6 +184,7 @@ export type Database = {
         Insert: {
           body: string
           created_at?: string | null
+          email_sent?: boolean | null
           id?: string
           is_read?: boolean | null
           reference_id?: string | null
@@ -193,6 +195,7 @@ export type Database = {
         Update: {
           body?: string
           created_at?: string | null
+          email_sent?: boolean | null
           id?: string
           is_read?: boolean | null
           reference_id?: string | null
