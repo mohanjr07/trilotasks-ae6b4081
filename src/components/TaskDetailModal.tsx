@@ -154,10 +154,21 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   ))}
                   {comments.length === 0 && <p className="text-xs text-ink-muted">No comments yet.</p>}
                 </div>
-                <div className="flex gap-2">
-                  <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment..."
-                    className="h-9 text-sm" onKeyDown={(e) => e.key === "Enter" && comment.trim() && addComment.mutate()} />
-                  <Button size="sm" onClick={() => comment.trim() && addComment.mutate()} disabled={!comment.trim()}>
+                <div className="flex gap-2 items-end">
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Add a comment... (Ctrl+Enter to send)"
+                    className="flex min-h-[36px] max-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                    rows={2}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && comment.trim()) {
+                        e.preventDefault();
+                        addComment.mutate();
+                      }
+                    }}
+                  />
+                  <Button size="sm" className="shrink-0 h-9" onClick={() => comment.trim() && addComment.mutate()} disabled={!comment.trim()}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
