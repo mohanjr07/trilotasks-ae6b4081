@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Download, Trash2, Paperclip } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
