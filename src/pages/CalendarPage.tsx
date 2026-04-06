@@ -23,6 +23,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FILTER_OPTIONS = [
+  { value: "all", label: "All Events" },
+  { value: "tasks", label: "Tasks" },
+  { value: "leaves", label: "Approved Leave" },
+  { value: "holidays", label: "Holidays" },
+];
 
 export default function CalendarPage() {
   const { profile } = useAuth();
@@ -33,6 +39,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showHolidayModal, setShowHolidayModal] = useState(false);
   const [goToDate, setGoToDate] = useState("");
+  const [filter, setFilter] = useState("all");
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -106,7 +113,7 @@ export default function CalendarPage() {
     setGoToDate("");
   };
 
-  // Build a map of date → events
+  // Build a map of date → events (filtered)
   const dateEvents = useMemo(() => {
     const map: Record<string, { tasks: any[]; leaves: any[]; holidays: any[] }> = {};
     const ensure = (k: string) => {
@@ -114,21 +121,27 @@ export default function CalendarPage() {
       return map[k];
     };
 
-    tasks.forEach((t: any) => {
-      if (t.deadline) ensure(t.deadline).tasks.push(t);
-    });
-    leaves.forEach((l: any) => {
-      const start = parseISO(l.start_date);
-      const end = l.end_date ? parseISO(l.end_date) : start;
-      eachDayOfInterval({ start, end }).forEach((d) => {
-        ensure(format(d, "yyyy-MM-dd")).leaves.push(l);
+    if (filter === "all" || filter === "tasks") {
+      tasks.forEach((t: any) => {
+        if (t.deadline) ensure(t.deadline).tasks.push(t);
       });
-    });
-    holidays.forEach((h: any) => {
-      ensure(h.date).holidays.push(h);
-    });
+    }
+    if (filter === "all" || filter === "leaves") {
+      leaves.forEach((l: any) => {
+        const start = parseISO(l.start_date);
+        const end = l.end_date ? parseISO(l.end_date) : start;
+        eachDayOfInterval({ start, end }).forEach((d) => {
+          ensure(format(d, "yyyy-MM-dd")).leaves.push(l);
+        });
+      });
+    }
+    if (filter === "all" || filter === "holidays") {
+      holidays.forEach((h: any) => {
+        ensure(h.date).holidays.push(h);
+      });
+    }
     return map;
-  }, [tasks, leaves, holidays]);
+  }, [tasks, leaves, holidays, filter]);
 
   const selectedKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
   const selectedEvents = selectedKey ? dateEvents[selectedKey] : null;
@@ -138,6 +151,17 @@ export default function CalendarPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">Calendar</h1>
         <div className="flex items-center gap-2">
+          {/* Filter dropdown */}
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-[160px] h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FILTER_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {/* Go to Date */}
           <Popover>
             <PopoverTrigger asChild>
