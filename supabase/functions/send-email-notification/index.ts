@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
         'X-Connection-Api-Key': RESEND_API_KEY,
       },
       body: JSON.stringify({
-        from: 'TaskFlow <onboarding@resend.dev>',
+        from: 'TaskFlow <noreply@triloautomation.com>',
         to: [profile.email],
         subject,
         html,
