@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 export default function AdminLeavePage() {
@@ -21,6 +22,7 @@ export default function AdminLeavePage() {
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [reviewReq, setReviewReq] = useState<any>(null);
+  const [showAssignLeave, setShowAssignLeave] = useState(false);
 
   const clearRequest = useMutation({
     mutationFn: async (id: string) => {
@@ -67,6 +69,11 @@ export default function AdminLeavePage() {
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">
           Leave & Permissions {pending > 0 && <span className="text-sm font-body bg-warning-light text-warning px-2 py-0.5 rounded-pill ml-2">{pending} pending</span>}
         </h1>
+        {isStrictAdmin && (
+          <Button onClick={() => setShowAssignLeave(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1.5" /> Assign Leave
+          </Button>
+        )}
       </div>
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -128,6 +135,7 @@ export default function AdminLeavePage() {
       </motion.div>
 
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
+      {isStrictAdmin && <AssignLeaveModal open={showAssignLeave} onClose={() => setShowAssignLeave(false)} />}
     </AnimatedPage>
   );
 }
@@ -195,6 +203,119 @@ function ReviewModal({ request, onClose }: { request: any; onClose: () => void }
           </div>
         </motion.div>
       </div>
+    </AnimatePresence>
+  );
+}
+
+function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [employeeId, setEmployeeId] = useState("");
+  const [leaveCategory, setLeaveCategory] = useState("casual_leave");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("");
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["all-employees"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles")
+        .select("id, full_name")
+        .eq("is_active", true)
+        .order("full_name");
+      return data ?? [];
+    },
+    enabled: open,
+  });
+
+  const assign = useMutation({
+    mutationFn: async () => {
+      if (!employeeId || !startDate || !reason.trim()) {
+        toast.error("Employee, start date, and reason are required");
+        return;
+      }
+      const { error } = await supabase.from("leave_requests").insert([{
+        employee_id: employeeId,
+        type: leaveCategory === "casual_leave" ? "leave" : leaveCategory === "on_duty" ? "on_duty" : "leave",
+        leave_category: leaveCategory,
+        start_date: startDate,
+        end_date: endDate || startDate,
+        reason: reason.trim(),
+        status: "approved",
+        reviewed_by: user!.id,
+        reviewed_at: new Date().toISOString(),
+      }]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
+      toast.success("Leave assigned on behalf of employee");
+      setEmployeeId(""); setLeaveCategory("casual_leave"); setStartDate(""); setEndDate(""); setReason("");
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-[460px] rounded-modal bg-card p-6 shadow-modal mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-heading text-xl font-bold text-ink-primary">Assign Leave on Behalf</h2>
+              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Employee *</label>
+                <Select value={employeeId} onValueChange={setEmployeeId}>
+                  <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map((e: any) => (
+                      <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Leave Category *</label>
+                <Select value={leaveCategory} onValueChange={setLeaveCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="casual_leave">Casual Leave</SelectItem>
+                    <SelectItem value="on_duty">On Duty</SelectItem>
+                    <SelectItem value="unauthorised_leave">Unauthorised Leave</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Date *</label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
+                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Reason *</label>
+                <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Reason for leave..." />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+                <Button onClick={() => assign.mutate()} disabled={assign.isPending} className="flex-1">
+                  {assign.isPending ? "Assigning..." : "Assign Leave"}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }

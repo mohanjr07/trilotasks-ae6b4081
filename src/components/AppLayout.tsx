@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
+import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
@@ -188,6 +189,7 @@ export default function AppLayout() {
             {nav.find((n) => n.path === location.pathname)?.label ?? ""}
           </h1>
           <div className="flex-1" />
+          <ThemeToggle />
           <NotificationBell />
           <Link to="/profile">
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
