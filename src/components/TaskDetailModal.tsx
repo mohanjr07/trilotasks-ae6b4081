@@ -36,12 +36,22 @@ interface CommentItemProps {
   replyInputRef: React.RefObject<HTMLTextAreaElement>;
   isSubmitting: boolean;
   currentUserId: string;
+  supportsReplies: boolean;
 }
 
 function CommentItem({
-  comment, depth = 0, onReply, replyingToId, replyText,
-  onReplyTextChange, onSubmitReply, onCancelReply, replyInputRef,
-  isSubmitting, currentUserId,
+  comment,
+  depth = 0,
+  onReply,
+  replyingToId,
+  replyText,
+  onReplyTextChange,
+  onSubmitReply,
+  onCancelReply,
+  replyInputRef,
+  isSubmitting,
+  currentUserId,
+  supportsReplies,
 }: CommentItemProps) {
   const isOwn = comment.user_id === currentUserId;
   const replies: any[] = comment.replies ?? [];
@@ -74,18 +84,20 @@ function CommentItem({
           <p className="text-sm text-ink-secondary mt-0.5 break-words leading-relaxed">
             {comment.body}
           </p>
-          <button
-            onClick={() => onReply(comment.id, comment.user?.full_name ?? "Someone")}
-            className="mt-1.5 text-[11px] text-ink-muted hover:text-primary flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-          >
-            <CornerDownRight className="h-3 w-3" />
-            Reply
-          </button>
+          {supportsReplies && depth === 0 && (
+            <button
+              onClick={() => onReply(comment.id, comment.user?.full_name ?? "Someone")}
+              className="mt-1.5 text-[11px] text-ink-muted hover:text-primary flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+            >
+              <CornerDownRight className="h-3 w-3" />
+              Reply
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Inline reply input – shown directly under the comment being replied to */}
-      {isReplyingHere && (
+      {/* Inline reply input */}
+      {isReplyingHere && supportsReplies && (
         <div className="mt-2 ml-9">
           <div className="flex items-center gap-1.5 mb-1.5">
             <CornerDownRight className="h-3 w-3 text-primary shrink-0" />
@@ -147,6 +159,7 @@ function CommentItem({
               replyInputRef={replyInputRef}
               isSubmitting={isSubmitting}
               currentUserId={currentUserId}
+              supportsReplies={supportsReplies}
             />
           ))}
         </div>
@@ -168,6 +181,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [comment, setComment] = useState("");
   const [replyingTo, setReplyingTo] = useState<{ id: string; author: string } | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [supportsReplies, setSupportsReplies] = useState(true);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
   const commentsBottomRef = useRef<HTMLDivElement>(null);
 
@@ -188,18 +202,35 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     if (replyingTo) setTimeout(() => replyInputRef.current?.focus(), 60);
   }, [replyingTo?.id]);
 
-  // Fetch comments and build a tree (top-level + replies)
+  // Fetch comments — tries with parent_id first, falls back gracefully if column doesn't exist yet
   const { data: comments = [] } = useQuery({
     queryKey: ["task-comments", task?.id],
     queryFn: async () => {
+      // Try fetching with parent_id (requires migration to be run)
       const { data, error } = await supabase
         .from("task_comments")
         .select("id, body, created_at, parent_id, user_id, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
-      if (error) throw error;
+
+      if (error) {
+        // If parent_id column doesn't exist yet, fall back to basic fetch without it
+        if (error.message?.includes("parent_id") || error.code === "42703" || error.message?.includes("schema cache")) {
+          setSupportsReplies(false);
+          const { data: fallback, error: fallbackError } = await supabase
+            .from("task_comments")
+            .select("id, body, created_at, user_id, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
+            .eq("task_id", task.id)
+            .order("created_at", { ascending: true });
+          if (fallbackError) throw fallbackError;
+          return (fallback ?? []).map((c: any) => ({ ...c, replies: [] }));
+        }
+        throw error;
+      }
+
+      setSupportsReplies(true);
       const all = data ?? [];
-      // Build tree
+      // Build comment tree
       const map: Record<string, any> = {};
       all.forEach((c: any) => { map[c.id] = { ...c, replies: [] }; });
       const roots: any[] = [];
@@ -284,7 +315,6 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         .insert(editAssignees.map((uid) => ({ task_id: task.id, user_id: uid })));
       if (insError) throw insError;
 
-      // Notify ALL assignees (in-app + email via DB trigger)
       const deadlineText = editDeadline ? ` Deadline: ${new Date(editDeadline).toLocaleDateString()}.` : "";
       await supabase.from("notifications").insert(
         editAssignees.map((uid) => ({
@@ -320,12 +350,15 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     mutationFn: async () => {
       const trimmed = comment.trim();
       if (!trimmed) return;
-      const { error } = await supabase.from("task_comments").insert({
+      const insertData: any = {
         task_id: task.id,
         user_id: user!.id,
         body: trimmed,
-        parent_id: null,
-      });
+      };
+      if (supportsReplies) {
+        insertData.parent_id = null;
+      }
+      const { error } = await supabase.from("task_comments").insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -339,14 +372,20 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const addReply = useMutation({
     mutationFn: async ({ body, parentId }: { body: string; parentId: string }) => {
       const trimmed = body.trim();
-      if (!trimmed) return;
+      if (!trimmed || !supportsReplies) return;
       const { error } = await supabase.from("task_comments").insert({
         task_id: task.id,
         user_id: user!.id,
         body: trimmed,
         parent_id: parentId,
       });
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes("parent_id") || error.code === "42703" || error.message?.includes("schema cache")) {
+          setSupportsReplies(false);
+          throw new Error("Reply feature needs a DB migration. Run fix_comment_replies.sql in Supabase SQL Editor.");
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       invalidateComments();
@@ -364,7 +403,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       if (pathMatch) await supabase.storage.from("task-attachments").remove([decodeURIComponent(pathMatch[1])]);
       await supabase.from("task_attachments").delete().eq("id", attachment.id);
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] }); toast.success("Attachment removed"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
+      toast.success("Attachment removed");
+    },
     onError: () => toast.error("Failed to remove attachment"),
   });
 
@@ -375,11 +417,17 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from("task-attachments").getPublicUrl(filePath);
       await supabase.from("task_attachments").insert({
-        task_id: task.id, file_name: file.name, file_size: file.size,
-        file_url: urlData.publicUrl, uploaded_by: user!.id,
+        task_id: task.id,
+        file_name: file.name,
+        file_size: file.size,
+        file_url: urlData.publicUrl,
+        uploaded_by: user!.id,
       });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] }); toast.success("File attached"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
+      toast.success("File attached");
+    },
     onError: () => toast.error("Failed to upload file"),
   });
 
@@ -417,15 +465,22 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
           {/* Header */}
           <div className="sticky top-0 bg-card z-10 flex items-center justify-between p-5 border-b border-border gap-3">
             {editMode ? (
-              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                className="h-9 font-heading text-base font-bold text-ink-primary flex-1" autoFocus placeholder="Task title" />
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="h-9 font-heading text-base font-bold text-ink-primary flex-1"
+                autoFocus
+                placeholder="Task title"
+              />
             ) : (
               <h2 className="font-heading text-lg font-bold text-ink-primary truncate flex-1">{task.title}</h2>
             )}
             <div className="flex items-center gap-2 shrink-0">
               {isAdmin && !editMode && (
-                <button onClick={() => setEditMode(true)}
-                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted">
+                <button
+                  onClick={() => setEditMode(true)}
+                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted"
+                >
                   <Pencil className="h-4 w-4" />
                   <span className="hidden sm:inline">Edit</span>
                 </button>
@@ -445,7 +500,9 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   <span className="hidden sm:inline">Delete</span>
                 </button>
               )}
-              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
+              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary">
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
@@ -462,7 +519,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
               {editMode ? (
                 <div>
                   <label className="text-sm font-medium text-ink-primary mb-1.5 block">Description</label>
-                  <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} placeholder="Task description..." />
+                  <Textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={4}
+                    placeholder="Task description..."
+                  />
                 </div>
               ) : (
                 task.description && <p className="text-sm text-ink-secondary">{task.description}</p>
@@ -473,9 +535,16 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   <label className="text-sm font-medium text-ink-primary mb-1.5 block">Priority</label>
                   <div className="flex gap-2">
                     {(["low", "medium", "high"] as const).map((p) => (
-                      <button key={p} type="button" onClick={() => setEditPriority(p)}
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setEditPriority(p)}
                         className={`flex-1 rounded-lg border py-2 text-sm font-medium capitalize transition-all ${
-                          editPriority === p ? `${PRIORITY_COLORS[p]} border-current` : "border-border text-ink-secondary hover:bg-muted"}`}>
+                          editPriority === p
+                            ? `${PRIORITY_COLORS[p]} border-current`
+                            : "border-border text-ink-secondary hover:bg-muted"
+                        }`}
+                      >
                         {p}
                       </button>
                     ))}
@@ -488,9 +557,23 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 <label className="text-sm font-medium text-ink-primary mb-2 block">
                   Completion — <span className="text-primary font-heading text-xl">{progress}%</span>
                 </label>
-                <Slider value={[progress]} onValueChange={([v]) => { setProgress(v); if (v === 100) setStatus("completed"); }}
-                  max={100} step={5} className="my-3" />
-                <Select value={status} onValueChange={(v) => { setStatus(v); if (v === "completed") setProgress(100); }}>
+                <Slider
+                  value={[progress]}
+                  onValueChange={([v]) => {
+                    setProgress(v);
+                    if (v === 100) setStatus("completed");
+                  }}
+                  max={100}
+                  step={5}
+                  className="my-3"
+                />
+                <Select
+                  value={status}
+                  onValueChange={(v) => {
+                    setStatus(v);
+                    if (v === "completed") setProgress(100);
+                  }}
+                >
                   <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todo">To Do</SelectItem>
@@ -499,7 +582,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button size="sm" onClick={() => updateProgressStatus.mutate()} disabled={updateProgressStatus.isPending} className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={() => updateProgressStatus.mutate()}
+                  disabled={updateProgressStatus.isPending}
+                  className="mt-3"
+                >
                   {updateProgressStatus.isPending ? "Saving..." : "Save Progress"}
                 </Button>
               </div>
@@ -510,11 +598,13 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     <Check className="h-4 w-4" />
                     {saveEdit.isPending ? "Saving..." : "Save Task"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saveEdit.isPending}>Cancel</Button>
+                  <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saveEdit.isPending}>
+                    Cancel
+                  </Button>
                 </div>
               )}
 
-              {/* ── Threaded Comments ── */}
+              {/* ── Comments Section ── */}
               <div>
                 <h4 className="text-sm font-semibold text-ink-primary mb-3 flex items-center gap-2">
                   Comments
@@ -549,17 +639,22 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                         replyInputRef={replyInputRef}
                         isSubmitting={addReply.isPending}
                         currentUserId={user?.id ?? ""}
+                        supportsReplies={supportsReplies}
                       />
                     ))
                   )}
                   <div ref={commentsBottomRef} />
                 </div>
 
-                {/* New top-level comment */}
+                {/* New top-level comment input */}
                 <div className="border-t border-border pt-3">
                   <div className="flex gap-2 items-end">
                     <div className="shrink-0 mt-1">
-                      <UserAvatar name={user?.email ?? "?"} avatarUrl={undefined} size="sm" />
+                      <UserAvatar
+                        name={profile?.full_name ?? user?.email ?? "?"}
+                        avatarUrl={profile?.avatar_url}
+                        size="sm"
+                      />
                     </div>
                     <textarea
                       value={comment}
@@ -574,9 +669,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                         }
                       }}
                     />
-                    <Button size="sm" className="shrink-0 h-9"
+                    <Button
+                      size="sm"
+                      className="shrink-0 h-9"
                       onClick={() => comment.trim() && addComment.mutate()}
-                      disabled={!comment.trim() || addComment.isPending}>
+                      disabled={!comment.trim() || addComment.isPending}
+                    >
                       <Send className="h-4 w-4" />
                     </Button>
                   </div>
@@ -592,8 +690,11 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">Assigned to</p>
                   {editMode ? (
                     <div className="relative">
-                      <button type="button" onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
-                        className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                        className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring gap-1"
+                      >
                         <span className="flex-1 flex flex-wrap gap-1 text-left">
                           {editAssignees.length === 0 ? (
                             <span className="text-muted-foreground">Select members...</span>
@@ -603,7 +704,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                               return (
                                 <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
                                   {emp?.full_name ?? "..."}
-                                  <button type="button" onClick={(ev) => { ev.stopPropagation(); toggleAssignee(id); }}>
+                                  <button
+                                    type="button"
+                                    onClick={(ev) => { ev.stopPropagation(); toggleAssignee(id); }}
+                                  >
                                     <X className="h-3 w-3" />
                                   </button>
                                 </span>
@@ -618,8 +722,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                           {employees.map((emp: any) => {
                             const selected = editAssignees.includes(emp.id);
                             return (
-                              <button key={emp.id} type="button" onClick={() => toggleAssignee(emp.id)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors">
+                              <button
+                                key={emp.id}
+                                type="button"
+                                onClick={() => toggleAssignee(emp.id)}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                              >
                                 <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-border"}`}>
                                   {selected && <Check className="h-3 w-3 text-primary-foreground" />}
                                 </div>
@@ -663,7 +771,13 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Deadline</p>
                   {editMode ? (
-                    <Input type="date" value={editDeadline} min={today()} onChange={(e) => setEditDeadline(e.target.value)} className="h-9" />
+                    <Input
+                      type="date"
+                      value={editDeadline}
+                      min={today()}
+                      onChange={(e) => setEditDeadline(e.target.value)}
+                      className="h-9"
+                    />
                   ) : (
                     <>
                       <p className="text-sm text-ink-primary">
@@ -671,7 +785,11 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       </p>
                       {daysLeft !== null && (
                         <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
-                          {daysLeft < 0 ? `Overdue by ${Math.abs(daysLeft)} days` : daysLeft === 0 ? "Due today" : `${daysLeft} days remaining`}
+                          {daysLeft < 0
+                            ? `Overdue by ${Math.abs(daysLeft)} days`
+                            : daysLeft === 0
+                            ? "Due today"
+                            : `${daysLeft} days remaining`}
                         </p>
                       )}
                     </>
@@ -682,7 +800,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Category</p>
                   {editMode ? (
-                    <Input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} placeholder="e.g. Design, Development" className="h-9" />
+                    <Input
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      placeholder="e.g. Design, Development"
+                      className="h-9"
+                    />
                   ) : task.category ? (
                     <span className="text-xs bg-purple-light text-purple px-2 py-0.5 rounded-pill">{task.category}</span>
                   ) : (
@@ -705,12 +828,21 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     Attachments {attachments.length > 0 && `(${attachments.length})`}
                   </p>
                   <div>
-                    <input ref={fileInputRef} type="file" multiple className="hidden"
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
                       onChange={(e) => {
                         if (e.target.files) Array.from(e.target.files).forEach((file) => uploadAttachment.mutate(file));
                         e.target.value = "";
-                      }} />
-                    <button onClick={() => fileInputRef.current?.click()} className="text-xs text-primary hover:underline" disabled={uploadAttachment.isPending}>
+                      }}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-xs text-primary hover:underline"
+                      disabled={uploadAttachment.isPending}
+                    >
                       {uploadAttachment.isPending ? "Uploading..." : "+ Add file"}
                     </button>
                   </div>
@@ -721,11 +853,20 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       <div key={att.id} className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-sm">
                         <span className="truncate text-ink-secondary text-xs">{att.file_name}</span>
                         <div className="flex items-center gap-1 ml-2 shrink-0">
-                          <a href={att.file_url} target="_blank" rel="noopener noreferrer" download className="text-primary hover:text-primary/80">
+                          <a
+                            href={att.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="text-primary hover:text-primary/80"
+                          >
                             <Download className="h-3.5 w-3.5" />
                           </a>
                           {isAdmin && (
-                            <button onClick={() => deleteAttachment.mutate(att)} className="text-ink-muted hover:text-destructive">
+                            <button
+                              onClick={() => deleteAttachment.mutate(att)}
+                              className="text-ink-muted hover:text-destructive"
+                            >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
