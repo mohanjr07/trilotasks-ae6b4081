@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, X as XIcon, CheckSquare } from "lucide-react";
+import { Plus, Search, CheckSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
@@ -18,7 +18,6 @@ import TaskDetailModal from "@/components/TaskDetailModal";
 
 export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boolean }) {
   const { isAdmin, user, profile } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -27,11 +26,11 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
 
   const canCreateTasks = profile?.role === "admin" || profile?.role === "manager";
 
-  // ✅ FIXED QUERY (NO JOINS → NO 500 ERROR)
+  // ✅ FIXED QUERY WITH USERS
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
-      // 1. Get tasks
+      // 1. Tasks
       const { data: tasksData, error: tasksError } = await supabase
         .from("tasks")
         .select("*")
@@ -42,17 +41,31 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         return [];
       }
 
-      // 2. Get assignees
+      // 2. Assignees
       const { data: assigneesData } = await supabase
         .from("task_assignees")
         .select("task_id, user_id");
 
-      // 3. Attach assignees to tasks
-      const mapped = tasksData.map((task: any) => ({
-        ...task,
-        task_assignees:
-          assigneesData?.filter((a: any) => a.task_id === task.id) || [],
-      }));
+      // 3. Users
+      const { data: usersData } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, email");
+
+      // 4. Attach users to assignees
+      const mapped = tasksData.map((task: any) => {
+        const taskAssignees =
+          assigneesData
+            ?.filter((a: any) => a.task_id === task.id)
+            .map((a: any) => ({
+              ...a,
+              user: usersData?.find((u: any) => u.id === a.user_id),
+            })) || [];
+
+        return {
+          ...task,
+          task_assignees: taskAssignees,
+        };
+      });
 
       return mapped;
     },
@@ -68,6 +81,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
 
   return (
     <AnimatedPage>
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">
           {myTasksOnly ? "My Tasks" : "Tasks"}
@@ -81,7 +95,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         )}
       </div>
 
-      {/* Filters */}
+      {/* FILTERS */}
       <div className="flex gap-3 mb-4">
         <Input
           placeholder="Search tasks..."
@@ -114,7 +128,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         </Select>
       </div>
 
-      {/* Content */}
+      {/* CONTENT */}
       {isLoading ? (
         <p>Loading...</p>
       ) : filteredTasks.length === 0 ? (
@@ -134,14 +148,19 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
             <motion.div
               key={task.id}
               variants={staggerItem}
-              className="p-4 bg-white rounded shadow cursor-pointer"
-              onClick={() => setSelectedTask(task)}
+              className="p-4 bg-white rounded shadow cursor-pointer hover:shadow-md transition"
+              onClick={() => {
+                console.log("CLICKED TASK:", task); // ✅ DEBUG
+                setSelectedTask(task);
+              }}
             >
               <p className="font-semibold">{task.title}</p>
+
               <div className="flex gap-2 mt-2">
                 <PriorityBadge priority={task.priority ?? "medium"} />
                 <StatusBadge status={task.status ?? "todo"} />
               </div>
+
               <p className="text-xs text-gray-500 mt-1">
                 {task.deadline
                   ? format(new Date(task.deadline), "MMM d")
@@ -152,8 +171,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         </motion.div>
       )}
 
+      {/* MODALS */}
       <CreateTaskModal open={createOpen} onClose={() => setCreateOpen(false)} />
-      <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+        />
+      )}
     </AnimatedPage>
   );
 }
