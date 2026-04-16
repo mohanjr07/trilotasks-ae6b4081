@@ -349,6 +349,7 @@ export type Database = {
           body: string
           created_at: string | null
           id: string
+          parent_id: string | null
           task_id: string
           user_id: string
         }
@@ -356,6 +357,7 @@ export type Database = {
           body: string
           created_at?: string | null
           id?: string
+          parent_id?: string | null
           task_id: string
           user_id: string
         }
@@ -363,6 +365,7 @@ export type Database = {
           body?: string
           created_at?: string | null
           id?: string
+          parent_id?: string | null
           task_id?: string
           user_id?: string
         }
