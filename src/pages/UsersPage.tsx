@@ -56,9 +56,9 @@ export default function UsersPage() {
   const { data: taskCounts = {} } = useQuery({
     queryKey: ["users-task-counts"],
     queryFn: async () => {
-      const { data } = await supabase.from("tasks").select("assigned_to");
+      const { data } = await supabase.from("task_assignees").select("user_id");
       const counts: Record<string, number> = {};
-      (data ?? []).forEach((t: any) => { counts[t.assigned_to] = (counts[t.assigned_to] ?? 0) + 1; });
+      (data ?? []).forEach((a: any) => { counts[a.user_id] = (counts[a.user_id] ?? 0) + 1; });
       return counts;
     },
   });

@@ -27,7 +27,10 @@ export default function AdminDashboard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["admin-tasks"],
     queryFn: async () => {
-      const { data } = await supabase.from("tasks").select("*, assigned:profiles!tasks_assigned_to_fkey(full_name, avatar_url)");
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
+        .order("created_at", { ascending: false });
       return data ?? [];
     },
   });
@@ -189,24 +192,30 @@ export default function AdminDashboard() {
       <div className="rounded-card bg-card p-5 shadow-card">
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Recent Tasks</h3>
         <div className="space-y-3">
-          {tasks.slice(0, 5).map((task: any) => (
-            <div key={task.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors">
-              <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
-                <p className="text-xs text-ink-muted">{task.assigned?.full_name}</p>
-              </div>
-              <PriorityBadge priority={task.priority} />
-              <StatusBadge status={task.status} />
-              <div className="hidden sm:flex items-center gap-2 text-xs text-ink-muted w-24">
-                <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
-                  <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
-                    className="h-full rounded-full bg-primary" />
+          {tasks.slice(0, 5).map((task: any) => {
+            const assignees = task.task_assignees?.map((a: any) => a.user) ?? [];
+            const primary = assignees[0];
+            return (
+              <div key={task.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors">
+                <UserAvatar name={primary?.full_name ?? "?"} avatarUrl={primary?.avatar_url} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+                  <p className="text-xs text-ink-muted">
+                    {assignees.length === 0 ? "Unassigned" : assignees.length === 1 ? primary?.full_name : `${primary?.full_name} +${assignees.length - 1} more`}
+                  </p>
                 </div>
-                {task.progress}%
+                <PriorityBadge priority={task.priority} />
+                <StatusBadge status={task.status} />
+                <div className="hidden sm:flex items-center gap-2 text-xs text-ink-muted w-24">
+                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
+                      className="h-full rounded-full bg-primary" />
+                  </div>
+                  {task.progress}%
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {tasks.length === 0 && (
             <p className="py-8 text-center text-sm text-ink-muted">No tasks yet. Create one to get started.</p>
           )}

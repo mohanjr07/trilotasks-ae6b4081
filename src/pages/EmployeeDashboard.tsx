@@ -16,7 +16,18 @@ export default function EmployeeDashboard() {
   const { data: tasks = [] } = useQuery({
     queryKey: ["my-tasks", user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("tasks").select("*").eq("assigned_to", user!.id).order("deadline", { ascending: true });
+      // Fetch via task_assignees so multi-assignee tasks are included
+      const { data: assignedIds } = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", user!.id);
+      if (!assignedIds?.length) return [];
+      const ids = assignedIds.map((a: any) => a.task_id);
+      const { data } = await supabase
+        .from("tasks")
+        .select("*")
+        .in("id", ids)
+        .order("deadline", { ascending: true });
       return data ?? [];
     },
     enabled: !!user,
