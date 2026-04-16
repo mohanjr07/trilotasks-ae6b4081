@@ -157,8 +157,9 @@ function CommentItem({
 
 // ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function TaskDetailModal({ task, onClose }: { task: any; onClose: () => void }) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, profile } = useAuth();
   const queryClient = useQueryClient();
+  const canManageTasks = profile?.role === "admin" || profile?.role === "manager";
 
   const [progress, setProgress] = useState(task?.progress ?? 0);
   const [status, setStatus] = useState(task?.status ?? "todo");
@@ -193,7 +194,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     queryFn: async () => {
       const { data, error } = await supabase
         .from("task_comments")
-        .select("*, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
+        .select("id, body, created_at, parent_id, user_id, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -205,14 +206,14 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       all.forEach((c: any) => {
         if (c.parent_id && map[c.parent_id]) {
           map[c.parent_id].replies.push(map[c.id]);
-        } else if (!c.parent_id) {
+        } else {
           roots.push(map[c.id]);
         }
       });
       return roots;
     },
     enabled: !!task,
-    refetchInterval: 15000,
+    refetchInterval: 10000,
   });
 
   const { data: attachments = [] } = useQuery({
@@ -299,38 +300,61 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
   });
 
+  const deleteTask = useMutation({
+    mutationFn: async () => {
+      await supabase.from("task_assignees").delete().eq("task_id", task.id);
+      await supabase.from("task_comments").delete().eq("task_id", task.id);
+      await supabase.from("task_attachments").delete().eq("task_id", task.id);
+      const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateTasks();
+      toast.success("Task deleted");
+      onClose();
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to delete task"),
+  });
+
   const addComment = useMutation({
     mutationFn: async () => {
-      await supabase.from("task_comments").insert({
+      const trimmed = comment.trim();
+      if (!trimmed) return;
+      const { error } = await supabase.from("task_comments").insert({
         task_id: task.id,
         user_id: user!.id,
-        body: comment.trim(),
+        body: trimmed,
         parent_id: null,
       });
+      if (error) throw error;
     },
     onSuccess: () => {
       invalidateComments();
       setComment("");
-      setTimeout(() => commentsBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      setTimeout(() => commentsBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 150);
     },
-    onError: () => toast.error("Failed to add comment"),
+    onError: (e: any) => toast.error(e.message ?? "Failed to add comment"),
   });
 
   const addReply = useMutation({
     mutationFn: async ({ body, parentId }: { body: string; parentId: string }) => {
-      await supabase.from("task_comments").insert({
+      const trimmed = body.trim();
+      if (!trimmed) return;
+      const { error } = await supabase.from("task_comments").insert({
         task_id: task.id,
         user_id: user!.id,
-        body: body.trim(),
+        body: trimmed,
         parent_id: parentId,
       });
+      if (error) throw error;
     },
     onSuccess: () => {
       invalidateComments();
       setReplyingTo(null);
       setReplyText("");
+      setTimeout(() => commentsBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 150);
     },
-    onError: () => toast.error("Failed to add reply"),
+    onError: (e: any) => toast.error(e.message ?? "Failed to add reply"),
   });
 
   const deleteAttachment = useMutation({
@@ -404,6 +428,21 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted">
                   <Pencil className="h-4 w-4" />
                   <span className="hidden sm:inline">Edit</span>
+                </button>
+              )}
+              {canManageTasks && !editMode && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to delete this task? This action cannot be undone.")) {
+                      deleteTask.mutate();
+                    }
+                  }}
+                  disabled={deleteTask.isPending}
+                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-destructive transition-colors px-2 py-1 rounded-md hover:bg-destructive/10"
+                  title="Delete task"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Delete</span>
                 </button>
               )}
               <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>

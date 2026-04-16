@@ -53,9 +53,20 @@ export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() =>
+    typeof window !== "undefined" && document.documentElement.classList.contains("dark")
+  );
   const isAdmin = profile?.role === "admin";
   const isManager = profile?.role === "manager";
   const nav = isAdmin ? adminNav : isManager ? managerNav : employeeNav;
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -67,7 +78,11 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card z-30">
         <div className="flex h-[60px] items-center gap-2 px-5 border-b border-border">
-          <img src="/logo.png" alt="Trilo Automation" className="h-28 object-contain" />
+          <img
+            src={isDark ? "/logo-dark.png" : "/logo.png"}
+            alt="Trilo Automation"
+            className="h-28 object-contain"
+          />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -134,7 +149,11 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Trilo Automation" className="h-24 object-contain" />
+                <img
+                  src={isDark ? "/logo-dark.png" : "/logo.png"}
+                  alt="Trilo Automation"
+                  className="h-24 object-contain"
+                />
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
                 <X className="h-5 w-5" />
