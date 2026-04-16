@@ -1,178 +1,102 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { z } from "npm:zod@3.25.76";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
-const GATEWAY_URL = 'https://connector-gateway.lovable.dev/resend'
+const UpdateUserSchema = z.object({
+  userId: z.string().uuid(),
+  full_name: z.string().trim().min(1).max(100),
+  role: z.enum(["admin", "manager", "employee"]),
+  department: z.string().trim().max(100).nullable().optional(),
+  position: z.string().trim().max(100).nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
+});
 
-interface NotificationPayload {
-  id: string
-  user_id: string
-  title: string
-  body: string
-  type: string | null
-  reference_id: string | null
-}
-
-function buildEmailHtml(notification: NotificationPayload, userName: string, userEmail: string): { subject: string; html: string } {
-  const type = notification.type || 'general'
-  let subject = notification.title
-  let ctaText = 'Open TaskFlow'
-  let ctaUrl = 'https://trilotasks.lovable.app'
-
-  if (type === 'task') {
-    subject = `TaskFlow: ${notification.title}`
-    ctaText = 'View Task'
-    ctaUrl = 'https://trilotasks.lovable.app/tasks'
-  } else if (type === 'leave') {
-    subject = `TaskFlow: ${notification.title}`
-    ctaText = 'View Details'
-    ctaUrl = 'https://trilotasks.lovable.app/leave'
-  } else if (type === 'meeting') {
-    subject = `TaskFlow: ${notification.title}`
-    ctaText = 'View Meeting'
-    ctaUrl = 'https://trilotasks.lovable.app/teams'
-  }
-
-  const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:Arial,Helvetica,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:40px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <!-- Header -->
-        <tr>
-          <td style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 32px 40px; text-align: center;">
-            <h1 style="color:#ffffff;font-size:24px;margin:0;font-weight:700;">TaskFlow</h1>
-          </td>
-        </tr>
-        <!-- Body -->
-        <tr>
-          <td style="padding:40px;">
-            <p style="color:#374151;font-size:16px;margin:0 0 8px;">Hi <strong>${userName}</strong>,</p>
-            <h2 style="color:#111827;font-size:20px;margin:16px 0 8px;">${notification.title}</h2>
-            <p style="color:#4b5563;font-size:15px;line-height:1.6;margin:0 0 28px;">${notification.body}</p>
-            <table cellpadding="0" cellspacing="0"><tr><td>
-              <a href="${ctaUrl}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;">
-                ${ctaText}
-              </a>
-            </td></tr></table>
-          </td>
-        </tr>
-        <!-- Footer -->
-        <tr>
-          <td style="padding:24px 40px;background-color:#f9fafb;border-top:1px solid #e5e7eb;text-align:center;">
-            <p style="color:#9ca3af;font-size:12px;margin:0;">This is an automated notification from TaskFlow.<br/>You received this because you have an account on TaskFlow.</p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`
-
-  return { subject, html }
-}
+const json = (body: Record<string, unknown>, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
+  });
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured')
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const authHeader = req.headers.get("Authorization");
 
-    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-    if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured')
-
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-    const payload = await req.json()
-
-    // Support both direct call and pg_net trigger (record field)
-    const notification: NotificationPayload = payload.record || payload
-
-    if (!notification.user_id || !notification.title) {
-      return new Response(JSON.stringify({ error: 'Invalid notification payload' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!supabaseUrl || !publishableKey || !serviceRoleKey) {
+      return json({ error: "Missing backend configuration" }, 500);
     }
 
-    // Fetch user profile
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', notification.user_id)
-      .single()
-
-    if (profileError || !profile?.email) {
-      console.error('Could not fetch user profile:', profileError)
-      return new Response(JSON.stringify({ error: 'User profile not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
-    const { subject, html } = buildEmailHtml(notification, profile.full_name, profile.email)
-
-    // Send email via Resend gateway
-    const emailResponse = await fetch(`${GATEWAY_URL}/emails`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'X-Connection-Api-Key': RESEND_API_KEY,
+    const userClient = createClient(supabaseUrl, publishableKey, {
+      global: {
+        headers: { Authorization: authHeader },
       },
-      body: JSON.stringify({
-        from: 'TaskFlow <noreply@triloautomation.com>',
-        to: [profile.email],
-        subject,
-        html,
-      }),
-    })
+    });
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const emailResult = await emailResponse.json()
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    const callerId = claimsData?.claims?.sub;
 
-    if (!emailResponse.ok) {
-      console.error('Resend API error:', emailResult)
-      // Update email_sent = false but don't throw
-      await supabase
-        .from('notifications')
-        .update({ email_sent: false })
-        .eq('id', notification.id)
-
-      return new Response(JSON.stringify({ success: false, error: emailResult }), {
-        status: 200, // Return 200 to not break trigger flow
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (claimsError || !callerId) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
-    // Mark email as sent
-    await supabase
-      .from('notifications')
-      .update({ email_sent: true })
-      .eq('id', notification.id)
+    const { data: callerProfile, error: callerError } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", callerId)
+      .maybeSingle();
 
-    console.log(`Email sent to ${profile.email} for notification ${notification.id}`)
+    if (callerError || !callerProfile || !["admin", "super_admin"].includes(callerProfile.role ?? "")) {
+      return json({ error: "Only admins can update users" }, 403);
+    }
 
-    return new Response(JSON.stringify({ success: true, emailId: emailResult.id }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    const parsedBody = UpdateUserSchema.safeParse(await req.json());
+    if (!parsedBody.success) {
+      return json({ error: parsedBody.error.flatten().fieldErrors }, 400);
+    }
+
+    const body = parsedBody.data;
+
+    if (body.userId === callerId && body.role !== "admin") {
+      return json({ error: "You cannot remove your own admin role" }, 400);
+    }
+
+    const { error: updateError } = await adminClient
+      .from("profiles")
+      .update({
+        full_name: body.full_name,
+        role: body.role,
+        department: body.department || null,
+        position: body.position || null,
+        phone: body.phone || null,
+      })
+      .eq("id", body.userId);
+
+    if (updateError) {
+      return json({ error: updateError.message }, 400);
+    }
+
+    return json({ success: true });
   } catch (error) {
-    console.error('Email notification error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
-      status: 200, // Return 200 to not break trigger flow
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return json({ error: message }, 500);
   }
-})
+});
