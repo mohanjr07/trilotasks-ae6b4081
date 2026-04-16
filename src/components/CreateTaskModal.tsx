@@ -158,6 +158,20 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       const { error: assignError } = await supabase.from("task_assignees").insert(assigneeRows);
       if (assignError) throw assignError;
 
+      // Send in-app + email notifications to ALL assignees
+      const deadlineText = data.deadline
+        ? ` Deadline: ${new Date(data.deadline).toLocaleDateString()}.`
+        : "";
+      const notificationRows = data.assigned_to.map((userId) => ({
+        user_id: userId,
+        title: "New Task Assigned",
+        body: `You have been assigned a new task: "${data.title}".${deadlineText}`,
+        type: "task",
+        reference_id: taskData.id,
+      }));
+      const { error: notifError } = await supabase.from("notifications").insert(notificationRows);
+      if (notifError) console.error("Notification insert failed:", notifError);
+
       // Upload attachments
       for (const file of attachedFiles) {
         const filePath = `${taskData.id}/${Date.now()}_${file.name}`;

@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown } from "lucide-react";
+import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,16 +23,154 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-destructive-light text-destructive border-destructive/20",
 };
 
+// ── Threaded Comment Component ─────────────────────────────────────────────────
+interface CommentItemProps {
+  comment: any;
+  depth?: number;
+  onReply: (parentId: string, parentAuthor: string) => void;
+  replyingToId: string | null;
+  replyText: string;
+  onReplyTextChange: (v: string) => void;
+  onSubmitReply: (parentId: string) => void;
+  onCancelReply: () => void;
+  replyInputRef: React.RefObject<HTMLTextAreaElement>;
+  isSubmitting: boolean;
+  currentUserId: string;
+}
+
+function CommentItem({
+  comment, depth = 0, onReply, replyingToId, replyText,
+  onReplyTextChange, onSubmitReply, onCancelReply, replyInputRef,
+  isSubmitting, currentUserId,
+}: CommentItemProps) {
+  const isOwn = comment.user_id === currentUserId;
+  const replies: any[] = comment.replies ?? [];
+  const isReplyingHere = replyingToId === comment.id;
+
+  return (
+    <div className={depth > 0 ? "ml-6 border-l-2 border-border pl-3" : ""}>
+      <div className="flex gap-2.5 group">
+        <div className="shrink-0 mt-0.5">
+          <UserAvatar
+            name={comment.user?.full_name ?? "?"}
+            avatarUrl={comment.user?.avatar_url}
+            size="sm"
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-ink-primary">
+              {comment.user?.full_name ?? "Unknown"}
+            </span>
+            {isOwn && (
+              <span className="text-[9px] bg-primary/10 text-primary rounded px-1.5 py-0.5 font-medium leading-tight">
+                You
+              </span>
+            )}
+            <span className="text-[10px] text-ink-muted">
+              {format(new Date(comment.created_at), "MMM d, h:mm a")}
+            </span>
+          </div>
+          <p className="text-sm text-ink-secondary mt-0.5 break-words leading-relaxed">
+            {comment.body}
+          </p>
+          <button
+            onClick={() => onReply(comment.id, comment.user?.full_name ?? "Someone")}
+            className="mt-1.5 text-[11px] text-ink-muted hover:text-primary flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+          >
+            <CornerDownRight className="h-3 w-3" />
+            Reply
+          </button>
+        </div>
+      </div>
+
+      {/* Inline reply input – shown directly under the comment being replied to */}
+      {isReplyingHere && (
+        <div className="mt-2 ml-9">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <CornerDownRight className="h-3 w-3 text-primary shrink-0" />
+            <span className="text-[11px] text-ink-muted">
+              Replying to{" "}
+              <span className="font-semibold text-ink-primary">
+                {comment.user?.full_name ?? "this comment"}
+              </span>
+            </span>
+            <button
+              onClick={onCancelReply}
+              className="ml-auto text-[10px] text-ink-muted hover:text-destructive transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={replyInputRef}
+              value={replyText}
+              onChange={(e) => onReplyTextChange(e.target.value)}
+              placeholder={`Reply to ${comment.user?.full_name ?? "this comment"}... (Ctrl+Enter to send)`}
+              className="flex min-h-[36px] max-h-[100px] w-full rounded-md border border-primary/40 bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              rows={2}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && replyText.trim()) {
+                  e.preventDefault();
+                  onSubmitReply(comment.id);
+                }
+                if (e.key === "Escape") onCancelReply();
+              }}
+            />
+            <Button
+              size="sm"
+              className="shrink-0 h-9"
+              onClick={() => replyText.trim() && onSubmitReply(comment.id)}
+              disabled={!replyText.trim() || isSubmitting}
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Nested replies */}
+      {replies.length > 0 && (
+        <div className="mt-3 space-y-3">
+          {replies.map((reply: any) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              depth={depth + 1}
+              onReply={onReply}
+              replyingToId={replyingToId}
+              replyText={replyText}
+              onReplyTextChange={onReplyTextChange}
+              onSubmitReply={onSubmitReply}
+              onCancelReply={onCancelReply}
+              replyInputRef={replyInputRef}
+              isSubmitting={isSubmitting}
+              currentUserId={currentUserId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function TaskDetailModal({ task, onClose }: { task: any; onClose: () => void }) {
   const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  // Progress / status state (always editable)
   const [progress, setProgress] = useState(task?.progress ?? 0);
   const [status, setStatus] = useState(task?.status ?? "todo");
-  const [comment, setComment] = useState("");
 
-  // Edit mode state (admin/manager only)
+  // Comment state
+  const [comment, setComment] = useState("");
+  const [replyingTo, setReplyingTo] = useState<{ id: string; author: string } | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const replyInputRef = useRef<HTMLTextAreaElement>(null);
+  const commentsBottomRef = useRef<HTMLDivElement>(null);
+
+  // Edit state
   const [editMode, setEditMode] = useState(false);
   const [editTitle, setEditTitle] = useState(task?.title ?? "");
   const [editDescription, setEditDescription] = useState(task?.description ?? "");
@@ -43,20 +181,38 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     task?.task_assignees?.map((a: any) => a.user_id) ?? []
   );
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (replyingTo) setTimeout(() => replyInputRef.current?.focus(), 60);
+  }, [replyingTo?.id]);
+
+  // Fetch comments and build a tree (top-level + replies)
   const { data: comments = [] } = useQuery({
     queryKey: ["task-comments", task?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("task_comments")
         .select("*, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
-      return data ?? [];
+      if (error) throw error;
+      const all = data ?? [];
+      // Build tree
+      const map: Record<string, any> = {};
+      all.forEach((c: any) => { map[c.id] = { ...c, replies: [] }; });
+      const roots: any[] = [];
+      all.forEach((c: any) => {
+        if (c.parent_id && map[c.parent_id]) {
+          map[c.parent_id].replies.push(map[c.id]);
+        } else if (!c.parent_id) {
+          roots.push(map[c.id]);
+        }
+      });
+      return roots;
     },
     enabled: !!task,
+    refetchInterval: 15000,
   });
 
   const { data: attachments = [] } = useQuery({
@@ -90,19 +246,17 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
   };
 
-  // Save progress/status only
+  const invalidateComments = () =>
+    queryClient.invalidateQueries({ queryKey: ["task-comments", task.id] });
+
   const updateProgressStatus = useMutation({
     mutationFn: async () => {
       await supabase.from("tasks").update({ progress, status }).eq("id", task.id);
     },
-    onSuccess: () => {
-      invalidateTasks();
-      toast.success("Task updated");
-    },
+    onSuccess: () => { invalidateTasks(); toast.success("Task updated"); },
     onError: () => toast.error("Failed to update task"),
   });
 
-  // Save full task details (admin/manager only)
   const saveEdit = useMutation({
     mutationFn: async () => {
       if (!editTitle.trim()) throw new Error("Title is required");
@@ -121,87 +275,92 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         .eq("id", task.id);
       if (taskError) throw taskError;
 
-      // Sync assignees: delete existing then re-insert
-      const { error: delError } = await supabase
-        .from("task_assignees")
-        .delete()
-        .eq("task_id", task.id);
+      const { error: delError } = await supabase.from("task_assignees").delete().eq("task_id", task.id);
       if (delError) throw delError;
 
       const { error: insError } = await supabase
         .from("task_assignees")
         .insert(editAssignees.map((uid) => ({ task_id: task.id, user_id: uid })));
       if (insError) throw insError;
+
+      // Notify ALL assignees (in-app + email via DB trigger)
+      const deadlineText = editDeadline ? ` Deadline: ${new Date(editDeadline).toLocaleDateString()}.` : "";
+      await supabase.from("notifications").insert(
+        editAssignees.map((uid) => ({
+          user_id: uid,
+          title: "Task Updated & Assigned",
+          body: `You have been assigned to task: "${editTitle}".${deadlineText}`,
+          type: "task",
+          reference_id: task.id,
+        }))
+      );
     },
-    onSuccess: () => {
-      invalidateTasks();
-      setEditMode(false);
-      toast.success("Task saved successfully");
-    },
+    onSuccess: () => { invalidateTasks(); setEditMode(false); toast.success("Task saved successfully"); },
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
   });
 
   const addComment = useMutation({
     mutationFn: async () => {
-      await supabase
-        .from("task_comments")
-        .insert({ task_id: task.id, user_id: user!.id, body: comment });
+      await supabase.from("task_comments").insert({
+        task_id: task.id,
+        user_id: user!.id,
+        body: comment.trim(),
+        parent_id: null,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-comments", task.id] });
+      invalidateComments();
       setComment("");
-      toast.success("Comment added");
+      setTimeout(() => commentsBottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     },
+    onError: () => toast.error("Failed to add comment"),
+  });
+
+  const addReply = useMutation({
+    mutationFn: async ({ body, parentId }: { body: string; parentId: string }) => {
+      await supabase.from("task_comments").insert({
+        task_id: task.id,
+        user_id: user!.id,
+        body: body.trim(),
+        parent_id: parentId,
+      });
+    },
+    onSuccess: () => {
+      invalidateComments();
+      setReplyingTo(null);
+      setReplyText("");
+    },
+    onError: () => toast.error("Failed to add reply"),
   });
 
   const deleteAttachment = useMutation({
     mutationFn: async (attachment: any) => {
       const url = new URL(attachment.file_url);
       const pathMatch = url.pathname.match(/\/task-attachments\/(.+)$/);
-      if (pathMatch) {
-        await supabase.storage
-          .from("task-attachments")
-          .remove([decodeURIComponent(pathMatch[1])]);
-      }
+      if (pathMatch) await supabase.storage.from("task-attachments").remove([decodeURIComponent(pathMatch[1])]);
       await supabase.from("task_attachments").delete().eq("id", attachment.id);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
-      toast.success("Attachment removed");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] }); toast.success("Attachment removed"); },
     onError: () => toast.error("Failed to remove attachment"),
   });
 
   const uploadAttachment = useMutation({
     mutationFn: async (file: File) => {
       const filePath = `${task.id}/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("task-attachments")
-        .upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from("task-attachments").upload(filePath, file);
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage
-        .from("task-attachments")
-        .getPublicUrl(filePath);
+      const { data: urlData } = supabase.storage.from("task-attachments").getPublicUrl(filePath);
       await supabase.from("task_attachments").insert({
-        task_id: task.id,
-        file_name: file.name,
-        file_size: file.size,
-        file_url: urlData.publicUrl,
-        uploaded_by: user!.id,
+        task_id: task.id, file_name: file.name, file_size: file.size,
+        file_url: urlData.publicUrl, uploaded_by: user!.id,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] });
-      toast.success("File attached");
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["task-attachments", task?.id] }); toast.success("File attached"); },
     onError: () => toast.error("Failed to upload file"),
   });
 
-  const toggleAssignee = (id: string) => {
-    setEditAssignees((prev) =>
-      prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]
-    );
-  };
+  const toggleAssignee = (id: string) =>
+    setEditAssignees((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]);
 
   const cancelEdit = () => {
     setEditTitle(task?.title ?? "");
@@ -216,61 +375,44 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
   if (!task) return null;
 
-  const daysLeft = task.deadline
-    ? differenceInDays(new Date(task.deadline), new Date())
-    : null;
+  const daysLeft = task.deadline ? differenceInDays(new Date(task.deadline), new Date()) : null;
+  const totalComments = comments.reduce((acc: number, c: any) => acc + 1 + (c.replies?.length ?? 0), 0);
 
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           className="absolute inset-0 bg-ink-primary/30"
           onClick={onClose}
         />
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
           className="relative w-full max-w-[720px] max-h-[90vh] overflow-y-auto rounded-modal bg-card shadow-modal mx-4"
         >
           {/* Header */}
           <div className="sticky top-0 bg-card z-10 flex items-center justify-between p-5 border-b border-border gap-3">
             {editMode ? (
-              <Input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="h-9 font-heading text-base font-bold text-ink-primary flex-1"
-                autoFocus
-                placeholder="Task title"
-              />
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                className="h-9 font-heading text-base font-bold text-ink-primary flex-1" autoFocus placeholder="Task title" />
             ) : (
-              <h2 className="font-heading text-lg font-bold text-ink-primary truncate flex-1">
-                {task.title}
-              </h2>
+              <h2 className="font-heading text-lg font-bold text-ink-primary truncate flex-1">{task.title}</h2>
             )}
             <div className="flex items-center gap-2 shrink-0">
               {isAdmin && !editMode && (
-                <button
-                  onClick={() => setEditMode(true)}
-                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted"
-                >
+                <button onClick={() => setEditMode(true)}
+                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted">
                   <Pencil className="h-4 w-4" />
                   <span className="hidden sm:inline">Edit</span>
                 </button>
               )}
-              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary">
-                <X className="h-5 w-5" />
-              </button>
+              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
             </div>
           </div>
 
           <div className="grid md:grid-cols-5 gap-6 p-5">
             {/* Left column */}
             <div className="md:col-span-3 space-y-5">
-              {/* Badges – view mode only */}
               {!editMode && (
                 <div className="flex gap-2 flex-wrap">
                   <StatusBadge status={task.status} />
@@ -278,43 +420,23 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 </div>
               )}
 
-              {/* Description */}
               {editMode ? (
                 <div>
-                  <label className="text-sm font-medium text-ink-primary mb-1.5 block">
-                    Description
-                  </label>
-                  <Textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    rows={4}
-                    placeholder="Task description..."
-                  />
+                  <label className="text-sm font-medium text-ink-primary mb-1.5 block">Description</label>
+                  <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} placeholder="Task description..." />
                 </div>
               ) : (
-                task.description && (
-                  <p className="text-sm text-ink-secondary">{task.description}</p>
-                )
+                task.description && <p className="text-sm text-ink-secondary">{task.description}</p>
               )}
 
-              {/* Priority – edit mode only */}
               {editMode && (
                 <div>
-                  <label className="text-sm font-medium text-ink-primary mb-1.5 block">
-                    Priority
-                  </label>
+                  <label className="text-sm font-medium text-ink-primary mb-1.5 block">Priority</label>
                   <div className="flex gap-2">
                     {(["low", "medium", "high"] as const).map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setEditPriority(p)}
+                      <button key={p} type="button" onClick={() => setEditPriority(p)}
                         className={`flex-1 rounded-lg border py-2 text-sm font-medium capitalize transition-all ${
-                          editPriority === p
-                            ? `${PRIORITY_COLORS[p]} border-current`
-                            : "border-border text-ink-secondary hover:bg-muted"
-                        }`}
-                      >
+                          editPriority === p ? `${PRIORITY_COLORS[p]} border-current` : "border-border text-ink-secondary hover:bg-muted"}`}>
                         {p}
                       </button>
                     ))}
@@ -322,32 +444,15 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 </div>
               )}
 
-              {/* Progress & Status – always editable */}
+              {/* Progress & Status */}
               <div>
                 <label className="text-sm font-medium text-ink-primary mb-2 block">
-                  Completion —{" "}
-                  <span className="text-primary font-heading text-xl">{progress}%</span>
+                  Completion — <span className="text-primary font-heading text-xl">{progress}%</span>
                 </label>
-                <Slider
-                  value={[progress]}
-                  onValueChange={([v]) => {
-                    setProgress(v);
-                    if (v === 100) setStatus("completed");
-                  }}
-                  max={100}
-                  step={5}
-                  className="my-3"
-                />
-                <Select
-                  value={status}
-                  onValueChange={(v) => {
-                    setStatus(v);
-                    if (v === "completed") setProgress(100);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
+                <Slider value={[progress]} onValueChange={([v]) => { setProgress(v); if (v === 100) setStatus("completed"); }}
+                  max={100} step={5} className="my-3" />
+                <Select value={status} onValueChange={(v) => { setStatus(v); if (v === "completed") setProgress(100); }}>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todo">To Do</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
@@ -355,89 +460,87 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
-                  size="sm"
-                  onClick={() => updateProgressStatus.mutate()}
-                  disabled={updateProgressStatus.isPending}
-                  className="mt-3"
-                >
+                <Button size="sm" onClick={() => updateProgressStatus.mutate()} disabled={updateProgressStatus.isPending} className="mt-3">
                   {updateProgressStatus.isPending ? "Saving..." : "Save Progress"}
                 </Button>
               </div>
 
-              {/* Edit mode – save / cancel */}
               {editMode && (
                 <div className="flex gap-2 pt-1 border-t border-border">
-                  <Button
-                    onClick={() => saveEdit.mutate()}
-                    disabled={saveEdit.isPending}
-                    size="sm"
-                    className="gap-1.5"
-                  >
+                  <Button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending} size="sm" className="gap-1.5">
                     <Check className="h-4 w-4" />
                     {saveEdit.isPending ? "Saving..." : "Save Task"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={cancelEdit}
-                    disabled={saveEdit.isPending}
-                  >
-                    Cancel
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saveEdit.isPending}>Cancel</Button>
                 </div>
               )}
 
-              {/* Comments */}
+              {/* ── Threaded Comments ── */}
               <div>
-                <h4 className="text-sm font-semibold text-ink-primary mb-3">Comments</h4>
-                <div className="space-y-3 mb-3 max-h-[200px] overflow-y-auto">
-                  {comments.map((c: any) => (
-                    <div key={c.id} className="flex gap-2">
-                      <UserAvatar
-                        name={c.user?.full_name ?? "?"}
-                        avatarUrl={c.user?.avatar_url}
-                        size="sm"
-                      />
-                      <div>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs font-medium text-ink-primary">
-                            {c.user?.full_name}
-                          </span>
-                          <span className="text-[10px] text-ink-muted">
-                            {format(new Date(c.created_at), "MMM d, h:mm a")}
-                          </span>
-                        </div>
-                        <p className="text-sm text-ink-secondary">{c.body}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {comments.length === 0 && (
-                    <p className="text-xs text-ink-muted">No comments yet.</p>
+                <h4 className="text-sm font-semibold text-ink-primary mb-3 flex items-center gap-2">
+                  Comments
+                  {totalComments > 0 && (
+                    <span className="text-[11px] bg-muted text-ink-muted rounded-full px-2 py-0.5 font-normal">
+                      {totalComments}
+                    </span>
                   )}
+                </h4>
+
+                {/* Thread list */}
+                <div className="space-y-4 mb-4 max-h-[340px] overflow-y-auto pr-1 scroll-smooth">
+                  {comments.length === 0 ? (
+                    <p className="text-xs text-ink-muted py-3 text-center">No comments yet. Be the first!</p>
+                  ) : (
+                    comments.map((c: any) => (
+                      <CommentItem
+                        key={c.id}
+                        comment={c}
+                        depth={0}
+                        onReply={(parentId, author) => {
+                          setReplyingTo({ id: parentId, author });
+                          setReplyText("");
+                        }}
+                        replyingToId={replyingTo?.id ?? null}
+                        replyText={replyText}
+                        onReplyTextChange={setReplyText}
+                        onSubmitReply={(parentId) => {
+                          if (replyText.trim()) addReply.mutate({ body: replyText, parentId });
+                        }}
+                        onCancelReply={() => { setReplyingTo(null); setReplyText(""); }}
+                        replyInputRef={replyInputRef}
+                        isSubmitting={addReply.isPending}
+                        currentUserId={user?.id ?? ""}
+                      />
+                    ))
+                  )}
+                  <div ref={commentsBottomRef} />
                 </div>
-                <div className="flex gap-2 items-end">
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Add a comment... (Ctrl+Enter to send)"
-                    className="flex min-h-[36px] max-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
-                    rows={2}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && comment.trim()) {
-                        e.preventDefault();
-                        addComment.mutate();
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    className="shrink-0 h-9"
-                    onClick={() => comment.trim() && addComment.mutate()}
-                    disabled={!comment.trim()}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+
+                {/* New top-level comment */}
+                <div className="border-t border-border pt-3">
+                  <div className="flex gap-2 items-end">
+                    <div className="shrink-0 mt-1">
+                      <UserAvatar name={user?.email ?? "?"} avatarUrl={undefined} size="sm" />
+                    </div>
+                    <textarea
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Add a comment... (Ctrl+Enter to send)"
+                      className="flex min-h-[36px] max-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+                      rows={2}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && comment.trim()) {
+                          e.preventDefault();
+                          addComment.mutate();
+                        }
+                      }}
+                    />
+                    <Button size="sm" className="shrink-0 h-9"
+                      onClick={() => comment.trim() && addComment.mutate()}
+                      disabled={!comment.trim() || addComment.isPending}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -447,16 +550,11 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
               <div className="rounded-lg bg-muted p-4 space-y-4">
                 {/* Assignees */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">
-                    Assigned to
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">Assigned to</p>
                   {editMode ? (
                     <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
-                        className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring gap-1"
-                      >
+                      <button type="button" onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                        className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring gap-1">
                         <span className="flex-1 flex flex-wrap gap-1 text-left">
                           {editAssignees.length === 0 ? (
                             <span className="text-muted-foreground">Select members...</span>
@@ -464,18 +562,9 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                             editAssignees.map((id) => {
                               const emp = employees.find((e: any) => e.id === id);
                               return (
-                                <span
-                                  key={id}
-                                  className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium"
-                                >
+                                <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
                                   {emp?.full_name ?? "..."}
-                                  <button
-                                    type="button"
-                                    onClick={(ev) => {
-                                      ev.stopPropagation();
-                                      toggleAssignee(id);
-                                    }}
-                                  >
+                                  <button type="button" onClick={(ev) => { ev.stopPropagation(); toggleAssignee(id); }}>
                                     <X className="h-3 w-3" />
                                   </button>
                                 </span>
@@ -490,26 +579,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                           {employees.map((emp: any) => {
                             const selected = editAssignees.includes(emp.id);
                             return (
-                              <button
-                                key={emp.id}
-                                type="button"
-                                onClick={() => toggleAssignee(emp.id)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
-                              >
-                                <div
-                                  className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${
-                                    selected ? "bg-primary border-primary" : "border-border"
-                                  }`}
-                                >
-                                  {selected && (
-                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                  )}
+                              <button key={emp.id} type="button" onClick={() => toggleAssignee(emp.id)}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors">
+                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                                  {selected && <Check className="h-3 w-3 text-primary-foreground" />}
                                 </div>
-                                <UserAvatar
-                                  name={emp.full_name}
-                                  avatarUrl={emp.avatar_url}
-                                  size="sm"
-                                />
+                                <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
                                 <span className="text-ink-primary">{emp.full_name}</span>
                               </button>
                             );
@@ -522,29 +597,17 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       {task.task_assignees && task.task_assignees.length > 0 ? (
                         task.task_assignees.map((a: any) => (
                           <div key={a.user_id} className="flex items-center gap-2">
-                            <UserAvatar
-                              name={a.user?.full_name ?? "?"}
-                              avatarUrl={a.user?.avatar_url}
-                              size="sm"
-                            />
+                            <UserAvatar name={a.user?.full_name ?? "?"} avatarUrl={a.user?.avatar_url} size="sm" />
                             <div>
-                              <p className="text-sm font-medium text-ink-primary">
-                                {a.user?.full_name}
-                              </p>
+                              <p className="text-sm font-medium text-ink-primary">{a.user?.full_name}</p>
                               <p className="text-xs text-ink-muted">{a.user?.email}</p>
                             </div>
                           </div>
                         ))
                       ) : (
                         <div className="flex items-center gap-2">
-                          <UserAvatar
-                            name={task.assigned?.full_name ?? "?"}
-                            avatarUrl={task.assigned?.avatar_url}
-                            size="sm"
-                          />
-                          <p className="text-sm font-medium text-ink-primary">
-                            {task.assigned?.full_name}
-                          </p>
+                          <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
+                          <p className="text-sm font-medium text-ink-primary">{task.assigned?.full_name}</p>
                         </div>
                       )}
                     </div>
@@ -553,43 +616,23 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
                 {/* Created by */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Created by
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Created by</p>
                   <p className="text-sm text-ink-primary">{task.assigner?.full_name ?? "—"}</p>
                 </div>
 
                 {/* Deadline */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Deadline
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Deadline</p>
                   {editMode ? (
-                    <Input
-                      type="date"
-                      value={editDeadline}
-                      min={today()}
-                      onChange={(e) => setEditDeadline(e.target.value)}
-                      className="h-9"
-                    />
+                    <Input type="date" value={editDeadline} min={today()} onChange={(e) => setEditDeadline(e.target.value)} className="h-9" />
                   ) : (
                     <>
                       <p className="text-sm text-ink-primary">
-                        {task.deadline
-                          ? format(new Date(task.deadline), "MMM d, yyyy")
-                          : "None"}
+                        {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "None"}
                       </p>
                       {daysLeft !== null && (
-                        <p
-                          className={`text-xs ${
-                            daysLeft < 0 ? "text-destructive" : "text-ink-muted"
-                          }`}
-                        >
-                          {daysLeft < 0
-                            ? `Overdue by ${Math.abs(daysLeft)} days`
-                            : daysLeft === 0
-                            ? "Due today"
-                            : `${daysLeft} days remaining`}
+                        <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
+                          {daysLeft < 0 ? `Overdue by ${Math.abs(daysLeft)} days` : daysLeft === 0 ? "Due today" : `${daysLeft} days remaining`}
                         </p>
                       )}
                     </>
@@ -598,20 +641,11 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
                 {/* Category */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Category
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Category</p>
                   {editMode ? (
-                    <Input
-                      value={editCategory}
-                      onChange={(e) => setEditCategory(e.target.value)}
-                      placeholder="e.g. Design, Development"
-                      className="h-9"
-                    />
+                    <Input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} placeholder="e.g. Design, Development" className="h-9" />
                   ) : task.category ? (
-                    <span className="text-xs bg-purple-light text-purple px-2 py-0.5 rounded-pill">
-                      {task.category}
-                    </span>
+                    <span className="text-xs bg-purple-light text-purple px-2 py-0.5 rounded-pill">{task.category}</span>
                   ) : (
                     <p className="text-sm text-ink-muted">—</p>
                   )}
@@ -619,12 +653,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
                 {/* Created at */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">
-                    Created
-                  </p>
-                  <p className="text-xs text-ink-muted">
-                    {format(new Date(task.created_at), "MMM d, yyyy")}
-                  </p>
+                  <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-1">Created</p>
+                  <p className="text-xs text-ink-muted">{format(new Date(task.created_at), "MMM d, yyyy")}</p>
                 </div>
               </div>
 
@@ -636,25 +666,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     Attachments {attachments.length > 0 && `(${attachments.length})`}
                   </p>
                   <div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
+                    <input ref={fileInputRef} type="file" multiple className="hidden"
                       onChange={(e) => {
-                        if (e.target.files) {
-                          Array.from(e.target.files).forEach((file) =>
-                            uploadAttachment.mutate(file)
-                          );
-                        }
+                        if (e.target.files) Array.from(e.target.files).forEach((file) => uploadAttachment.mutate(file));
                         e.target.value = "";
-                      }}
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-xs text-primary hover:underline"
-                      disabled={uploadAttachment.isPending}
-                    >
+                      }} />
+                    <button onClick={() => fileInputRef.current?.click()} className="text-xs text-primary hover:underline" disabled={uploadAttachment.isPending}>
                       {uploadAttachment.isPending ? "Uploading..." : "+ Add file"}
                     </button>
                   </div>
@@ -662,28 +679,14 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 {attachments.length > 0 ? (
                   <div className="space-y-1.5">
                     {attachments.map((att: any) => (
-                      <div
-                        key={att.id}
-                        className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-sm"
-                      >
-                        <span className="truncate text-ink-secondary text-xs">
-                          {att.file_name}
-                        </span>
+                      <div key={att.id} className="flex items-center justify-between rounded-md border border-border bg-card px-2.5 py-1.5 text-sm">
+                        <span className="truncate text-ink-secondary text-xs">{att.file_name}</span>
                         <div className="flex items-center gap-1 ml-2 shrink-0">
-                          <a
-                            href={att.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="text-primary hover:text-primary/80"
-                          >
+                          <a href={att.file_url} target="_blank" rel="noopener noreferrer" download className="text-primary hover:text-primary/80">
                             <Download className="h-3.5 w-3.5" />
                           </a>
                           {isAdmin && (
-                            <button
-                              onClick={() => deleteAttachment.mutate(att)}
-                              className="text-ink-muted hover:text-destructive"
-                            >
+                            <button onClick={() => deleteAttachment.mutate(att)} className="text-ink-muted hover:text-destructive">
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
