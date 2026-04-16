@@ -276,6 +276,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
     queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
     queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["manager-my-tasks"] });
+    queryClient.invalidateQueries({ queryKey: ["users-task-counts"] });
   };
 
   const invalidateComments = () =>

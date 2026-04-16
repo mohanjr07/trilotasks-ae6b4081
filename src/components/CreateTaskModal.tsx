@@ -190,6 +190,9 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["admin-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-my-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["users-task-counts"] });
       clearDraft();
       toast.success("Task created successfully");
       handleClose();
