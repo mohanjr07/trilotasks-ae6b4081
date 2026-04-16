@@ -23,11 +23,207 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-destructive-light text-destructive border-destructive/20",
 };
 
+// ── Email HTML builder ──────────────────────────────────────────────────────────
+function buildCommentEmailHtml({
+  commenterName,
+  taskTitle,
+  commentBody,
+  isReply,
+  recipientName,
+  appUrl = "https://trilotasks.lovable.app",
+}: {
+  commenterName: string;
+  taskTitle: string;
+  commentBody: string;
+  isReply: boolean;
+  recipientName: string;
+  appUrl?: string;
+}) {
+  const action = isReply ? "replied to a comment" : "added a comment";
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:#4f46e5;padding:24px 32px;">
+              <p style="margin:0;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.3px;">
+                🔔 Trilo Tasks Notification
+              </p>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 32px;">
+              <p style="margin:0 0 8px;color:#374151;font-size:15px;">Hi <strong>${recipientName}</strong>,</p>
+              <p style="margin:0 0 20px;color:#6b7280;font-size:14px;">
+                <strong>${commenterName}</strong> ${action} on a task assigned to you.
+              </p>
+
+              <!-- Task card -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:#9ca3af;font-weight:600;">Task</p>
+                    <p style="margin:0 0 16px;font-size:15px;font-weight:600;color:#111827;">${taskTitle}</p>
+                    <p style="margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:#9ca3af;font-weight:600;">${isReply ? "Reply" : "Comment"}</p>
+                    <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;background:#ffffff;border:1px solid #e5e7eb;border-radius:6px;padding:12px 14px;">
+                      "${commentBody}"
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <a href="${appUrl}/tasks" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                View Task →
+              </a>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;">
+              <p style="margin:0;color:#9ca3af;font-size:12px;">
+                You received this email because you are assigned to this task in Trilo Tasks.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ── Notification sender helper ──────────────────────────────────────────────────
+async function sendCommentNotifications({
+  taskId,
+  taskTitle,
+  commenterId,
+  commenterName,
+  commentBody,
+  isReply,
+  parentCommentUserId,
+}: {
+  taskId: string;
+  taskTitle: string;
+  commenterId: string;
+  commenterName: string;
+  commentBody: string;
+  isReply: boolean;
+  parentCommentUserId?: string; // for replies: only notify the parent comment's author
+}) {
+  // 1. Determine who to notify
+  let recipientIds: string[] = [];
+
+  if (isReply && parentCommentUserId && parentCommentUserId !== commenterId) {
+    // For replies: notify only the author of the parent comment
+    recipientIds = [parentCommentUserId];
+  } else {
+    // For top-level comments: notify all task assignees + creator (excluding commenter)
+    const { data: assignees } = await supabase
+      .from("task_assignees")
+      .select("user_id")
+      .eq("task_id", taskId);
+
+    const { data: taskData } = await supabase
+      .from("tasks")
+      .select("assigned_by")
+      .eq("id", taskId)
+      .single();
+
+    const assigneeIds = (assignees ?? []).map((a: any) => a.user_id);
+    const creatorId = taskData?.assigned_by;
+
+    const allIds = new Set([...assigneeIds]);
+    if (creatorId) allIds.add(creatorId);
+    allIds.delete(commenterId); // don't notify yourself
+    recipientIds = Array.from(allIds);
+  }
+
+  if (recipientIds.length === 0) return;
+
+  // 2. Fetch recipient profiles (email + name)
+  const { data: recipients } = await supabase
+    .from("profiles")
+    .select("id, email, full_name")
+    .in("id", recipientIds);
+
+  if (!recipients || recipients.length === 0) return;
+
+  const notificationTitle = isReply
+    ? `${commenterName} replied to a comment`
+    : `${commenterName} commented on a task`;
+  const notificationBody = `On task "${taskTitle}": ${commentBody.slice(0, 120)}${commentBody.length > 120 ? "…" : ""}`;
+
+  // 3. Insert in-app notifications for all recipients
+  const notificationRows = recipients.map((r: any) => ({
+    user_id: r.id,
+    title: notificationTitle,
+    body: notificationBody,
+    type: "comment",
+    reference_id: taskId,
+    email_sent: false,
+  }));
+
+  const { data: insertedNotifs } = await supabase
+    .from("notifications")
+    .insert(notificationRows)
+    .select("id, user_id");
+
+  // 4. Send email notifications via edge function (fire-and-forget, non-blocking)
+  const notifMap: Record<string, string> = {};
+  (insertedNotifs ?? []).forEach((n: any) => {
+    notifMap[n.user_id] = n.id;
+  });
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  for (const recipient of recipients as any[]) {
+    const htmlBody = buildCommentEmailHtml({
+      commenterName,
+      taskTitle,
+      commentBody,
+      isReply,
+      recipientName: recipient.full_name,
+    });
+
+    // Call the edge function — don't await so it doesn't block the UI
+    fetch(
+      `${(supabase as any).supabaseUrl}/functions/v1/send-email-notification`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: (supabase as any).supabaseKey,
+        },
+        body: JSON.stringify({
+          to_email: recipient.email,
+          to_name: recipient.full_name,
+          subject: `[Trilo Tasks] ${notificationTitle}`,
+          html_body: htmlBody,
+          notification_id: notifMap[recipient.id] ?? null,
+        }),
+      }
+    ).catch((err) => console.warn("Email send failed (non-critical):", err));
+  }
+}
+
 // ── Threaded Comment Component ─────────────────────────────────────────────────
 interface CommentItemProps {
   comment: any;
   depth?: number;
-  onReply: (parentId: string, parentAuthor: string) => void;
+  onReply: (parentId: string, parentAuthor: string, parentUserId: string) => void;
   replyingToId: string | null;
   replyText: string;
   onReplyTextChange: (v: string) => void;
@@ -86,7 +282,7 @@ function CommentItem({
           </p>
           {supportsReplies && depth === 0 && (
             <button
-              onClick={() => onReply(comment.id, comment.user?.full_name ?? "Someone")}
+              onClick={() => onReply(comment.id, comment.user?.full_name ?? "Someone", comment.user_id)}
               className="mt-1.5 text-[11px] text-ink-muted hover:text-primary flex items-center gap-1 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
             >
               <CornerDownRight className="h-3 w-3" />
@@ -179,7 +375,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
   // Comment state
   const [comment, setComment] = useState("");
-  const [replyingTo, setReplyingTo] = useState<{ id: string; author: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; author: string; userId: string } | null>(null);
   const [replyText, setReplyText] = useState("");
   const [supportsReplies, setSupportsReplies] = useState(true);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
@@ -202,11 +398,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     if (replyingTo) setTimeout(() => replyInputRef.current?.focus(), 60);
   }, [replyingTo?.id]);
 
-  // Fetch comments — tries with parent_id first, falls back gracefully if column doesn't exist yet
+  // Fetch comments
   const { data: comments = [] } = useQuery({
     queryKey: ["task-comments", task?.id],
     queryFn: async () => {
-      // Try fetching with parent_id (requires migration to be run)
       const { data, error } = await supabase
         .from("task_comments")
         .select("id, body, created_at, parent_id, user_id, user:profiles!task_comments_user_id_fkey(full_name, avatar_url)")
@@ -214,7 +409,6 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         .order("created_at", { ascending: true });
 
       if (error) {
-        // If parent_id column doesn't exist yet, fall back to basic fetch without it
         if (error.message?.includes("parent_id") || error.code === "42703" || error.message?.includes("schema cache")) {
           setSupportsReplies(false);
           const { data: fallback, error: fallbackError } = await supabase
@@ -230,7 +424,6 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
       setSupportsReplies(true);
       const all = data ?? [];
-      // Build comment tree
       const map: Record<string, any> = {};
       all.forEach((c: any) => { map[c.id] = { ...c, replies: [] }; });
       const roots: any[] = [];
@@ -346,6 +539,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     onError: (e: any) => toast.error(e.message ?? "Failed to delete task"),
   });
 
+  // ── Add Comment (with notifications) ───────────────────────────────────────
   const addComment = useMutation({
     mutationFn: async () => {
       const trimmed = comment.trim();
@@ -360,6 +554,16 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       }
       const { error } = await supabase.from("task_comments").insert(insertData);
       if (error) throw error;
+
+      // Send in-app + email notifications (non-blocking)
+      sendCommentNotifications({
+        taskId: task.id,
+        taskTitle: task.title,
+        commenterId: user!.id,
+        commenterName: profile?.full_name ?? user?.email ?? "Someone",
+        commentBody: trimmed,
+        isReply: false,
+      }).catch((err) => console.warn("Notification send failed (non-critical):", err));
     },
     onSuccess: () => {
       invalidateComments();
@@ -369,8 +573,9 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     onError: (e: any) => toast.error(e.message ?? "Failed to add comment"),
   });
 
+  // ── Add Reply (with notifications) ─────────────────────────────────────────
   const addReply = useMutation({
-    mutationFn: async ({ body, parentId }: { body: string; parentId: string }) => {
+    mutationFn: async ({ body, parentId, parentUserId }: { body: string; parentId: string; parentUserId: string }) => {
       const trimmed = body.trim();
       if (!trimmed || !supportsReplies) return;
       const { error } = await supabase.from("task_comments").insert({
@@ -386,6 +591,17 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         }
         throw error;
       }
+
+      // Send in-app + email notifications for the reply (non-blocking)
+      sendCommentNotifications({
+        taskId: task.id,
+        taskTitle: task.title,
+        commenterId: user!.id,
+        commenterName: profile?.full_name ?? user?.email ?? "Someone",
+        commentBody: trimmed,
+        isReply: true,
+        parentCommentUserId: parentUserId,
+      }).catch((err) => console.warn("Reply notification failed (non-critical):", err));
     },
     onSuccess: () => {
       invalidateComments();
@@ -625,15 +841,21 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                         key={c.id}
                         comment={c}
                         depth={0}
-                        onReply={(parentId, author) => {
-                          setReplyingTo({ id: parentId, author });
+                        onReply={(parentId, author, parentUserId) => {
+                          setReplyingTo({ id: parentId, author, userId: parentUserId });
                           setReplyText("");
                         }}
                         replyingToId={replyingTo?.id ?? null}
                         replyText={replyText}
                         onReplyTextChange={setReplyText}
                         onSubmitReply={(parentId) => {
-                          if (replyText.trim()) addReply.mutate({ body: replyText, parentId });
+                          if (replyText.trim()) {
+                            addReply.mutate({
+                              body: replyText,
+                              parentId,
+                              parentUserId: replyingTo?.userId ?? "",
+                            });
+                          }
                         }}
                         onCancelReply={() => { setReplyingTo(null); setReplyText(""); }}
                         replyInputRef={replyInputRef}
