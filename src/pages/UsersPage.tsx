@@ -75,6 +75,7 @@ export default function UsersPage() {
   const adminCount = profiles.filter((p: any) => p.role === "admin").length;
   const managerCount = profiles.filter((p: any) => p.role === "manager").length;
   const employeeCount = profiles.filter((p: any) => p.role === "employee").length;
+  const internCount = profiles.filter((p: any) => p.role === "intern").length;
   const activeCount = profiles.filter((p: any) => p.is_active).length;
 
   const toggleActive = useMutation({
@@ -146,6 +147,7 @@ export default function UsersPage() {
             <SelectItem value="admin">Admin</SelectItem>
             <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="employee">Employee</SelectItem>
+            <SelectItem value="intern">Intern</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -202,7 +204,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                        p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
+                        p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : p.role === "intern" ? "bg-purple-light text-purple" : "bg-muted text-ink-secondary"
                       }`}>{p.role}</span>
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-ink-secondary">{p.department ?? "—"}</td>
@@ -266,7 +268,7 @@ export default function UsersPage() {
                     <p className="text-xs text-ink-muted">{p.department ?? p.email}</p>
                   </div>
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                    p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
+                    p.role === "admin" ? "bg-accent-light text-primary" : p.role === "manager" ? "bg-warning/10 text-warning" : p.role === "intern" ? "bg-purple-light text-purple" : "bg-muted text-ink-secondary"
                   }`}>{p.role}</span>
                 </div>
               </motion.div>
@@ -290,7 +292,7 @@ export default function UsersPage() {
 const addUserSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email").max(255),
-  role: z.enum(["admin", "manager", "employee"]),
+  role: z.enum(["admin", "manager", "employee", "intern"]),
   department: z.string().max(100).optional(),
   position: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
@@ -372,15 +374,15 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Role *</label>
-            <div className="grid grid-cols-3 gap-3">
-              {(["admin", "manager", "employee"] as const).map((r) => (
+            <div className="grid grid-cols-2 gap-3">
+              {(["admin", "manager", "employee", "intern"] as const).map((r) => (
                 <button key={r} type="button" onClick={() => setValue("role", r)}
                   className={`rounded-lg border p-4 text-left transition-all ${selectedRole === r ? "border-primary bg-accent-light" : "border-border"}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
+                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : r === "intern" ? <UsersIcon className="h-4 w-4 text-warning" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
                     <span className="text-sm font-semibold capitalize text-ink-primary">{r}</span>
                   </div>
-                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : "View tasks & submit requests"}</p>
+                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : r === "intern" ? "Dashboard, tasks & notes only" : "View tasks & submit requests"}</p>
                 </button>
               ))}
             </div>
@@ -496,6 +498,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
+                <SelectItem value="intern">Intern</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -571,7 +574,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
               <div>
                 <p className="font-heading text-xl font-bold text-ink-primary">{selectedUser.full_name}</p>
                 <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
-                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : selectedUser.role === "manager" ? "bg-warning/10 text-warning" : "bg-muted text-ink-secondary"
+                  selectedUser.role === "admin" ? "bg-accent-light text-primary" : selectedUser.role === "manager" ? "bg-warning/10 text-warning" : selectedUser.role === "intern" ? "bg-purple-light text-purple" : "bg-muted text-ink-secondary"
                 }`}>{selectedUser.role}</span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className={`h-2 w-2 rounded-full ${selectedUser.is_active ? "bg-success" : "bg-ink-muted"}`} />
