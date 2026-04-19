@@ -21,6 +21,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import CalendarPage from "@/pages/CalendarPage";
 import TeamsPage from "@/pages/TeamsPage";
 import NotesPage from "@/pages/NotesPage";
+import InternDashboard from "@/pages/InternDashboard";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -36,7 +37,9 @@ function RootRedirect() {
   const { profile, loading } = useAuth();
   if (loading) return null;
   if (!profile) return <Navigate to="/login" replace />;
-  return profile.role === "employee" ? <Navigate to="/my-dashboard" replace /> : <Navigate to="/dashboard" replace />;
+  if (profile.role === "employee") return <Navigate to="/my-dashboard" replace />;
+  if (profile.role === "intern") return <Navigate to="/intern-dashboard" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 const App = () => (
@@ -65,6 +68,8 @@ const App = () => (
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
+              <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
+              <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/profile" element={<ProfilePage />} />
