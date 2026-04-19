@@ -308,7 +308,7 @@ const addUserSchema = z.object({
 function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolean; onClose: () => void; internAdminMode?: boolean }) {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
-  const [passwordMode, setPasswordMode] = useState<"email" | "password">("email");
+  const [passwordMode, setPasswordMode] = useState<"email" | "password">(internAdminMode ? "password" : "email");
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
