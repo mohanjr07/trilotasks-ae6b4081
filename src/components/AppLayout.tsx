@@ -54,6 +54,8 @@ const internNav: NavItem[] = [
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
+
+export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
