@@ -75,7 +75,7 @@ const getInitialDraft = (preselectedAssignee?: string): FormData => {
 };
 
 export default function CreateTaskModal({ open, onClose, preselectedAssignee }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -83,9 +83,14 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
   const { data: employees = [] } = useQuery({
-    queryKey: ["employees-list"],
+    queryKey: ["employees-list", profile?.role],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      const query = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      if (profile?.role === "intern_admin") {
+        const { data } = await query.eq("role", "intern");
+        return data ?? [];
+      }
+      const { data } = await query;
       return data ?? [];
     },
     enabled: open,
