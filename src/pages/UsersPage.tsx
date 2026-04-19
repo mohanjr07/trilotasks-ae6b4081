@@ -34,8 +34,8 @@ async function getFunctionAuthHeaders() {
   };
 }
 
-export default function UsersPage({ internAdminMode = false }: { internAdminMode?: boolean }) {
-  const { user, profile } = useAuth();
+export default function UsersPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -46,14 +46,9 @@ export default function UsersPage({ internAdminMode = false }: { internAdminMode
   const [createTaskForUser, setCreateTaskForUser] = useState<string | undefined>(undefined);
 
   const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["users-profiles", internAdminMode],
+    queryKey: ["users-profiles"],
     queryFn: async () => {
-      const query = supabase.from("profiles").select("*").order("full_name");
-      if (internAdminMode) {
-        const { data } = await query.eq("role", "intern");
-        return data ?? [];
-      }
-      const { data } = await query;
+      const { data } = await supabase.from("profiles").select("*").order("full_name");
       return data ?? [];
     },
   });
@@ -125,8 +120,8 @@ export default function UsersPage({ internAdminMode = false }: { internAdminMode
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-heading text-[28px] font-bold text-ink-primary">{internAdminMode ? "Interns" : "Users"}</h1>
-          <p className="text-sm text-ink-muted">{totalUsers} {internAdminMode ? "interns" : "total members"}</p>
+          <h1 className="font-heading text-[28px] font-bold text-ink-primary">Users</h1>
+          <p className="text-sm text-ink-muted">{totalUsers} total members</p>
         </div>
         <Button onClick={() => setAddOpen(true)} className="gap-2">
           <UserPlus className="h-4 w-4" /> Add User
@@ -153,7 +148,6 @@ export default function UsersPage({ internAdminMode = false }: { internAdminMode
             <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="employee">Employee</SelectItem>
             <SelectItem value="intern">Intern</SelectItem>
-            <SelectItem value="intern_admin">Intern Admin</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -283,7 +277,7 @@ export default function UsersPage({ internAdminMode = false }: { internAdminMode
         </>
       )}
 
-      <AddUserModal open={addOpen} onClose={() => setAddOpen(false)} internAdminMode={internAdminMode} />
+      <AddUserModal open={addOpen} onClose={() => setAddOpen(false)} />
       {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} />}
       <UserDetailPanel user={selectedUser} onClose={() => setSelectedUser(null)} taskCounts={taskCounts}
         onEdit={(u: any) => { setSelectedUser(null); setEditUser(u); }}
@@ -298,21 +292,21 @@ export default function UsersPage({ internAdminMode = false }: { internAdminMode
 const addUserSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email").max(255),
-  role: z.enum(["admin", "manager", "employee", "intern", "intern_admin"]),
+  role: z.enum(["admin", "manager", "employee", "intern"]),
   department: z.string().max(100).optional(),
   position: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
   password: z.string().min(8, "Min 8 characters").optional(),
 });
 
-function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolean; onClose: () => void; internAdminMode?: boolean }) {
+function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const { user, profile } = useAuth();
-  const [passwordMode, setPasswordMode] = useState<"email" | "password">(internAdminMode ? "password" : "email");
+  const { user } = useAuth();
+  const [passwordMode, setPasswordMode] = useState<"email" | "password">("email");
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: { role: internAdminMode ? "intern" : "employee" },
+    defaultValues: { role: "employee" },
   });
 
   const createUser = useMutation({
@@ -323,36 +317,6 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
 
       if (passwordMode === "password" && !data.password) {
         throw new Error("Temporary password is required");
-      }
-
-      // Intern admin caller OR intern/intern_admin role: fully bypass edge function
-      // The edge function only allows admin/super_admin callers, so intern_admin must go direct via signUp
-      const needsBypass = internAdminMode || profile?.role === "intern_admin" || data.role === "intern" || data.role === "intern_admin";
-      if (needsBypass) {
-        if (passwordMode !== "password") throw new Error("Please use 'Set temporary password' when creating intern users.");
-        // Directly sign up the user — no edge function involved
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password!,
-          options: { data: { full_name: data.full_name } },
-        });
-        if (signUpError) throw signUpError;
-        const newUserId = signUpData.user?.id;
-        if (!newUserId) throw new Error("Failed to create auth user. The email may already be registered.");
-        // Wait briefly for auth trigger to create base profile, then upsert with correct data
-        await new Promise((r) => setTimeout(r, 800));
-        const { error: upsertError } = await supabase.from("profiles").upsert({
-          id: newUserId,
-          email: data.email,
-          full_name: data.full_name,
-          role: data.role,
-          department: data.department || null,
-          position: data.position || null,
-          phone: data.phone || null,
-          is_active: true,
-        });
-        if (upsertError) throw upsertError;
-        return;
       }
 
       const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
@@ -408,29 +372,21 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
             <Input {...register("email")} type="email" className="h-10" />
             {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email.message}</p>}
           </div>
-          {!internAdminMode && (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Role *</label>
             <div className="grid grid-cols-2 gap-3">
-              {(["admin", "manager", "employee", "intern", "intern_admin"] as const).map((r) => (
+              {(["admin", "manager", "employee", "intern"] as const).map((r) => (
                 <button key={r} type="button" onClick={() => setValue("role", r)}
                   className={`rounded-lg border p-4 text-left transition-all ${selectedRole === r ? "border-primary bg-accent-light" : "border-border"}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : r === "intern_admin" ? <UserCheck className="h-4 w-4 text-warning" /> : r === "intern" ? <UsersIcon className="h-4 w-4 text-warning" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
-                    <span className="text-sm font-semibold capitalize text-ink-primary">{r === "intern_admin" ? "Intern Admin" : r}</span>
+                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : r === "intern" ? <UsersIcon className="h-4 w-4 text-warning" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
+                    <span className="text-sm font-semibold capitalize text-ink-primary">{r}</span>
                   </div>
-                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : r === "intern_admin" ? "Manage interns & their tasks" : r === "intern" ? "Dashboard, tasks & notes only" : "View tasks & submit requests"}</p>
+                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : r === "intern" ? "Dashboard, tasks & notes only" : "View tasks & submit requests"}</p>
                 </button>
               ))}
             </div>
           </div>
-          )}
-          {internAdminMode && (
-            <div className="rounded-lg border border-border bg-purple-light/30 px-4 py-3">
-              <p className="text-sm font-medium text-ink-primary">Role: <span className="text-purple font-semibold">Intern</span></p>
-              <p className="text-xs text-ink-muted mt-0.5">Intern Admin can only add intern users</p>
-            </div>
-          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Job Title / Position</label>
             <Input {...register("position")} placeholder="e.g. Senior Designer" className="h-10" />
@@ -447,9 +403,6 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Password</label>
-            {internAdminMode ? (
-              <p className="text-xs text-ink-muted mb-2">Set a temporary password for this intern account.</p>
-            ) : (
             <div className="flex gap-3 mb-2">
               {(["email", "password"] as const).map((m) => (
                 <label key={m} className="flex items-center gap-2 text-sm text-ink-secondary cursor-pointer">
@@ -458,19 +411,11 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
                 </label>
               ))}
             </div>
-            )}
-            {internAdminMode ? (
+            {passwordMode === "password" && (
               <>
-                <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10 mt-1" />
+                <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
                 {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
               </>
-            ) : (
-              passwordMode === "password" && (
-                <>
-                  <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
-                  {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
-                </>
-              )
             )}
           </div>
 
@@ -502,22 +447,6 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
 
   const updateUser = useMutation({
     mutationFn: async (data: any) => {
-      // For intern/intern_admin roles, bypass edge function directly via profiles table
-      if (data.role === "intern" || data.role === "intern_admin") {
-        const { error: directError } = await supabase
-          .from("profiles")
-          .update({
-            full_name: data.full_name,
-            role: data.role,
-            department: data.department || null,
-            position: data.position || null,
-            phone: data.phone || null,
-          })
-          .eq("id", editingUser.id);
-        if (directError) throw directError;
-        return;
-      }
-
       const { data: response, error } = await supabase.functions.invoke("admin-update-user", {
         headers: await getFunctionAuthHeaders(),
         body: {
@@ -570,7 +499,6 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
                 <SelectItem value="intern">Intern</SelectItem>
-                <SelectItem value="intern_admin">Intern Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
