@@ -490,6 +490,22 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
 
   const updateUser = useMutation({
     mutationFn: async (data: any) => {
+      // For intern/intern_admin roles, bypass edge function directly via profiles table
+      if (data.role === "intern" || data.role === "intern_admin") {
+        const { error: directError } = await supabase
+          .from("profiles")
+          .update({
+            full_name: data.full_name,
+            role: data.role,
+            department: data.department || null,
+            position: data.position || null,
+            phone: data.phone || null,
+          })
+          .eq("id", editingUser.id);
+        if (directError) throw directError;
+        return;
+      }
+
       const { data: response, error } = await supabase.functions.invoke("admin-update-user", {
         headers: await getFunctionAuthHeaders(),
         body: {
