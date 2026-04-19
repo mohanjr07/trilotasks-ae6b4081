@@ -319,6 +319,30 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
         throw new Error("Temporary password is required");
       }
 
+      // For intern role with password mode, bypass edge function directly
+      if (data.role === "intern" && passwordMode === "password") {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password!,
+          options: { data: { full_name: data.full_name } },
+        });
+        if (signUpError) throw signUpError;
+        const newUserId = signUpData.user?.id;
+        if (!newUserId) throw new Error("Failed to create user");
+        const { error: profileError } = await supabase.from("profiles").upsert({
+          id: newUserId,
+          email: data.email,
+          full_name: data.full_name,
+          role: "intern",
+          department: data.department || null,
+          position: data.position || null,
+          phone: data.phone || null,
+          is_active: true,
+        });
+        if (profileError) throw profileError;
+        return;
+      }
+
       const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
         headers: await getFunctionAuthHeaders(),
         body: {
