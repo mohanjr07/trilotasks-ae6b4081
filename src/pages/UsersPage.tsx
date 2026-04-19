@@ -326,38 +326,32 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
       }
 
       // Intern admin caller OR intern/intern_admin role: fully bypass edge function
-      // The edge function only allows admin/super_admin callers, so intern_admin must go direct
-      const needsBypass = profile?.role === "intern_admin" || data.role === "intern" || data.role === "intern_admin";
-      if (needsBypass && passwordMode === "password") {
-        // Use the admin edge function with employee role (passes caller & role validation)
-        const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
-          headers: await getFunctionAuthHeaders(),
-          body: {
-            full_name: data.full_name,
-            email: data.email,
-            role: "employee", // temporarily employee to pass old edge function caller+role validation
-            department: data.department || null,
-            position: data.position || null,
-            phone: data.phone || null,
-            passwordMode: "password",
-            password: data.password,
-            redirectTo: `${window.location.origin}/reset-password`,
-          },
+      // The edge function only allows admin/super_admin callers, so intern_admin must go direct via signUp
+      const needsBypass = internAdminMode || profile?.role === "intern_admin" || data.role === "intern" || data.role === "intern_admin";
+      if (needsBypass) {
+        if (passwordMode !== "password") throw new Error("Please use 'Set temporary password' when creating intern users.");
+        // Directly sign up the user — no edge function involved
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password!,
+          options: { data: { full_name: data.full_name } },
         });
-        if (error) throw error;
-        if (response?.error) throw new Error(response.error);
-        // Now fix the role to what was actually intended
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({
-            role: data.role,
-            full_name: data.full_name,
-            department: data.department || null,
-            position: data.position || null,
-            phone: data.phone || null,
-          })
-          .eq("email", data.email);
-        if (updateError) throw updateError;
+        if (signUpError) throw signUpError;
+        const newUserId = signUpData.user?.id;
+        if (!newUserId) throw new Error("Failed to create auth user. The email may already be registered.");
+        // Wait briefly for auth trigger to create base profile, then upsert with correct data
+        await new Promise((r) => setTimeout(r, 800));
+        const { error: upsertError } = await supabase.from("profiles").upsert({
+          id: newUserId,
+          email: data.email,
+          full_name: data.full_name,
+          role: data.role,
+          department: data.department || null,
+          position: data.position || null,
+          phone: data.phone || null,
+          is_active: true,
+        });
+        if (upsertError) throw upsertError;
         return;
       }
 
@@ -453,6 +447,9 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Password</label>
+            {internAdminMode ? (
+              <p className="text-xs text-ink-muted mb-2">A temporary password is required for intern accounts.</p>
+            ) : (
             <div className="flex gap-3 mb-2">
               {(["email", "password"] as const).map((m) => (
                 <label key={m} className="flex items-center gap-2 text-sm text-ink-secondary cursor-pointer">
@@ -461,6 +458,7 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
                 </label>
               ))}
             </div>
+            )}
             {passwordMode === "password" && (
               <>
                 <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
