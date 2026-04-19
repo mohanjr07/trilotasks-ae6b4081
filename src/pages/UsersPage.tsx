@@ -448,7 +448,7 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Password</label>
             {internAdminMode ? (
-              <p className="text-xs text-ink-muted mb-2">A temporary password is required for intern accounts.</p>
+              <p className="text-xs text-ink-muted mb-2">Set a temporary password for this intern account.</p>
             ) : (
             <div className="flex gap-3 mb-2">
               {(["email", "password"] as const).map((m) => (
@@ -459,11 +459,18 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
               ))}
             </div>
             )}
-            {passwordMode === "password" && (
+            {internAdminMode ? (
               <>
-                <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
+                <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10 mt-1" />
                 {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
               </>
+            ) : (
+              passwordMode === "password" && (
+                <>
+                  <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
+                  {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
+                </>
+              )
             )}
           </div>
 
