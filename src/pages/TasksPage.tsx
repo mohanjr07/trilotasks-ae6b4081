@@ -19,8 +19,8 @@ import TaskDetailModal from "@/components/TaskDetailModal";
 
 const TASK_CREATE_OPEN_KEY = "tasks:create-open";
 
-export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boolean }) {
-  const { isAdmin, user, profile } = useAuth();
+export default function TasksPage({ myTasksOnly = false, internAdminMode = false }: { myTasksOnly?: boolean; internAdminMode?: boolean }) {
+  const { isAdmin, isInternAdmin, user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -33,12 +33,35 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
   }, [createOpen]);
 
-  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
-  const showAllTasks = isAdmin && !myTasksOnly;
+  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager" || (internAdminMode && profile?.role === "intern_admin"));
+  const showAllTasks = (isAdmin && !myTasksOnly) || (internAdminMode && profile?.role === "intern_admin");
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ["tasks", showAllTasks, user?.id, myTasksOnly],
     queryFn: async () => {
+      // Intern admin mode: show only tasks assigned to interns
+      if (internAdminMode && profile?.role === "intern_admin") {
+        const { data: internProfiles } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "intern")
+          .eq("is_active", true);
+        if (!internProfiles?.length) return [];
+        const internIds = internProfiles.map((p: any) => p.id);
+        const { data: assigneeRows } = await supabase
+          .from("task_assignees")
+          .select("task_id")
+          .in("user_id", internIds);
+        if (!assigneeRows?.length) return [];
+        const taskIds = [...new Set(assigneeRows.map((r: any) => r.task_id))];
+        const { data } = await supabase
+          .from("tasks")
+          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+          .in("id", taskIds as string[])
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      }
+
       if (showAllTasks) {
         const { data } = await supabase
           .from("tasks")
@@ -66,12 +89,17 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   });
 
   const { data: members = [] } = useQuery({
-    queryKey: ["members-list"],
+    queryKey: ["members-list", internAdminMode],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true).order("full_name");
+      const query = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true).order("full_name");
+      if (internAdminMode) {
+        const { data } = await query.eq("role", "intern");
+        return data ?? [];
+      }
+      const { data } = await query;
       return data ?? [];
     },
-    enabled: isAdmin,
+    enabled: isAdmin || internAdminMode,
   });
 
   const filteredTasks = tasks.filter((t: any) => {
@@ -116,7 +144,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-heading text-[28px] font-bold text-ink-primary">
-          {myTasksOnly ? "My Tasks" : canCreateTasks ? "Tasks" : "My Tasks"}
+          {myTasksOnly ? "My Tasks" : internAdminMode ? "Intern Tasks" : canCreateTasks ? "Tasks" : "My Tasks"}
         </h1>
         {canCreateTasks && (
           <Button onClick={handleOpenCreate} className="gap-2">
@@ -149,7 +177,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
             <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
-        {isAdmin && !myTasksOnly && (
+        {(isAdmin || internAdminMode) && !myTasksOnly && (
           <Select value={assigneeFilter} onValueChange={setAssignee}>
             <SelectTrigger className="w-[180px] h-10"><SelectValue placeholder="Assignee" /></SelectTrigger>
             <SelectContent>
