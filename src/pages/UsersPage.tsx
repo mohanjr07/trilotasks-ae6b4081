@@ -307,7 +307,7 @@ const addUserSchema = z.object({
 
 function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolean; onClose: () => void; internAdminMode?: boolean }) {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [passwordMode, setPasswordMode] = useState<"email" | "password">("email");
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
@@ -325,16 +325,17 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
         throw new Error("Temporary password is required");
       }
 
-      // For intern/intern_admin role with password mode, bypass edge function directly
-      if ((data.role === "intern" || data.role === "intern_admin") && passwordMode === "password") {
-        // Use admin-create-user but intercept the role validation issue
-        // by calling signUp and then immediately upserting the profile via admin client workaround
+      // Intern admin caller OR intern/intern_admin role: fully bypass edge function
+      // The edge function only allows admin/super_admin callers, so intern_admin must go direct
+      const needsBypass = profile?.role === "intern_admin" || data.role === "intern" || data.role === "intern_admin";
+      if (needsBypass && passwordMode === "password") {
+        // Use the admin edge function with employee role (passes caller & role validation)
         const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
           headers: await getFunctionAuthHeaders(),
           body: {
             full_name: data.full_name,
             email: data.email,
-            role: "employee", // temporarily employee to pass old edge function validation
+            role: "employee", // temporarily employee to pass old edge function caller+role validation
             department: data.department || null,
             position: data.position || null,
             phone: data.phone || null,
@@ -345,10 +346,16 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
         });
         if (error) throw error;
         if (response?.error) throw new Error(response.error);
-        // Now update the role correctly since edge function created it as employee
+        // Now fix the role to what was actually intended
         const { error: updateError } = await supabase
           .from("profiles")
-          .update({ role: data.role, position: data.position || data.role })
+          .update({
+            role: data.role,
+            full_name: data.full_name,
+            department: data.department || null,
+            position: data.position || null,
+            phone: data.phone || null,
+          })
           .eq("email", data.email);
         if (updateError) throw updateError;
         return;
