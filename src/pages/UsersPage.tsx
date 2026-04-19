@@ -34,8 +34,8 @@ async function getFunctionAuthHeaders() {
   };
 }
 
-export default function UsersPage() {
-  const { user } = useAuth();
+export default function UsersPage({ internAdminMode = false }: { internAdminMode?: boolean }) {
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -46,9 +46,14 @@ export default function UsersPage() {
   const [createTaskForUser, setCreateTaskForUser] = useState<string | undefined>(undefined);
 
   const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["users-profiles"],
+    queryKey: ["users-profiles", internAdminMode],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("*").order("full_name");
+      const query = supabase.from("profiles").select("*").order("full_name");
+      if (internAdminMode) {
+        const { data } = await query.eq("role", "intern");
+        return data ?? [];
+      }
+      const { data } = await query;
       return data ?? [];
     },
   });
@@ -120,8 +125,8 @@ export default function UsersPage() {
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-heading text-[28px] font-bold text-ink-primary">Users</h1>
-          <p className="text-sm text-ink-muted">{totalUsers} total members</p>
+          <h1 className="font-heading text-[28px] font-bold text-ink-primary">{internAdminMode ? "Interns" : "Users"}</h1>
+          <p className="text-sm text-ink-muted">{totalUsers} {internAdminMode ? "interns" : "total members"}</p>
         </div>
         <Button onClick={() => setAddOpen(true)} className="gap-2">
           <UserPlus className="h-4 w-4" /> Add User
@@ -148,6 +153,7 @@ export default function UsersPage() {
             <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="employee">Employee</SelectItem>
             <SelectItem value="intern">Intern</SelectItem>
+            <SelectItem value="intern_admin">Intern Admin</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -277,7 +283,7 @@ export default function UsersPage() {
         </>
       )}
 
-      <AddUserModal open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddUserModal open={addOpen} onClose={() => setAddOpen(false)} internAdminMode={internAdminMode} />
       {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} />}
       <UserDetailPanel user={selectedUser} onClose={() => setSelectedUser(null)} taskCounts={taskCounts}
         onEdit={(u: any) => { setSelectedUser(null); setEditUser(u); }}
@@ -292,21 +298,21 @@ export default function UsersPage() {
 const addUserSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email").max(255),
-  role: z.enum(["admin", "manager", "employee", "intern"]),
+  role: z.enum(["admin", "manager", "employee", "intern", "intern_admin"]),
   department: z.string().max(100).optional(),
   position: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
   password: z.string().min(8, "Min 8 characters").optional(),
 });
 
-function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolean; onClose: () => void; internAdminMode?: boolean }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [passwordMode, setPasswordMode] = useState<"email" | "password">("email");
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: { role: "employee" },
+    defaultValues: { role: internAdminMode ? "intern" : "employee" },
   });
 
   const createUser = useMutation({
@@ -401,21 +407,29 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
             <Input {...register("email")} type="email" className="h-10" />
             {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email.message}</p>}
           </div>
+          {!internAdminMode && (
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Role *</label>
             <div className="grid grid-cols-2 gap-3">
-              {(["admin", "manager", "employee", "intern"] as const).map((r) => (
+              {(["admin", "manager", "employee", "intern", "intern_admin"] as const).map((r) => (
                 <button key={r} type="button" onClick={() => setValue("role", r)}
                   className={`rounded-lg border p-4 text-left transition-all ${selectedRole === r ? "border-primary bg-accent-light" : "border-border"}`}>
                   <div className="flex items-center gap-2 mb-1">
-                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : r === "intern" ? <UsersIcon className="h-4 w-4 text-warning" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
-                    <span className="text-sm font-semibold capitalize text-ink-primary">{r}</span>
+                    {r === "admin" ? <Shield className="h-4 w-4 text-primary" /> : r === "manager" ? <UserCheck className="h-4 w-4 text-primary" /> : r === "intern_admin" ? <UserCheck className="h-4 w-4 text-warning" /> : r === "intern" ? <UsersIcon className="h-4 w-4 text-warning" /> : <UsersIcon className="h-4 w-4 text-ink-muted" />}
+                    <span className="text-sm font-semibold capitalize text-ink-primary">{r === "intern_admin" ? "Intern Admin" : r}</span>
                   </div>
-                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : r === "intern" ? "Dashboard, tasks & notes only" : "View tasks & submit requests"}</p>
+                  <p className="text-xs text-ink-muted">{r === "admin" ? "Full access & user management" : r === "manager" ? "All admin access except user management" : r === "intern_admin" ? "Manage interns & their tasks" : r === "intern" ? "Dashboard, tasks & notes only" : "View tasks & submit requests"}</p>
                 </button>
               ))}
             </div>
           </div>
+          )}
+          {internAdminMode && (
+            <div className="rounded-lg border border-border bg-purple-light/30 px-4 py-3">
+              <p className="text-sm font-medium text-ink-primary">Role: <span className="text-purple font-semibold">Intern</span></p>
+              <p className="text-xs text-ink-muted mt-0.5">Intern Admin can only add intern users</p>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Job Title / Position</label>
             <Input {...register("position")} placeholder="e.g. Senior Designer" className="h-10" />
@@ -528,6 +542,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
                 <SelectItem value="intern">Intern</SelectItem>
+                <SelectItem value="intern_admin">Intern Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
