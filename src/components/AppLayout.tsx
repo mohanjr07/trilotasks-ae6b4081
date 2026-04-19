@@ -48,7 +48,12 @@ const employeeNav: NavItem[] = [
   { label: "Profile", path: "/profile", icon: User },
 ];
 
-export default function AppLayout() {
+const internNav: NavItem[] = [
+  { label: "Dashboard", path: "/intern-dashboard", icon: LayoutDashboard },
+  { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
+  { label: "Notes", path: "/notes", icon: StickyNote },
+  { label: "Profile", path: "/profile", icon: User },
+];
   const { profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -58,7 +63,8 @@ export default function AppLayout() {
   );
   const isAdmin = profile?.role === "admin";
   const isManager = profile?.role === "manager";
-  const nav = isAdmin ? adminNav : isManager ? managerNav : employeeNav;
+  const isIntern = profile?.role === "intern";
+  const nav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
 
   useEffect(() => {
     const observer = new MutationObserver(() => {
