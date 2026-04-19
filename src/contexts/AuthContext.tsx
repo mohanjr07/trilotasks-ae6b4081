@@ -6,7 +6,7 @@ type Profile = {
   id: string;
   full_name: string;
   email: string;
-  role: "admin" | "manager" | "employee" | "intern" | "intern_admin";
+  role: "admin" | "manager" | "employee" | "intern";
   department: string | null;
   position: string | null;
   avatar_url: string | null;
@@ -22,7 +22,6 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
-  isInternAdmin: boolean;
   refreshProfile: () => Promise<void>;
 };
 
@@ -104,10 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = profile?.role === "admin" || profile?.role === "manager";
-  const isInternAdmin = profile?.role === "intern_admin";
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signIn, signOut, isAdmin, isInternAdmin, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, profile, loading, signIn, signOut, isAdmin, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
