@@ -9,7 +9,7 @@ const corsHeaders = {
 const CreateUserSchema = z.object({
   full_name: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(255),
-  role: z.enum(["admin", "manager", "employee"]),
+  role: z.enum(["admin", "manager", "employee", "intern"]),
   department: z.string().trim().max(100).nullable().optional(),
   position: z.string().trim().max(100).nullable().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
