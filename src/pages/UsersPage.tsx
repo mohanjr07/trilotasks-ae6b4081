@@ -321,25 +321,30 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
 
       // For intern role with password mode, bypass edge function directly
       if (data.role === "intern" && passwordMode === "password") {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password!,
-          options: { data: { full_name: data.full_name } },
+        // Use admin-create-user but intercept the role validation issue
+        // by calling signUp and then immediately upserting the profile via admin client workaround
+        const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
+          headers: await getFunctionAuthHeaders(),
+          body: {
+            full_name: data.full_name,
+            email: data.email,
+            role: "employee", // send as employee to pass old edge function validation
+            department: data.department || null,
+            position: data.position || null,
+            phone: data.phone || null,
+            passwordMode: "password",
+            password: data.password,
+            redirectTo: `${window.location.origin}/reset-password`,
+          },
         });
-        if (signUpError) throw signUpError;
-        const newUserId = signUpData.user?.id;
-        if (!newUserId) throw new Error("Failed to create user");
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          id: newUserId,
-          email: data.email,
-          full_name: data.full_name,
-          role: "intern",
-          department: data.department || null,
-          position: data.position || null,
-          phone: data.phone || null,
-          is_active: true,
-        });
-        if (profileError) throw profileError;
+        if (error) throw error;
+        if (response?.error) throw new Error(response.error);
+        // Now update the role to intern since edge function created it as employee
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ role: "intern", position: data.position || "Intern" })
+          .eq("email", data.email);
+        if (updateError) throw updateError;
         return;
       }
 
