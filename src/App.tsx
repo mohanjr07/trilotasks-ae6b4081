@@ -22,7 +22,6 @@ import CalendarPage from "@/pages/CalendarPage";
 import TeamsPage from "@/pages/TeamsPage";
 import NotesPage from "@/pages/NotesPage";
 import InternDashboard from "@/pages/InternDashboard";
-import InternAdminDashboard from "@/pages/InternAdminDashboard";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -40,7 +39,6 @@ function RootRedirect() {
   if (!profile) return <Navigate to="/login" replace />;
   if (profile.role === "employee") return <Navigate to="/my-dashboard" replace />;
   if (profile.role === "intern") return <Navigate to="/intern-dashboard" replace />;
-  if (profile.role === "intern_admin") return <Navigate to="/intern-admin-dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
 }
 
@@ -72,10 +70,6 @@ const App = () => (
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
-              <Route path="/intern-admin-dashboard" element={<ProtectedRoute allowedRoles={["intern_admin"]}><InternAdminDashboard /></ProtectedRoute>} />
-              <Route path="/intern-admin-tasks" element={<ProtectedRoute allowedRoles={["intern_admin"]}><TasksPage internAdminMode /></ProtectedRoute>} />
-              <Route path="/intern-admin-my-tasks" element={<ProtectedRoute allowedRoles={["intern_admin"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
-              <Route path="/intern-admin-users" element={<ProtectedRoute allowedRoles={["intern_admin"]}><UsersPage internAdminMode /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/profile" element={<ProfilePage />} />
