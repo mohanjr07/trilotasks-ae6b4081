@@ -325,8 +325,8 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
         throw new Error("Temporary password is required");
       }
 
-      // For intern role with password mode, bypass edge function directly
-      if (data.role === "intern" && passwordMode === "password") {
+      // For intern/intern_admin role with password mode, bypass edge function directly
+      if ((data.role === "intern" || data.role === "intern_admin") && passwordMode === "password") {
         // Use admin-create-user but intercept the role validation issue
         // by calling signUp and then immediately upserting the profile via admin client workaround
         const { data: response, error } = await supabase.functions.invoke("admin-create-user", {
@@ -334,7 +334,7 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
           body: {
             full_name: data.full_name,
             email: data.email,
-            role: "employee", // send as employee to pass old edge function validation
+            role: "employee", // temporarily employee to pass old edge function validation
             department: data.department || null,
             position: data.position || null,
             phone: data.phone || null,
@@ -345,10 +345,10 @@ function AddUserModal({ open, onClose, internAdminMode = false }: { open: boolea
         });
         if (error) throw error;
         if (response?.error) throw new Error(response.error);
-        // Now update the role to intern since edge function created it as employee
+        // Now update the role correctly since edge function created it as employee
         const { error: updateError } = await supabase
           .from("profiles")
-          .update({ role: "intern", position: data.position || "Intern" })
+          .update({ role: data.role, position: data.position || data.role })
           .eq("email", data.email);
         if (updateError) throw updateError;
         return;
