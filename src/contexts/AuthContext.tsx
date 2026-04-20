@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const initialLoadDone = useRef(false);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -49,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    const syncAuthState = async (nextSession: Session | null) => {
+    const syncAuthState = async (nextSession: Session | null, showLoading = false) => {
       if (!isMounted) return;
 
       setSession(nextSession);
@@ -57,10 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!nextSession?.user) {
         setProfile(null);
         setLoading(false);
+        initialLoadDone.current = true;
         return;
       }
 
-      setLoading(true);
+      // Only show loading spinner on the very first load, not on tab switches
+      if (showLoading) setLoading(true);
 
       try {
         await fetchProfile(nextSession.user.id);
@@ -71,24 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } finally {
         if (isMounted) {
           setLoading(false);
+          initialLoadDone.current = true;
         }
       }
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      // Ignore events that don't actually change auth state
-      // TOKEN_REFRESHED and USER_UPDATED fire on tab focus and should not cause re-renders
+      // These events fire on tab focus / token refresh — ignore them
+      // to prevent re-renders that close open modals
       if (
         event === "INITIAL_SESSION" ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) return;
 
-      // Only re-sync if the session actually changed (user logged in or out)
-      void syncAuthState(nextSession);
+      // For real sign-in/sign-out events, sync but never show the loading spinner
+      // again after the initial load (avoids unmounting modals)
+      void syncAuthState(nextSession, !initialLoadDone.current);
     });
 
-    void supabase.auth.getSession().then(({ data: { session: nextSession } }) => syncAuthState(nextSession));
+    // Initial load — this is the only time we show the spinner
+    void supabase.auth.getSession().then(({ data: { session: nextSession } }) =>
+      syncAuthState(nextSession, true)
+    );
 
     return () => {
       isMounted = false;
