@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, X as XIcon, CheckSquare, LayoutGrid, List } from "lucide-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Plus, Search, X as XIcon, CheckSquare, LayoutGrid, List,
+  Pencil, Trash2, Check,
+} from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,15 +20,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CreateTaskModal from "@/components/CreateTaskModal";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import { toast } from "sonner";
+import { useTaskColumns, DEFAULT_TASK_COLUMNS, TaskColumn } from "@/hooks/useTaskColumns";
 
 const TASK_CREATE_OPEN_KEY = "tasks:create-open";
 
-const COLUMNS = [
-  { key: "todo",        label: "To Do",       color: "#6366f1" },
-  { key: "in_progress", label: "In Progress",  color: "#f59e0b" },
-  { key: "on_hold",     label: "On Hold",      color: "#ef4444" },
-  { key: "completed",   label: "Completed",    color: "#10b981" },
+// Palette used when creating a brand-new custom column.
+const CUSTOM_COLORS = [
+  "#8b5cf6", // violet
+  "#06b6d4", // cyan
+  "#ec4899", // pink
+  "#f97316", // orange
+  "#14b8a6", // teal
+  "#eab308", // yellow
+  "#64748b", // slate
 ];
+
+function slugifyKey(label: string) {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "custom";
+}
 
 export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boolean }) {
   const { isAdmin, user, profile } = useAuth();
@@ -40,13 +57,26 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   // Drag-and-drop state
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+
+  // Column editing state
+  const [editingColKey, setEditingColKey] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [newColumnLabel, setNewColumnLabel] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
   const queryClient = useQueryClient();
 
   useEffect(() => {
     sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
   }, [createOpen]);
 
+  useEffect(() => {
+    if (editingColKey) editInputRef.current?.focus();
+  }, [editingColKey]);
+
   const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
+  const canManageColumns = !myTasksOnly && isAdmin; // admin + manager
   const showAllTasks = isAdmin && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
@@ -75,6 +105,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     enabled: !!user,
   });
 
+  const { data: columns = DEFAULT_TASK_COLUMNS } = useTaskColumns();
+
   const { data: members = [] } = useQuery({
     queryKey: ["members-list"],
     queryFn: async () => {
@@ -83,6 +115,82 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     },
     enabled: isAdmin,
   });
+
+  // ── Column mutations ─────────────────────────────────────────────
+  const renameColumn = useMutation({
+    mutationFn: async ({ id, label }: { id: string; label: string }) => {
+      const { error } = await supabase
+        .from("task_columns")
+        .update({ label, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-columns"] });
+      toast.success("Section renamed");
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Couldn't rename section. Did you run the SQL migration?");
+    },
+  });
+
+  const addColumn = useMutation({
+    mutationFn: async (label: string) => {
+      const trimmed = label.trim();
+      if (!trimmed) throw new Error("Name cannot be empty");
+      const baseKey = slugifyKey(trimmed);
+      // Avoid collisions by appending a short timestamp if needed
+      let key = baseKey;
+      const { data: existing } = await supabase.from("task_columns").select("key").eq("key", key).maybeSingle();
+      if (existing) key = `${baseKey}_${Date.now().toString(36).slice(-4)}`;
+      const position = (columns[columns.length - 1]?.position ?? -1) + 1;
+      const color = CUSTOM_COLORS[columns.length % CUSTOM_COLORS.length];
+      const { error } = await supabase.from("task_columns").insert({
+        key, label: trimmed, color, position, is_default: false, created_by: user?.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-columns"] });
+      setAddingColumn(false);
+      setNewColumnLabel("");
+      toast.success("Section added");
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Couldn't add section. Did you run the SQL migration?");
+    },
+  });
+
+  const deleteColumn = useMutation({
+    mutationFn: async (col: TaskColumn) => {
+      // Move any tasks in this column back to the first column (usually "todo")
+      const fallback = columns.find((c) => c.key !== col.key) ?? DEFAULT_TASK_COLUMNS[0];
+      await supabase.from("tasks").update({ status: fallback.key }).eq("status", col.key);
+      if (!col.id) return; // default columns have no id — shouldn't be deletable anyway
+      const { error } = await supabase.from("task_columns").delete().eq("id", col.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-columns"] });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Section deleted");
+    },
+    onError: (e: any) => {
+      toast.error(e?.message ?? "Couldn't delete section.");
+    },
+  });
+
+  const startRename = (col: TaskColumn) => {
+    setEditingColKey(col.key);
+    setEditingLabel(col.label);
+  };
+  const commitRename = (col: TaskColumn) => {
+    const next = editingLabel.trim();
+    setEditingColKey(null);
+    if (!next || next === col.label || !col.id) return;
+    renameColumn.mutate({ id: col.id, label: next });
+  };
+  const cancelRename = () => setEditingColKey(null);
 
   const filteredTasks = tasks.filter((t: any) => {
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
@@ -113,10 +221,16 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const handleOpenCreate = () => setCreateOpen(true);
   const handleCloseCreate = () => setCreateOpen(false);
 
-  const tasksByStatus = COLUMNS.reduce((acc, col) => {
+  // Bucket tasks by column. Any task whose status doesn't match a known column
+  // (e.g. legacy "todo" when column is gone) lands in the first column.
+  const tasksByStatus = columns.reduce((acc, col) => {
     acc[col.key] = filteredTasks.filter((t: any) => (t.status ?? "todo") === col.key);
     return acc;
   }, {} as Record<string, any[]>);
+  // Orphaned tasks (status not in columns) → attach to first column so nothing disappears
+  const knownKeys = new Set(columns.map((c) => c.key));
+  const orphaned = filteredTasks.filter((t: any) => !knownKeys.has(t.status ?? "todo"));
+  if (orphaned.length && columns[0]) tasksByStatus[columns[0].key] = [...tasksByStatus[columns[0].key], ...orphaned];
 
   const handleTaskDrop = async (targetStatus: string) => {
     if (!draggedTaskId) return;
@@ -235,10 +349,18 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         />
       ) : viewMode === "board" ? (
         /* ─── BOARD VIEW ─── */
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-          {COLUMNS.map((col) => {
+        <div
+          className="grid gap-4 items-start"
+          style={{
+            // auto-fit + minmax lets the board stay responsive regardless of
+            // how many columns the admin has created (4 defaults or 10 custom).
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          }}
+        >
+          {columns.map((col) => {
             const colTasks = tasksByStatus[col.key] ?? [];
             const isDragTarget = dragOverCol === col.key;
+            const isEditing = editingColKey === col.key;
             return (
               <div
                 key={col.key}
@@ -247,19 +369,81 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                   if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null);
                 }}
                 onDrop={() => { handleTaskDrop(col.key); setDragOverCol(null); }}
-                className={`rounded-xl border-2 flex flex-col overflow-hidden transition-colors ${
+                className={`rounded-xl border-2 flex flex-col overflow-hidden transition-colors group ${
                   isDragTarget ? "border-primary bg-accent-light/40" : "border-border bg-muted/30"
                 }`}
               >
                 {/* Column header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: col.color }} />
-                    <span className="text-sm font-semibold text-ink-primary">{col.label}</span>
+                <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-card">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: col.color }}
+                    />
+                    {isEditing ? (
+                      <input
+                        ref={editInputRef}
+                        value={editingLabel}
+                        onChange={(e) => setEditingLabel(e.target.value)}
+                        onBlur={() => commitRename(col)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRename(col);
+                          if (e.key === "Escape") cancelRename();
+                        }}
+                        className="text-sm font-semibold text-ink-primary bg-transparent border-b border-primary/60 outline-none min-w-0 flex-1"
+                        maxLength={40}
+                      />
+                    ) : (
+                      <span
+                        className={`text-sm font-semibold text-ink-primary truncate ${
+                          canManageColumns ? "cursor-text" : ""
+                        }`}
+                        onDoubleClick={() => canManageColumns && col.id && startRename(col)}
+                        title={canManageColumns ? "Double-click to rename" : undefined}
+                      >
+                        {col.label}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-xs font-medium text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
-                    {colTasks.length}
-                  </span>
+
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {canManageColumns && !isEditing && col.id && (
+                      <>
+                        <button
+                          onClick={() => startRename(col)}
+                          className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-primary transition-opacity"
+                          title="Rename section"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        {!col.is_default && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Delete "${col.label}"? Tasks in this section will be moved to "${columns[0]?.label ?? "To Do"}".`)) {
+                                deleteColumn.mutate(col);
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-destructive transition-opacity"
+                            title="Delete section"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {canManageColumns && isEditing && (
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); commitRename(col); }}
+                        className="text-primary hover:text-primary/80"
+                        title="Save"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    )}
+                    <span className="text-xs font-medium text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
+                      {colTasks.length}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Cards */}
@@ -350,6 +534,52 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
               </div>
             );
           })}
+
+          {/* "+ Add Section" tile (admins only) */}
+          {canManageColumns && (
+            <div className="rounded-xl border-2 border-dashed border-border bg-muted/10 flex flex-col min-h-[140px]">
+              {addingColumn ? (
+                <div className="p-4 flex flex-col gap-2">
+                  <input
+                    autoFocus
+                    value={newColumnLabel}
+                    onChange={(e) => setNewColumnLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newColumnLabel.trim()) addColumn.mutate(newColumnLabel);
+                      if (e.key === "Escape") { setAddingColumn(false); setNewColumnLabel(""); }
+                    }}
+                    placeholder="Section name (e.g. In Review)"
+                    className="w-full text-sm px-3 py-2 rounded-md border border-border bg-card outline-none focus:border-primary"
+                    maxLength={40}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => addColumn.mutate(newColumnLabel)}
+                      disabled={!newColumnLabel.trim() || addColumn.isPending}
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => { setAddingColumn(false); setNewColumnLabel(""); }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingColumn(true)}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 text-sm text-ink-muted hover:text-primary hover:bg-muted/30 transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                  Add Section
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         /* ─── LIST VIEW ─── */
@@ -413,6 +643,3 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     </AnimatedPage>
   );
 }
-
-// eslint-disable-next-line react-refresh/only-export-components
-import { Search } from "lucide-react";
