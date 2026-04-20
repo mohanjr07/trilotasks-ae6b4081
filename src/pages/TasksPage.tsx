@@ -76,7 +76,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   }, [editingColKey]);
 
   const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
-  const canManageColumns = !myTasksOnly && isAdmin; // admin + manager
+  // Renaming is PER-USER (stored in user_task_column_prefs) so every signed-in
+  // user — employee, intern, manager, admin — can rename their own view.
+  // Add / delete still modify the shared task_columns table, so those remain
+  // restricted to admins + managers.
+  const canRenameColumns = !myTasksOnly && !!user;
+  const canManageColumns = !myTasksOnly && isAdmin; // admin + manager (add / delete)
   const showAllTasks = isAdmin && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
@@ -423,10 +428,10 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                     ) : (
                       <span
                         className={`text-sm font-semibold text-ink-primary truncate ${
-                          canManageColumns ? "cursor-text" : ""
+                          canRenameColumns ? "cursor-text" : ""
                         }`}
-                        onDoubleClick={() => canManageColumns && startRename(col)}
-                        title={canManageColumns ? "Double-click to rename (only you see this)" : undefined}
+                        onDoubleClick={() => canRenameColumns && startRename(col)}
+                        title={canRenameColumns ? "Double-click to rename (only you see this)" : undefined}
                       >
                         {col.label}
                       </span>
@@ -434,31 +439,32 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {canManageColumns && !isEditing && (
-                      <>
-                        <button
-                          onClick={() => startRename(col)}
-                          className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-primary transition-opacity"
-                          title="Rename (only you see this)"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        {!col.is_default && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Delete "${col.label}"? Tasks in this section will be moved to "${columns[0]?.label ?? "To Do"}".`)) {
-                                deleteColumn.mutate(col);
-                              }
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-destructive transition-opacity"
-                            title="Delete section"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </>
+                    {/* Rename icon — everyone (per-user) */}
+                    {canRenameColumns && !isEditing && (
+                      <button
+                        onClick={() => startRename(col)}
+                        className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-primary transition-opacity"
+                        title="Rename (only you see this)"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                    {canManageColumns && isEditing && (
+                    {/* Delete icon — admin / manager only, and only for custom columns */}
+                    {canManageColumns && !isEditing && !col.is_default && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${col.label}"? Tasks in this section will be moved to "${columns[0]?.label ?? "To Do"}".`)) {
+                            deleteColumn.mutate(col);
+                          }
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-destructive transition-opacity"
+                        title="Delete section"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {/* Save-rename checkmark — anyone who can rename */}
+                    {canRenameColumns && isEditing && (
                       <button
                         onMouseDown={(e) => { e.preventDefault(); commitRename(col); }}
                         className="text-primary hover:text-primary/80"
