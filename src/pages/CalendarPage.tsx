@@ -66,14 +66,29 @@ export default function CalendarPage() {
   const { data: leaves = [] } = useQuery({
     queryKey: ["calendar-leaves", format(monthStart, "yyyy-MM"), profile?.role, profile?.id],
     queryFn: async () => {
+      // Try selecting the new is_half_day / reverted_at columns; gracefully
+      // fall back to the older shape when the database hasn't been migrated.
+      const baseCols = "id, type, leave_category, start_date, end_date, status, employee_id, employee:profiles!leave_requests_employee_id_fkey(full_name)";
+      const newCols = `${baseCols}, is_half_day, half_day_period, reverted_at`;
       let q = supabase.from("leave_requests")
-        .select("id, type, leave_category, start_date, end_date, status, employee_id, employee:profiles!leave_requests_employee_id_fkey(full_name)")
+        .select(newCols)
         .eq("status", "approved")
         .lte("start_date", format(calEnd, "yyyy-MM-dd"))
         .gte("end_date", format(calStart, "yyyy-MM-dd"));
       if (!isAdminOrManager) q = q.eq("employee_id", profile!.id);
-      const { data } = await q;
-      return data ?? [];
+      let { data, error } = await q;
+      if (error) {
+        let q2 = supabase.from("leave_requests")
+          .select(baseCols)
+          .eq("status", "approved")
+          .lte("start_date", format(calEnd, "yyyy-MM-dd"))
+          .gte("end_date", format(calStart, "yyyy-MM-dd"));
+        if (!isAdminOrManager) q2 = q2.eq("employee_id", profile!.id);
+        const res = await q2;
+        data = res.data ?? [];
+      }
+      // Hide reverted leaves from the calendar (they no longer count as leave)
+      return (data ?? []).filter((r: any) => !r.reverted_at);
     },
     enabled: !!profile,
   });
@@ -321,7 +336,7 @@ export default function CalendarPage() {
                         <p className="text-sm font-medium text-ink-primary">
                           {isAdminOrManager ? (l as any).employee?.full_name : "Your leave"}
                         </p>
-                        <p className="text-xs text-ink-muted capitalize">{l.type}{l.leave_category ? ` · ${l.leave_category}` : ""}</p>
+                        <p className="text-xs text-ink-muted capitalize">{l.type}{l.leave_category ? ` · ${l.leave_category}` : ""}{l.is_half_day ? ` · Half Day${l.half_day_period ? ` (${l.half_day_period})` : ""}` : ""}</p>
                       </div>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">Approved</span>
                       {isAdminOrManager && (
