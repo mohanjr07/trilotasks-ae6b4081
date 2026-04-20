@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight } from "lucide-react";
+import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -198,6 +198,11 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Move-to-project state
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveProjectId, setMoveProjectId] = useState<string>(task?.project_id ?? "");
+  const [moveTeamId, setMoveTeamId] = useState<string>(task?.project_team_id ?? "");
+
   useEffect(() => {
     if (replyingTo) setTimeout(() => replyInputRef.current?.focus(), 60);
   }, [replyingTo?.id]);
@@ -272,6 +277,40 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     enabled: editMode && isAdmin,
   });
 
+  // Projects list + teams (for Move to Project feature)
+  const { data: allProjects = [] } = useQuery({
+    queryKey: ["projects-for-move"],
+    queryFn: async () => {
+      const { data } = await supabase.from("projects").select("id, name, color").order("name");
+      return data ?? [];
+    },
+    enabled: moveOpen && isAdmin,
+  });
+
+  const { data: allProjectTeams = [] } = useQuery({
+    queryKey: ["project-teams-for-move"],
+    queryFn: async () => {
+      const { data } = await supabase.from("project_teams").select("id, project_id, name").order("name");
+      return data ?? [];
+    },
+    enabled: moveOpen && isAdmin,
+  });
+
+  // Look up the task's current project (for display even outside the move popover)
+  const { data: currentProject } = useQuery({
+    queryKey: ["project-of-task", task?.project_id],
+    queryFn: async () => {
+      if (!task?.project_id) return null;
+      const { data } = await supabase
+        .from("projects")
+        .select("id, name, color")
+        .eq("id", task.project_id)
+        .single();
+      return data;
+    },
+    enabled: !!task?.project_id,
+  });
+
   const invalidateTasks = () => {
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
     queryClient.invalidateQueries({ queryKey: ["my-tasks"] });
@@ -280,6 +319,34 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
   const invalidateComments = () =>
     queryClient.invalidateQueries({ queryKey: ["task-comments", task.id] });
+
+  const moveTask = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          project_id: moveProjectId || null,
+          project_team_id: moveTeamId || null,
+        })
+        .eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateTasks();
+      queryClient.invalidateQueries({ queryKey: ["my-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["project-of-task"] });
+      toast.success(moveProjectId ? "Task moved to project" : "Task removed from project");
+      setMoveOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to move task"),
+  });
+
+  // Sync the move-form fields when the selected task changes
+  useEffect(() => {
+    setMoveProjectId(task?.project_id ?? "");
+    setMoveTeamId(task?.project_team_id ?? "");
+  }, [task?.id, task?.project_id, task?.project_team_id]);
 
   const updateProgressStatus = useMutation({
     mutationFn: async () => {
@@ -478,6 +545,16 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
             <div className="flex items-center gap-2 shrink-0">
               {isAdmin && !editMode && (
                 <button
+                  onClick={() => setMoveOpen((v) => !v)}
+                  className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted"
+                  title="Move this task into a project"
+                >
+                  <ArrowRightCircle className="h-4 w-4" />
+                  <span className="hidden sm:inline">Move</span>
+                </button>
+              )}
+              {isAdmin && !editMode && (
+                <button
                   onClick={() => setEditMode(true)}
                   className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-muted"
                 >
@@ -509,10 +586,107 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
           <div className="grid md:grid-cols-5 gap-6 p-5">
             {/* Left column */}
             <div className="md:col-span-3 space-y-5">
+              {/* Move-to-Project inline panel (admin only) */}
+              {isAdmin && moveOpen && !editMode && (
+                <div className="rounded-lg border-2 border-primary/30 bg-accent-light/30 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FolderKanban className="h-4 w-4 text-primary" />
+                    <h4 className="text-sm font-semibold text-ink-primary">Move task to a project</h4>
+                    <button
+                      onClick={() => setMoveOpen(false)}
+                      className="ml-auto text-ink-muted hover:text-ink-primary"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-ink-muted mb-3">
+                    Tasks moved here will appear inside the chosen project (and team, if selected) in the Projects section.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-ink-primary">Project</label>
+                      <Select
+                        value={moveProjectId || "none"}
+                        onValueChange={(v) => {
+                          setMoveProjectId(v === "none" ? "" : v);
+                          setMoveTeamId("");
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="No project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No project (remove)</SelectItem>
+                          {allProjects.map((p: any) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: p.color }}
+                                />
+                                {p.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {moveProjectId &&
+                      allProjectTeams.filter((t: any) => t.project_id === moveProjectId).length > 0 && (
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-ink-primary">Team (optional)</label>
+                          <Select
+                            value={moveTeamId || "none"}
+                            onValueChange={(v) => setMoveTeamId(v === "none" ? "" : v)}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue placeholder="No team" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No team</SelectItem>
+                              {allProjectTeams
+                                .filter((t: any) => t.project_id === moveProjectId)
+                                .map((t: any) => (
+                                  <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => moveTask.mutate()}
+                      disabled={moveTask.isPending}
+                      className="gap-1.5"
+                    >
+                      <Check className="h-4 w-4" />
+                      {moveTask.isPending ? "Moving..." : moveProjectId ? "Move to project" : "Remove from project"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setMoveOpen(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {!editMode && (
                 <div className="flex gap-2 flex-wrap">
                   <StatusBadge status={task.status} />
                   <PriorityBadge priority={task.priority} />
+                  {currentProject && (
+                    <span className="inline-flex items-center gap-1.5 rounded-pill bg-accent-light text-primary px-2.5 py-0.5 text-xs font-medium">
+                      <FolderKanban className="h-3 w-3" />
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: currentProject.color }}
+                      />
+                      {currentProject.name}
+                    </span>
+                  )}
                 </div>
               )}
 
