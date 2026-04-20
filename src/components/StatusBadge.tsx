@@ -8,11 +8,13 @@ const statusConfig: Record<string, { dot: string; bg: string; text: string }> = 
   pending: { dot: "bg-warning", bg: "bg-warning-light", text: "text-warning" },
   approved: { dot: "bg-success", bg: "bg-success-light", text: "text-success" },
   rejected: { dot: "bg-destructive", bg: "bg-destructive-light", text: "text-destructive" },
+  reverted: { dot: "bg-ink-muted", bg: "bg-muted", text: "text-ink-muted" },
 };
 
 const labels: Record<string, string> = {
   todo: "To Do", in_progress: "In Progress", on_hold: "On Hold",
   completed: "Completed", pending: "Pending", approved: "Approved", rejected: "Rejected",
+  reverted: "Reverted",
 };
 
 export default function StatusBadge({ status }: { status: string }) {
