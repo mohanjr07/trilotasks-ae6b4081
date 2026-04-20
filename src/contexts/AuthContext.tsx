@@ -80,16 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      // These events fire on tab focus / token refresh — ignore them
-      // to prevent re-renders that close open modals
+      // Ignore passive events that fire on tab focus / token refresh
       if (
-        event === "INITIAL_SESSION" ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) return;
 
-      // For real sign-in/sign-out events, sync but never show the loading spinner
-      // again after the initial load (avoids unmounting modals)
+      // INITIAL_SESSION: only use it if the initial getSession() hasn't completed yet
+      if (event === "INITIAL_SESSION") {
+        if (!initialLoadDone.current) {
+          void syncAuthState(nextSession, true);
+        }
+        return;
+      }
+
+      // SIGNED_IN / SIGNED_OUT — always sync, no spinner after first load
       void syncAuthState(nextSession, !initialLoadDone.current);
     });
 
