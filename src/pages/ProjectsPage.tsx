@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, X, ChevronDown, ChevronRight, Users, FolderKanban,
+  Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
+  CheckSquare, ArrowLeft,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage from "@/components/AnimatedPage";
 import UserAvatar from "@/components/UserAvatar";
+import PriorityBadge from "@/components/PriorityBadge";
+import StatusBadge from "@/components/StatusBadge";
+import TaskDetailModal from "@/components/TaskDetailModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +43,7 @@ const PROJECT_COLORS = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
@@ -143,6 +148,7 @@ export default function ProjectsPage() {
                 allProfiles={allProfiles}
                 isAdmin={isAdmin}
                 isExpanded={isExpanded}
+                currentUserId={user?.id ?? ""}
                 onToggle={() => toggleExpand(project.id)}
                 onEdit={() => setEditProject(project)}
                 onDelete={() => {
@@ -156,21 +162,11 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Create Project Modal */}
       {isAdmin && (
-        <ProjectFormModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-        />
+        <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
       )}
-
-      {/* Edit Project Modal */}
       {isAdmin && editProject && (
-        <ProjectFormModal
-          open={!!editProject}
-          project={editProject}
-          onClose={() => setEditProject(null)}
-        />
+        <ProjectFormModal open={!!editProject} project={editProject} onClose={() => setEditProject(null)} />
       )}
     </AnimatedPage>
   );
@@ -179,7 +175,7 @@ export default function ProjectsPage() {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
   project, projectTeams, projectMembers, allProfiles,
-  isAdmin, isExpanded, onToggle, onEdit, onDelete,
+  isAdmin, isExpanded, currentUserId, onToggle, onEdit, onDelete,
 }: {
   project: Project;
   projectTeams: ProjectTeam[];
@@ -187,21 +183,45 @@ function ProjectCard({
   allProfiles: Profile[];
   isAdmin: boolean;
   isExpanded: boolean;
+  currentUserId: string;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const [addTeamOpen, setAddTeamOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState<string | null>(null); // team id or "none"
+  const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [draggedMemberId, setDraggedMemberId] = useState<string | null>(null);
   const [dragOverTeam, setDragOverTeam] = useState<string | null>(null);
+  // For employee: which team was clicked to show tasks
+  const [activeTeam, setActiveTeam] = useState<ProjectTeam | null>(null);
+  const [selectedTask, setSelectedTask] = useState<any>(null);
   const qc = useQueryClient();
 
   const membersWithoutTeam = projectMembers.filter((m) => !m.team_id);
 
+  // Fetch tasks for the current employee in the selected team's project
+  const { data: myTeamTasks = [], isLoading: tasksLoading } = useQuery({
+    queryKey: ["my-team-tasks", project.id, currentUserId],
+    queryFn: async () => {
+      const { data: assignedIds } = await supabase
+        .from("task_assignees")
+        .select("task_id")
+        .eq("user_id", currentUserId);
+      if (!assignedIds?.length) return [];
+      const taskIds = assignedIds.map((a: any) => a.task_id);
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
+        .in("id", taskIds)
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+    enabled: !isAdmin && !!currentUserId && isExpanded,
+  });
+
   const deleteTeam = useMutation({
     mutationFn: async (teamId: string) => {
-      // Move team members to unassigned before deleting
       await supabase.from("project_members").update({ team_id: null }).eq("team_id", teamId);
       const { error } = await supabase.from("project_teams").delete().eq("id", teamId);
       if (error) throw error;
@@ -239,6 +259,9 @@ function ProjectCard({
     setDraggedMemberId(null);
     setDragOverTeam(null);
   };
+
+  // Check if current user is a member of this project
+  const isMemberOfProject = projectMembers.some((m) => m.user_id === currentUserId);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -308,119 +331,230 @@ function ProjectCard({
             className="overflow-hidden"
           >
             <div className="border-t border-border px-5 py-4">
-              {/* Teams */}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {projectTeams.map((team) => {
-                  const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
-                  const isDragTarget = dragOverTeam === team.id;
-                  return (
-                    <div
-                      key={team.id}
-                      onDragOver={(e) => { e.preventDefault(); setDragOverTeam(team.id); }}
-                      onDragLeave={() => setDragOverTeam(null)}
-                      onDrop={() => handleDrop(team.id)}
-                      className={`rounded-lg border-2 transition-colors p-3 ${isDragTarget ? "border-primary bg-accent-light" : "border-border bg-muted/20"}`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
-                          <span className="text-sm font-semibold text-ink-primary">{team.name}</span>
-                          <span className="text-xs text-ink-muted">({teamMembers.length})</span>
-                        </div>
-                        {isAdmin && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setAssignOpen(team.id)}
-                              className="text-ink-muted hover:text-primary p-1 rounded"
-                              title="Add member"
-                            >
-                              <UserPlus className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm(`Remove team "${team.name}"? Members will become unassigned.`)) {
-                                  deleteTeam.mutate(team.id);
-                                }
-                              }}
-                              className="text-ink-muted hover:text-destructive p-1 rounded"
-                              title="Remove team"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+
+              {/* ── ADMIN VIEW: full team management ── */}
+              {isAdmin ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {projectTeams.map((team) => {
+                      const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
+                      const isDragTarget = dragOverTeam === team.id;
+                      return (
+                        <div
+                          key={team.id}
+                          onDragOver={(e) => { e.preventDefault(); setDragOverTeam(team.id); }}
+                          onDragLeave={() => setDragOverTeam(null)}
+                          onDrop={() => handleDrop(team.id)}
+                          className={`rounded-lg border-2 transition-colors p-3 ${isDragTarget ? "border-primary bg-accent-light" : "border-border bg-muted/20"}`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
+                              <span className="text-sm font-semibold text-ink-primary">{team.name}</span>
+                              <span className="text-xs text-ink-muted">({teamMembers.length})</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setAssignOpen(team.id)}
+                                className="text-ink-muted hover:text-primary p-1 rounded"
+                                title="Add member"
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Remove team "${team.name}"? Members will become unassigned.`)) {
+                                    deleteTeam.mutate(team.id);
+                                  }
+                                }}
+                                className="text-ink-muted hover:text-destructive p-1 rounded"
+                                title="Remove team"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        )}
-                      </div>
+                          <div className="space-y-1.5 min-h-[40px]">
+                            {teamMembers.length === 0 && (
+                              <p className="text-xs text-ink-muted text-center py-2">Drop members here</p>
+                            )}
+                            {teamMembers.map((m) => (
+                              <MemberChip
+                                key={m.id}
+                                member={m}
+                                isAdmin={isAdmin}
+                                onRemove={() => removeMember.mutate(m.id)}
+                                onDragStart={() => setDraggedMemberId(m.id)}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
 
-                      <div className="space-y-1.5 min-h-[40px]">
-                        {teamMembers.length === 0 && (
-                          <p className="text-xs text-ink-muted text-center py-2">Drop members here</p>
-                        )}
-                        {teamMembers.map((m) => (
-                          <MemberChip
-                            key={m.id}
-                            member={m}
-                            isAdmin={isAdmin}
-                            onRemove={() => removeMember.mutate(m.id)}
-                            onDragStart={() => setDraggedMemberId(m.id)}
-                          />
-                        ))}
+                    {/* Unassigned lane */}
+                    {membersWithoutTeam.length > 0 && (
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setDragOverTeam("none"); }}
+                        onDragLeave={() => setDragOverTeam(null)}
+                        onDrop={() => handleDrop(null)}
+                        className={`rounded-lg border-2 border-dashed transition-colors p-3 ${dragOverTeam === "none" ? "border-primary bg-accent-light" : "border-border"}`}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold text-ink-muted">Unassigned</span>
+                          <span className="text-xs text-ink-muted">({membersWithoutTeam.length})</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {membersWithoutTeam.map((m) => (
+                            <MemberChip
+                              key={m.id}
+                              member={m}
+                              isAdmin={isAdmin}
+                              onRemove={() => removeMember.mutate(m.id)}
+                              onDragStart={() => setDraggedMemberId(m.id)}
+                            />
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-
-                {/* Unassigned members lane */}
-                {membersWithoutTeam.length > 0 && (
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setDragOverTeam("none"); }}
-                    onDragLeave={() => setDragOverTeam(null)}
-                    onDrop={() => handleDrop(null)}
-                    className={`rounded-lg border-2 border-dashed transition-colors p-3 ${dragOverTeam === "none" ? "border-primary bg-accent-light" : "border-border"}`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-ink-muted">Unassigned</span>
-                      <span className="text-xs text-ink-muted">({membersWithoutTeam.length})</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {membersWithoutTeam.map((m) => (
-                        <MemberChip
-                          key={m.id}
-                          member={m}
-                          isAdmin={isAdmin}
-                          onRemove={() => removeMember.mutate(m.id)}
-                          onDragStart={() => setDraggedMemberId(m.id)}
-                        />
-                      ))}
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Footer actions */}
-              {isAdmin && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                  <Button size="sm" variant="outline" onClick={() => setAddTeamOpen(true)} className="gap-1.5">
-                    <Plus className="h-3.5 w-3.5" /> Add Team
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setAssignOpen("none")} className="gap-1.5">
-                    <UserPlus className="h-3.5 w-3.5" /> Assign Member
-                  </Button>
-                </div>
+                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                    <Button size="sm" variant="outline" onClick={() => setAddTeamOpen(true)} className="gap-1.5">
+                      <Plus className="h-3.5 w-3.5" /> Add Team
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAssignOpen("none")} className="gap-1.5">
+                      <UserPlus className="h-3.5 w-3.5" /> Assign Member
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                /* ── EMPLOYEE VIEW: clickable team cards → show my tasks ── */
+                activeTeam ? (
+                  /* Task panel for selected team */
+                  <div>
+                    <button
+                      onClick={() => setActiveTeam(null)}
+                      className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary mb-4 transition-colors"
+                    >
+                      <ArrowLeft className="h-4 w-4" /> Back to teams
+                    </button>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                      <h3 className="font-heading text-base font-semibold text-ink-primary">{activeTeam.name}</h3>
+                      <span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">My Tasks</span>
+                    </div>
+
+                    {tasksLoading ? (
+                      <div className="space-y-2">
+                        {[1,2,3].map(i => <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />)}
+                      </div>
+                    ) : myTeamTasks.length === 0 ? (
+                      <div className="flex flex-col items-center py-10 text-center">
+                        <CheckSquare className="h-9 w-9 text-ink-muted mb-2" />
+                        <p className="text-sm font-medium text-ink-primary">No tasks assigned</p>
+                        <p className="text-xs text-ink-muted">You have no tasks in this project yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {myTeamTasks.map((task: any) => {
+                          const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== "completed";
+                          return (
+                            <motion.div
+                              key={task.id}
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              onClick={() => setSelectedTask(task)}
+                              className="flex items-center gap-3 rounded-lg bg-muted/30 border border-border p-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
+                                {task.deadline && (
+                                  <p className={`text-[11px] mt-0.5 ${isOverdue ? "text-destructive font-medium" : "text-ink-muted"}`}>
+                                    Due {format(new Date(task.deadline), "MMM d, yyyy")}
+                                  </p>
+                                )}
+                              </div>
+                              <PriorityBadge priority={task.priority ?? "medium"} />
+                              <StatusBadge status={task.status ?? "todo"} />
+                              {(task.progress ?? 0) > 0 && (
+                                <div className="hidden sm:flex items-center gap-1.5 w-20">
+                                  <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                                    <div className="h-full rounded-full bg-primary" style={{ width: `${task.progress}%` }} />
+                                  </div>
+                                  <span className="text-[10px] text-ink-muted">{task.progress}%</span>
+                                </div>
+                              )}
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Team cards grid for employees */
+                  isMemberOfProject ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {projectTeams.map((team) => {
+                        const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
+                        const isMember = teamMembers.some((m) => m.user_id === currentUserId);
+                        return (
+                          <button
+                            key={team.id}
+                            onClick={() => setActiveTeam(team)}
+                            className={`text-left rounded-lg border-2 p-4 transition-all hover:shadow-md hover:border-primary/50 group ${
+                              isMember ? "border-primary/20 bg-accent-light/40" : "border-border bg-muted/20"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                              <span className="text-sm font-semibold text-ink-primary group-hover:text-primary transition-colors">
+                                {team.name}
+                              </span>
+                              {isMember && (
+                                <span className="ml-auto text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-pill">
+                                  You're in this team
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex -space-x-2 mb-3">
+                              {teamMembers.slice(0, 5).map((m) => (
+                                <div key={m.id} className="ring-2 ring-card rounded-full">
+                                  <UserAvatar name={m.user?.full_name ?? ""} avatarUrl={m.user?.avatar_url} size="sm" />
+                                </div>
+                              ))}
+                              {teamMembers.length > 5 && (
+                                <div className="h-7 w-7 rounded-full bg-muted ring-2 ring-card flex items-center justify-center text-[10px] font-medium text-ink-muted">
+                                  +{teamMembers.length - 5}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-ink-muted">
+                              {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""} · Click to view your tasks
+                            </p>
+                          </button>
+                        );
+                      })}
+                      {projectTeams.length === 0 && (
+                        <p className="text-sm text-ink-muted col-span-3 py-4">No teams in this project yet.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <FolderKanban className="h-8 w-8 text-ink-muted mb-2" />
+                      <p className="text-sm text-ink-muted">You are not assigned to this project.</p>
+                    </div>
+                  )
+                )
               )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Add Team Modal */}
       {addTeamOpen && (
-        <AddTeamModal
-          projectId={project.id}
-          onClose={() => setAddTeamOpen(false)}
-        />
+        <AddTeamModal projectId={project.id} onClose={() => setAddTeamOpen(false)} />
       )}
-
-      {/* Assign Member Modal */}
       {assignOpen !== null && (
         <AssignMemberModal
           projectId={project.id}
@@ -431,6 +565,7 @@ function ProjectCard({
           onClose={() => setAssignOpen(null)}
         />
       )}
+      <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
     </div>
   );
 }
@@ -466,7 +601,7 @@ function MemberChip({
   );
 }
 
-// ─── Project Form Modal (Create / Edit) ───────────────────────────────────────
+// ─── Project Form Modal ───────────────────────────────────────────────────────
 function ProjectFormModal({
   open, project, onClose,
 }: {
@@ -518,26 +653,14 @@ function ProjectFormModal({
           </h2>
           <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
         </div>
-
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Project Name *</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. VLM, Project Alpha"
-              className="h-10"
-              autoFocus
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. VLM, Project Alpha" className="h-10" autoFocus />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Description</label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of the project..."
-              rows={3}
-            />
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of the project..." rows={3} />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Colour</label>
@@ -556,7 +679,6 @@ function ProjectFormModal({
             </div>
           </div>
         </div>
-
         <div className="flex gap-3 mt-6">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
           <Button onClick={handleSubmit} disabled={saving} className="flex-1">
@@ -705,12 +827,7 @@ function AssignMemberModal({
         )}
 
         <div className="mb-3">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search members..."
-            className="h-9"
-          />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search members..." className="h-9" />
         </div>
 
         <div className="max-h-[240px] overflow-y-auto space-y-1 mb-4">
