@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -16,6 +16,7 @@ type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
 const adminNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
+  { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Users", path: "/users", icon: Users },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -28,6 +29,7 @@ const adminNav: NavItem[] = [
 const managerNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
+  { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -41,6 +43,7 @@ const managerNav: NavItem[] = [
 const employeeNav: NavItem[] = [
   { label: "Dashboard", path: "/my-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
+  { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
@@ -51,6 +54,7 @@ const employeeNav: NavItem[] = [
 const internNav: NavItem[] = [
   { label: "Dashboard", path: "/intern-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
+  { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
