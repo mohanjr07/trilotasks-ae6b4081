@@ -78,11 +78,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
   // Renaming is PER-USER (stored in user_task_column_prefs) so every signed-in
   // user — employee, intern, manager, admin — can rename their own view on
-  // ANY board (Tasks or My Tasks). Add / delete still modify the shared
-  // task_columns table, so those remain restricted to admins + managers on
-  // the main Tasks page only.
+  // ANY board (Tasks or My Tasks).
   const canRenameColumns = !!user;
-  const canManageColumns = !myTasksOnly && isAdmin; // admin + manager (add / delete)
+  // Adding sections is ALSO per-user now (stored in user_task_columns), so
+  // everyone signed in can add their own personal sections on any board.
+  // Only that user sees them.
+  const canAddColumns = !!user;
+  // Admins + managers can still delete shared (global) columns from
+  // task_columns. Any user can delete their OWN personal columns.
+  const canManageSharedColumns = !myTasksOnly && isAdmin;
   const showAllTasks = isAdmin && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
@@ -165,19 +169,29 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     },
   });
 
+  // Adding a section creates a PERSONAL column — stored in user_task_columns
+  // and only visible to the user who created it. The key is user-scoped
+  // (prefixed with a slice of the user's id + a random suffix) so that two
+  // different users can both create "Review" without colliding on a shared
+  // key, and so other users never accidentally see tasks dragged into
+  // someone else's personal column.
   const addColumn = useMutation({
     mutationFn: async (label: string) => {
       const trimmed = label.trim();
       if (!trimmed) throw new Error("Name cannot be empty");
-      const baseKey = slugifyKey(trimmed);
-      // Avoid collisions by appending a short timestamp if needed
-      let key = baseKey;
-      const { data: existing } = await supabase.from("task_columns").select("key").eq("key", key).maybeSingle();
-      if (existing) key = `${baseKey}_${Date.now().toString(36).slice(-4)}`;
+      if (!user?.id) throw new Error("You must be signed in to add sections");
+      const slug = slugifyKey(trimmed);
+      const uidPart = user.id.replace(/-/g, "").slice(0, 8);
+      const randPart = Date.now().toString(36).slice(-4);
+      const key = `u_${uidPart}_${slug}_${randPart}`;
       const position = (columns[columns.length - 1]?.position ?? -1) + 1;
       const color = CUSTOM_COLORS[columns.length % CUSTOM_COLORS.length];
-      const { error } = await supabase.from("task_columns").insert({
-        key, label: trimmed, color, position, is_default: false, created_by: user?.id,
+      const { error } = await supabase.from("user_task_columns").insert({
+        user_id: user.id,
+        key,
+        label: trimmed,
+        color,
+        position,
       });
       if (error) throw error;
     },
@@ -185,21 +199,38 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       queryClient.invalidateQueries({ queryKey: ["task-columns"] });
       setAddingColumn(false);
       setNewColumnLabel("");
-      toast.success("Section added");
+      toast.success("Section added (only you see this)");
     },
     onError: (e: any) => {
       toast.error(e?.message ?? "Couldn't add section. Did you run the SQL migration?");
     },
   });
 
+  // Delete routes based on whether the column is personal or shared:
+  //   • personal  → delete from user_task_columns (anyone can delete their own)
+  //   • shared    → delete from task_columns (admins / managers only)
+  // Default columns (is_default = true) are not deletable — the trash icon
+  // is hidden for them in the UI.
   const deleteColumn = useMutation({
     mutationFn: async (col: TaskColumn) => {
-      // Move any tasks in this column back to the first column (usually "todo")
+      if (!col.id) return; // hardcoded defaults have no id — nothing to delete
+      // Move any tasks in this column back to the first surviving column
       const fallback = columns.find((c) => c.key !== col.key) ?? DEFAULT_TASK_COLUMNS[0];
       await supabase.from("tasks").update({ status: fallback.key }).eq("status", col.key);
-      if (!col.id) return; // default columns have no id — shouldn't be deletable anyway
-      const { error } = await supabase.from("task_columns").delete().eq("id", col.id);
-      if (error) throw error;
+
+      if (col.is_personal) {
+        if (!user?.id) throw new Error("You must be signed in");
+        const { error } = await supabase
+          .from("user_task_columns")
+          .delete()
+          .eq("id", col.id)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        if (!isAdmin) throw new Error("Only admins can delete shared sections");
+        const { error } = await supabase.from("task_columns").delete().eq("id", col.id);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-columns"] });
@@ -450,8 +481,10 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {/* Delete icon — admin / manager only, and only for custom columns */}
-                    {canManageColumns && !isEditing && !col.is_default && (
+                    {/* Delete icon — show when the user can actually delete this column:
+                          • personal column → only the owner (this user) can delete it
+                          • shared non-default → admin / manager on the main Tasks page */}
+                    {!isEditing && !col.is_default && (col.is_personal || canManageSharedColumns) && (
                       <button
                         onClick={() => {
                           if (confirm(`Delete "${col.label}"? Tasks in this section will be moved to "${columns[0]?.label ?? "To Do"}".`)) {
@@ -569,8 +602,10 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
             );
           })}
 
-          {/* "+ Add Section" tile (admins only) */}
-          {canManageColumns && (
+          {/* "+ Add Section" tile — every signed-in user (employee, intern,
+              manager, admin) can add their own personal section. It's saved
+              to user_task_columns and only shows up on their own board. */}
+          {canAddColumns && (
             <div className="rounded-xl border-2 border-dashed border-border bg-muted/10 flex flex-col min-h-[140px]">
               {addingColumn ? (
                 <div className="p-4 flex flex-col gap-2">
