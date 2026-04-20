@@ -117,17 +117,42 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   });
 
   // ── Column mutations ─────────────────────────────────────────────
+  // Rename is PER-USER: the new label is saved to user_task_column_prefs and
+  // only shows up on this user's board. Other teammates keep seeing the
+  // original global label from task_columns. To reset back to the shared
+  // name, save an empty string (or the same string as the base label).
   const renameColumn = useMutation({
-    mutationFn: async ({ id, label }: { id: string; label: string }) => {
+    mutationFn: async ({ key, label, baseLabel }: { key: string; label: string; baseLabel?: string }) => {
+      if (!user?.id) throw new Error("You must be signed in to rename sections");
+
+      // If the user cleared the input or typed the base label, remove their
+      // personal override so they fall back to the global label.
+      if (!label || label === baseLabel) {
+        const { error } = await supabase
+          .from("user_task_column_prefs")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("column_key", key);
+        if (error) throw error;
+        return;
+      }
+
       const { error } = await supabase
-        .from("task_columns")
-        .update({ label, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .from("user_task_column_prefs")
+        .upsert(
+          {
+            user_id: user.id,
+            column_key: key,
+            custom_label: label,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,column_key" }
+        );
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["task-columns"] });
-      toast.success("Section renamed");
+      toast.success("Section renamed (only you see this)");
     },
     onError: (e: any) => {
       toast.error(e?.message ?? "Couldn't rename section. Did you run the SQL migration?");
@@ -187,8 +212,10 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const commitRename = (col: TaskColumn) => {
     const next = editingLabel.trim();
     setEditingColKey(null);
-    if (!next || next === col.label || !col.id) return;
-    renameColumn.mutate({ id: col.id, label: next });
+    if (!next || next === col.label) return;
+    // Rename works for every column including the hardcoded fallback defaults,
+    // because the override is keyed on `column_key` not the column's row id.
+    renameColumn.mutate({ key: col.key, label: next, baseLabel: col.baseLabel });
   };
   const cancelRename = () => setEditingColKey(null);
 
@@ -398,8 +425,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                         className={`text-sm font-semibold text-ink-primary truncate ${
                           canManageColumns ? "cursor-text" : ""
                         }`}
-                        onDoubleClick={() => canManageColumns && col.id && startRename(col)}
-                        title={canManageColumns ? "Double-click to rename" : undefined}
+                        onDoubleClick={() => canManageColumns && startRename(col)}
+                        title={canManageColumns ? "Double-click to rename (only you see this)" : undefined}
                       >
                         {col.label}
                       </span>
@@ -407,12 +434,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {canManageColumns && !isEditing && col.id && (
+                    {canManageColumns && !isEditing && (
                       <>
                         <button
                           onClick={() => startRename(col)}
                           className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-primary transition-opacity"
-                          title="Rename section"
+                          title="Rename (only you see this)"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
