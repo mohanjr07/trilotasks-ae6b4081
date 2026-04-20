@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckSquare, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,7 +17,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, profile, session } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,15 @@ export default function LoginPage() {
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  // Once profile is loaded after sign-in, redirect based on role
+  useEffect(() => {
+    if (session && profile) {
+      if (profile.role === "employee") navigate("/my-dashboard", { replace: true });
+      else if (profile.role === "intern") navigate("/intern-dashboard", { replace: true });
+      else navigate("/dashboard", { replace: true });
+    }
+  }, [session, profile, navigate]);
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -34,8 +43,8 @@ export default function LoginPage() {
       toast.error("Invalid email or password");
       return;
     }
-    navigate("/", { replace: true });
-    setLoading(false);
+    // Do NOT navigate here — the useEffect above will fire once
+    // AuthContext finishes fetching the profile after SIGNED_IN
   };
 
   return (
