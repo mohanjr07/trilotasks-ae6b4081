@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Paperclip, Trash2 } from "lucide-react";
+import { X, Check, Paperclip, Trash2, FolderKanban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ const schema = z.object({
     "Deadline must be today or a future date"
   ),
   category: z.string().max(50).optional(),
+  project_id: z.string().optional(),
+  project_team_id: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -56,6 +58,8 @@ const getInitialDraft = (preselectedAssignee?: string): FormData => {
           status: parsed.status ?? "todo",
           deadline: parsed.deadline ?? "",
           category: parsed.category ?? "",
+          project_id: parsed.project_id ?? "",
+          project_team_id: parsed.project_team_id ?? "",
         };
       } catch {
         sessionStorage.removeItem(TASK_DRAFT_KEY);
@@ -71,6 +75,8 @@ const getInitialDraft = (preselectedAssignee?: string): FormData => {
     status: "todo",
     deadline: "",
     category: "",
+    project_id: "",
+    project_team_id: "",
   };
 };
 
@@ -91,6 +97,24 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
     enabled: open,
   });
 
+  const { data: projects = [] } = useQuery({
+    queryKey: ["projects"],
+    queryFn: async () => {
+      const { data } = await supabase.from("projects").select("id, name, color").eq("status", "active").order("name");
+      return data ?? [];
+    },
+    enabled: open,
+  });
+
+  const { data: projectTeams = [] } = useQuery({
+    queryKey: ["project-teams"],
+    queryFn: async () => {
+      const { data } = await supabase.from("project_teams").select("id, project_id, name").order("name");
+      return data ?? [];
+    },
+    enabled: open,
+  });
+
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: initialDraft,
@@ -98,6 +122,8 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const draft = watch();
   const selectedAssignees = draft.assigned_to || [];
+  const selectedProjectId = draft.project_id;
+  const teamsForProject = projectTeams.filter((t: any) => t.project_id === selectedProjectId);
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +134,11 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
     if (!open) return;
     sessionStorage.setItem(TASK_DRAFT_KEY, JSON.stringify(draft));
   }, [draft, open]);
+
+  // Reset team when project changes
+  useEffect(() => {
+    setValue("project_team_id", "");
+  }, [selectedProjectId, setValue]);
 
   const clearDraft = () => {
     sessionStorage.removeItem(TASK_DRAFT_KEY);
@@ -120,6 +151,8 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       status: "todo",
       deadline: "",
       category: "",
+      project_id: "",
+      project_team_id: "",
     });
   };
 
@@ -148,6 +181,8 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
         deadline: data.deadline,
         category: data.category || null,
         assigned_by: user!.id,
+        project_id: data.project_id || null,
+        project_team_id: data.project_team_id || null,
       }]).select("id").single();
       if (error) throw error;
 
@@ -158,7 +193,6 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       const { error: assignError } = await supabase.from("task_assignees").insert(assigneeRows);
       if (assignError) throw assignError;
 
-      // Send in-app + email notifications to ALL assignees
       const deadlineText = data.deadline
         ? ` Deadline: ${new Date(data.deadline).toLocaleDateString()}.`
         : "";
@@ -172,7 +206,6 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
       const { error: notifError } = await supabase.from("notifications").insert(notificationRows);
       if (notifError) console.error("Notification insert failed:", notifError);
 
-      // Upload attachments
       for (const file of attachedFiles) {
         const filePath = `${taskData.id}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage.from("task-attachments").upload(filePath, file);
@@ -235,6 +268,52 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Description</label>
                 <Textarea {...register("description")} rows={3} />
               </div>
+
+              {/* Project assignment */}
+              {projects.length > 0 && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-primary">
+                      <FolderKanban className="h-3.5 w-3.5 text-ink-muted" /> Project
+                    </label>
+                    <Select
+                      value={draft.project_id || "none"}
+                      onValueChange={(v) => setValue("project_id", v === "none" ? "" : v, { shouldDirty: true })}
+                    >
+                      <SelectTrigger className="h-10"><SelectValue placeholder="No project" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {projects.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                              {p.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {selectedProjectId && teamsForProject.length > 0 && (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">Team</label>
+                      <Select
+                        value={draft.project_team_id || "none"}
+                        onValueChange={(v) => setValue("project_team_id", v === "none" ? "" : v, { shouldDirty: true })}
+                      >
+                        <SelectTrigger className="h-10"><SelectValue placeholder="No team" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No team</SelectItem>
+                          {teamsForProject.map((t: any) => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To * <span className="text-ink-muted font-normal">(select multiple)</span></label>
