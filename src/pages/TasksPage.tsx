@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, X as XIcon, CheckSquare, LayoutGrid, List } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CreateTaskModal from "@/components/CreateTaskModal";
 import TaskDetailModal from "@/components/TaskDetailModal";
+import { toast } from "sonner";
 
 const TASK_CREATE_OPEN_KEY = "tasks:create-open";
 
@@ -35,6 +36,11 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const [createOpen, setCreateOpen] = useState(() => sessionStorage.getItem(TASK_CREATE_OPEN_KEY) === "1");
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+
+  // Drag-and-drop state
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     sessionStorage.setItem(TASK_CREATE_OPEN_KEY, createOpen ? "1" : "0");
@@ -111,6 +117,26 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     acc[col.key] = filteredTasks.filter((t: any) => (t.status ?? "todo") === col.key);
     return acc;
   }, {} as Record<string, any[]>);
+
+  const handleTaskDrop = async (targetStatus: string) => {
+    if (!draggedTaskId) return;
+    const task = tasks.find((t: any) => t.id === draggedTaskId);
+    if (!task || task.status === targetStatus) {
+      setDraggedTaskId(null);
+      return;
+    }
+    // Optimistic update
+    queryClient.setQueryData(
+      ["tasks", showAllTasks, user?.id, myTasksOnly],
+      (old: any[]) => old.map((t: any) => t.id === draggedTaskId ? { ...t, status: targetStatus } : t)
+    );
+    setDraggedTaskId(null);
+    const { error } = await supabase.from("tasks").update({ status: targetStatus }).eq("id", draggedTaskId);
+    if (error) {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.error("Failed to update task status");
+    }
+  };
 
   const pageTitle = myTasksOnly ? "My Tasks" : canCreateTasks ? "Tasks" : "My Tasks";
 
@@ -212,8 +238,19 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
           {COLUMNS.map((col) => {
             const colTasks = tasksByStatus[col.key] ?? [];
+            const isDragTarget = dragOverCol === col.key;
             return (
-              <div key={col.key} className="rounded-xl border border-border bg-muted/30 flex flex-col overflow-hidden">
+              <div
+                key={col.key}
+                onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.key); }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null);
+                }}
+                onDrop={() => { handleTaskDrop(col.key); setDragOverCol(null); }}
+                className={`rounded-xl border-2 flex flex-col overflow-hidden transition-colors ${
+                  isDragTarget ? "border-primary bg-accent-light/40" : "border-border bg-muted/30"
+                }`}
+              >
                 {/* Column header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
                   <div className="flex items-center gap-2">
@@ -228,20 +265,28 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                 {/* Cards */}
                 <div className="flex flex-col gap-2 p-3 min-h-[100px]">
                   {colTasks.length === 0 && (
-                    <p className="text-xs text-ink-muted text-center py-6">No tasks</p>
+                    <p className={`text-xs text-center py-6 transition-colors ${isDragTarget ? "text-primary font-medium" : "text-ink-muted"}`}>
+                      {isDragTarget ? "Drop here" : "No tasks"}
+                    </p>
                   )}
                   {colTasks.map((task: any) => {
                     const assignees = getAssignees(task);
                     const primaryAssignee = assignees[0];
                     const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== "completed";
+                    const isDragging = draggedTaskId === task.id;
                     return (
                       <motion.div
                         key={task.id}
                         layout
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
+                        draggable
+                        onDragStart={() => setDraggedTaskId(task.id)}
+                        onDragEnd={() => setDraggedTaskId(null)}
                         onClick={() => setSelectedTask(task)}
-                        className="rounded-lg bg-card border border-border p-3 cursor-pointer hover:shadow-md hover:border-primary/30 transition-all"
+                        className={`rounded-lg bg-card border border-border p-3 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/30 transition-all select-none ${
+                          isDragging ? "opacity-40 scale-95" : ""
+                        }`}
                       >
                         {/* Title */}
                         <p className="text-sm font-semibold text-ink-primary mb-2 leading-snug line-clamp-2">{task.title}</p>
