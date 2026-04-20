@@ -347,13 +347,11 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
     onError: (e: any) => toast.error(e.message),
   });
 
-  if (!open) return null;
-
   const selectedRole = watch("role");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ display: open ? 'flex' : 'none' }}>
+      <motion.div animate={{ opacity: open ? 1 : 0 }} className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
         className="relative w-full max-w-[520px] max-h-[90vh] overflow-y-auto rounded-modal bg-card p-6 shadow-modal mx-4">
         <div className="flex items-center justify-between mb-5">
