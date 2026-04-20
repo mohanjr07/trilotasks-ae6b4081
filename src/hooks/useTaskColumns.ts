@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type TaskColumn = {
   id?: string;
   key: string;
-  label: string;
+  label: string;        // already merged with the current user's override
+  baseLabel?: string;   // the global label from task_columns (what everyone else sees)
   color: string;
   position: number;
   is_default: boolean;
@@ -20,16 +22,48 @@ export const DEFAULT_TASK_COLUMNS: TaskColumn[] = [
 ];
 
 export function useTaskColumns() {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ["task-columns"],
+    // Include user.id so the cache is per-user (preferences are personal)
+    queryKey: ["task-columns", user?.id ?? "anon"],
     queryFn: async (): Promise<TaskColumn[]> => {
-      const { data, error } = await supabase
+      // 1. Base columns — global list shared by everyone
+      const { data: base, error: baseErr } = await supabase
         .from("task_columns")
         .select("id, key, label, color, position, is_default")
         .order("position", { ascending: true });
-      // Table may not exist yet (migration not run). Fall back silently.
-      if (error || !data || data.length === 0) return DEFAULT_TASK_COLUMNS;
-      return data as TaskColumn[];
+
+      const baseColumns: TaskColumn[] =
+        baseErr || !base || base.length === 0
+          ? DEFAULT_TASK_COLUMNS
+          : (base as TaskColumn[]);
+
+      if (!user?.id) {
+        return baseColumns.map((c) => ({ ...c, baseLabel: c.label }));
+      }
+
+      // 2. Personal overrides — each user can rename any column for themselves
+      const { data: prefs, error: prefsErr } = await supabase
+        .from("user_task_column_prefs")
+        .select("column_key, custom_label")
+        .eq("user_id", user.id);
+
+      // If the prefs table doesn't exist yet (migration not run) just return
+      // the base columns unchanged.
+      if (prefsErr || !prefs) {
+        return baseColumns.map((c) => ({ ...c, baseLabel: c.label }));
+      }
+
+      const prefMap = new Map<string, string>(
+        prefs.map((p: any) => [p.column_key, p.custom_label])
+      );
+
+      return baseColumns.map((c) => ({
+        ...c,
+        baseLabel: c.label,
+        label: prefMap.get(c.key) ?? c.label,
+      }));
     },
     staleTime: 30_000,
   });
