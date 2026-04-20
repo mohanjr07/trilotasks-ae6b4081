@@ -62,7 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Only show loading spinner on the very first load, not on tab switches
       if (showLoading) setLoading(true);
 
       try {
@@ -80,25 +79,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      // Ignore passive events that fire on tab focus / token refresh
+      // Only ignore passive background events that don't represent real auth changes
       if (
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) return;
 
-      // INITIAL_SESSION: only use it if the initial getSession() hasn't completed yet
-      if (event === "INITIAL_SESSION") {
-        if (!initialLoadDone.current) {
-          void syncAuthState(nextSession, true);
-        }
-        return;
-      }
+      // INITIAL_SESSION is handled by getSession() below — skip to avoid double-fetch
+      if (event === "INITIAL_SESSION") return;
 
-      // SIGNED_IN / SIGNED_OUT — always sync, no spinner after first load
-      void syncAuthState(nextSession, !initialLoadDone.current);
+      // SIGNED_IN and SIGNED_OUT must always sync (this is what was broken)
+      void syncAuthState(nextSession, false);
     });
 
-    // Initial load — this is the only time we show the spinner
+    // Initial load — fetch session once on mount
     void supabase.auth.getSession().then(({ data: { session: nextSession } }) =>
       syncAuthState(nextSession, true)
     );
