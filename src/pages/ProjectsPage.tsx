@@ -194,6 +194,8 @@ function ProjectCard({
   const [dragOverTeam, setDragOverTeam] = useState<string | null>(null);
   // For employee: which team was clicked to show tasks
   const [activeTeam, setActiveTeam] = useState<ProjectTeam | null>(null);
+  // For admin: which team was clicked to view all tasks
+  const [adminActiveTeam, setAdminActiveTeam] = useState<ProjectTeam | null>(null);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const qc = useQueryClient();
 
@@ -218,6 +220,20 @@ function ProjectCard({
       return data ?? [];
     },
     enabled: !isAdmin && !!currentUserId && isExpanded,
+  });
+
+  // Fetch ALL tasks in a team's project for admin view
+  const { data: adminTeamTasks = [], isLoading: adminTasksLoading } = useQuery({
+    queryKey: ["admin-team-tasks", project.id, adminActiveTeam?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tasks")
+        .select("*, task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
+        .eq("project_id", project.id)
+        .order("created_at", { ascending: false });
+      return data ?? [];
+    },
+    enabled: isAdmin && !!adminActiveTeam,
   });
 
   const deleteTeam = useMutation({
@@ -332,101 +348,215 @@ function ProjectCard({
           >
             <div className="border-t border-border px-5 py-4">
 
-              {/* ── ADMIN VIEW: full team management ── */}
+              {/* ── ADMIN VIEW ── */}
               {isAdmin ? (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {projectTeams.map((team) => {
-                      const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
-                      const isDragTarget = dragOverTeam === team.id;
-                      return (
-                        <div
-                          key={team.id}
-                          onDragOver={(e) => { e.preventDefault(); setDragOverTeam(team.id); }}
-                          onDragLeave={() => setDragOverTeam(null)}
-                          onDrop={() => handleDrop(team.id)}
-                          className={`rounded-lg border-2 transition-colors p-3 ${isDragTarget ? "border-primary bg-accent-light" : "border-border bg-muted/20"}`}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
-                              <span className="text-sm font-semibold text-ink-primary">{team.name}</span>
-                              <span className="text-xs text-ink-muted">({teamMembers.length})</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setAssignOpen(team.id)}
-                                className="text-ink-muted hover:text-primary p-1 rounded"
-                                title="Add member"
-                              >
-                                <UserPlus className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (confirm(`Remove team "${team.name}"? Members will become unassigned.`)) {
-                                    deleteTeam.mutate(team.id);
-                                  }
-                                }}
-                                className="text-ink-muted hover:text-destructive p-1 rounded"
-                                title="Remove team"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-1.5 min-h-[40px]">
-                            {teamMembers.length === 0 && (
-                              <p className="text-xs text-ink-muted text-center py-2">Drop members here</p>
-                            )}
-                            {teamMembers.map((m) => (
-                              <MemberChip
-                                key={m.id}
-                                member={m}
-                                isAdmin={isAdmin}
-                                onRemove={() => removeMember.mutate(m.id)}
-                                onDragStart={() => setDraggedMemberId(m.id)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Unassigned lane */}
-                    {membersWithoutTeam.length > 0 && (
-                      <div
-                        onDragOver={(e) => { e.preventDefault(); setDragOverTeam("none"); }}
-                        onDragLeave={() => setDragOverTeam(null)}
-                        onDrop={() => handleDrop(null)}
-                        className={`rounded-lg border-2 border-dashed transition-colors p-3 ${dragOverTeam === "none" ? "border-primary bg-accent-light" : "border-border"}`}
+                  {adminActiveTeam ? (
+                    /* ── Admin: task view for selected team ── */
+                    <div>
+                      <button
+                        onClick={() => setAdminActiveTeam(null)}
+                        className="flex items-center gap-1.5 text-sm text-ink-muted hover:text-primary mb-4 transition-colors"
                       >
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-semibold text-ink-muted">Unassigned</span>
-                          <span className="text-xs text-ink-muted">({membersWithoutTeam.length})</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {membersWithoutTeam.map((m) => (
-                            <MemberChip
-                              key={m.id}
-                              member={m}
-                              isAdmin={isAdmin}
-                              onRemove={() => removeMember.mutate(m.id)}
-                              onDragStart={() => setDraggedMemberId(m.id)}
-                            />
-                          ))}
-                        </div>
+                        <ArrowLeft className="h-4 w-4" /> Back to team management
+                      </button>
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                        <h3 className="font-heading text-base font-semibold text-ink-primary">{adminActiveTeam.name}</h3>
+                        <span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">All Tasks</span>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
-                    <Button size="sm" variant="outline" onClick={() => setAddTeamOpen(true)} className="gap-1.5">
-                      <Plus className="h-3.5 w-3.5" /> Add Team
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => setAssignOpen("none")} className="gap-1.5">
-                      <UserPlus className="h-3.5 w-3.5" /> Assign Member
-                    </Button>
-                  </div>
+                      {adminTasksLoading ? (
+                        <div className="space-y-2">
+                          {[1,2,3].map(i => <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />)}
+                        </div>
+                      ) : adminTeamTasks.length === 0 ? (
+                        <div className="flex flex-col items-center py-10 text-center">
+                          <CheckSquare className="h-9 w-9 text-ink-muted mb-2" />
+                          <p className="text-sm font-medium text-ink-primary">No tasks in this project</p>
+                          <p className="text-xs text-ink-muted">Tasks assigned to this project will appear here.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {adminTeamTasks.map((task: any) => {
+                            const assignees = task.task_assignees?.map((a: any) => a.user) ?? [];
+                            const primaryAssignee = assignees[0];
+                            const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== "completed";
+                            return (
+                              <motion.div
+                                key={task.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                onClick={() => setSelectedTask(task)}
+                                className="flex items-center gap-3 rounded-lg bg-muted/30 border border-border p-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    {assignees.length > 0 && (
+                                      <span className="text-[11px] text-ink-muted">
+                                        {assignees.length === 1
+                                          ? primaryAssignee?.full_name
+                                          : `${primaryAssignee?.full_name} +${assignees.length - 1}`}
+                                      </span>
+                                    )}
+                                    {task.deadline && (
+                                      <span className={`text-[11px] ${isOverdue ? "text-destructive font-medium" : "text-ink-muted"}`}>
+                                        · Due {format(new Date(task.deadline), "MMM d, yyyy")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <PriorityBadge priority={task.priority ?? "medium"} />
+                                <StatusBadge status={task.status ?? "todo"} />
+                                {(task.progress ?? 0) > 0 && (
+                                  <div className="hidden sm:flex items-center gap-1.5 w-20">
+                                    <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                                      <div className="h-full rounded-full bg-primary" style={{ width: `${task.progress}%` }} />
+                                    </div>
+                                    <span className="text-[10px] text-ink-muted">{task.progress}%</span>
+                                  </div>
+                                )}
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── Admin: team management + clickable team cards ── */
+                    <>
+                      {/* Clickable team cards for admin to view tasks */}
+                      {projectTeams.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-4">
+                          {projectTeams.map((team) => {
+                            const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
+                            return (
+                              <button
+                                key={team.id}
+                                onClick={() => setAdminActiveTeam(team)}
+                                className="text-left rounded-lg border-2 border-primary/20 bg-accent-light/30 p-3 transition-all hover:shadow-md hover:border-primary/50 group"
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
+                                  <span className="text-sm font-semibold text-ink-primary group-hover:text-primary transition-colors">
+                                    {team.name}
+                                  </span>
+                                  <span className="ml-auto text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-pill">
+                                    {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""}
+                                  </span>
+                                </div>
+                                <div className="flex -space-x-1.5 mb-1">
+                                  {teamMembers.slice(0, 5).map((m) => (
+                                    <div key={m.id} className="ring-1 ring-card rounded-full">
+                                      <UserAvatar name={m.user?.full_name ?? ""} avatarUrl={m.user?.avatar_url} size="sm" />
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-ink-muted group-hover:text-primary transition-colors">
+                                  Click to view all tasks →
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Team management grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {projectTeams.map((team) => {
+                          const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
+                          const isDragTarget = dragOverTeam === team.id;
+                          return (
+                            <div
+                              key={team.id}
+                              onDragOver={(e) => { e.preventDefault(); setDragOverTeam(team.id); }}
+                              onDragLeave={() => setDragOverTeam(null)}
+                              onDrop={() => handleDrop(team.id)}
+                              className={`rounded-lg border-2 transition-colors p-3 ${isDragTarget ? "border-primary bg-accent-light" : "border-border bg-muted/20"}`}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: project.color }} />
+                                  <span className="text-sm font-semibold text-ink-primary">{team.name}</span>
+                                  <span className="text-xs text-ink-muted">({teamMembers.length})</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => setAssignOpen(team.id)}
+                                    className="text-ink-muted hover:text-primary p-1 rounded"
+                                    title="Add member"
+                                  >
+                                    <UserPlus className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Remove team "${team.name}"? Members will become unassigned.`)) {
+                                        deleteTeam.mutate(team.id);
+                                      }
+                                    }}
+                                    className="text-ink-muted hover:text-destructive p-1 rounded"
+                                    title="Remove team"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="space-y-1.5 min-h-[40px]">
+                                {teamMembers.length === 0 && (
+                                  <p className="text-xs text-ink-muted text-center py-2">Drop members here</p>
+                                )}
+                                {teamMembers.map((m) => (
+                                  <MemberChip
+                                    key={m.id}
+                                    member={m}
+                                    isAdmin={isAdmin}
+                                    onRemove={() => removeMember.mutate(m.id)}
+                                    onDragStart={() => setDraggedMemberId(m.id)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Unassigned lane */}
+                        {membersWithoutTeam.length > 0 && (
+                          <div
+                            onDragOver={(e) => { e.preventDefault(); setDragOverTeam("none"); }}
+                            onDragLeave={() => setDragOverTeam(null)}
+                            onDrop={() => handleDrop(null)}
+                            className={`rounded-lg border-2 border-dashed transition-colors p-3 ${dragOverTeam === "none" ? "border-primary bg-accent-light" : "border-border"}`}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-sm font-semibold text-ink-muted">Unassigned</span>
+                              <span className="text-xs text-ink-muted">({membersWithoutTeam.length})</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {membersWithoutTeam.map((m) => (
+                                <MemberChip
+                                  key={m.id}
+                                  member={m}
+                                  isAdmin={isAdmin}
+                                  onRemove={() => removeMember.mutate(m.id)}
+                                  onDragStart={() => setDraggedMemberId(m.id)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-border">
+                        <Button size="sm" variant="outline" onClick={() => setAddTeamOpen(true)} className="gap-1.5">
+                          <Plus className="h-3.5 w-3.5" /> Add Team
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setAssignOpen("none")} className="gap-1.5">
+                          <UserPlus className="h-3.5 w-3.5" /> Assign Member
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 /* ── EMPLOYEE VIEW: clickable team cards → show my tasks ── */
