@@ -10,6 +10,7 @@ export type TaskColumn = {
   color: string;
   position: number;
   is_default: boolean;
+  is_personal?: boolean; // true for columns from user_task_columns (only this user sees)
 };
 
 // Hardcoded fallback used when the task_columns table hasn't been created yet.
@@ -43,27 +44,50 @@ export function useTaskColumns() {
         return baseColumns.map((c) => ({ ...c, baseLabel: c.label }));
       }
 
-      // 2. Personal overrides — each user can rename any column for themselves
+      // 2. Personal label overrides — each user can rename any shared column
       const { data: prefs, error: prefsErr } = await supabase
         .from("user_task_column_prefs")
         .select("column_key, custom_label")
         .eq("user_id", user.id);
 
-      // If the prefs table doesn't exist yet (migration not run) just return
-      // the base columns unchanged.
-      if (prefsErr || !prefs) {
-        return baseColumns.map((c) => ({ ...c, baseLabel: c.label }));
-      }
-
       const prefMap = new Map<string, string>(
-        prefs.map((p: any) => [p.column_key, p.custom_label])
+        prefsErr || !prefs
+          ? []
+          : prefs.map((p: any) => [p.column_key, p.custom_label])
       );
 
-      return baseColumns.map((c) => ({
+      const mergedBase: TaskColumn[] = baseColumns.map((c) => ({
         ...c,
         baseLabel: c.label,
         label: prefMap.get(c.key) ?? c.label,
       }));
+
+      // 3. Personal columns — only this user sees these. If the table
+      // doesn't exist yet (migration not run), we silently skip it.
+      const { data: personal, error: personalErr } = await supabase
+        .from("user_task_columns")
+        .select("id, key, label, color, position")
+        .eq("user_id", user.id)
+        .order("position", { ascending: true });
+
+      if (personalErr || !personal || personal.length === 0) {
+        return mergedBase;
+      }
+
+      const personalCols: TaskColumn[] = personal.map((p: any) => ({
+        id: p.id,
+        key: p.key,
+        label: p.label,
+        baseLabel: p.label,
+        color: p.color,
+        position: p.position ?? 100,
+        is_default: false,
+        is_personal: true,
+      }));
+
+      return [...mergedBase, ...personalCols].sort(
+        (a, b) => (a.position ?? 0) - (b.position ?? 0)
+      );
     },
     staleTime: 30_000,
   });
