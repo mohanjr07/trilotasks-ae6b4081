@@ -103,9 +103,12 @@ export default function ReportsPage() {
     return { ...p, assigned: pTasks.length, completed: pCompleted, inProgress: pInProgress, overdue: pOverdue, rate };
   }).sort((a, b) => b.rate - a.rate);
 
-  // Leave stats
+  // Leave stats — exclude reverted leaves from the "approved" count
+  // (a reverted leave is no longer effectively a leave).
   const totalLeave = leaveRequests.length;
-  const approvedLeave = leaveRequests.filter((r: any) => r.status === "approved").length;
+  const approvedLeave = leaveRequests.filter(
+    (r: any) => r.status === "approved" && !r.reverted_at
+  ).length;
   const approvalRate = totalLeave ? Math.round((approvedLeave / totalLeave) * 100) : 0;
   const leaveTypes = leaveRequests.reduce((acc: Record<string, number>, r: any) => { acc[r.type] = (acc[r.type] ?? 0) + 1; return acc; }, {});
   const mostCommonType = Object.entries(leaveTypes).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] ?? "—";
@@ -325,7 +328,8 @@ export default function ReportsPage() {
                   const c = r.leave_category || r.type;
                   if (!acc[c]) acc[c] = { total: 0, approved: 0, rejected: 0 };
                   acc[c].total++;
-                  if (r.status === "approved") acc[c].approved++;
+                  // Reverted leaves no longer count as approved
+                  if (r.status === "approved" && !r.reverted_at) acc[c].approved++;
                   if (r.status === "rejected") acc[c].rejected++;
                   return acc;
                 }, {});
