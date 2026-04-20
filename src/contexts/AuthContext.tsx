@@ -76,7 +76,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
+      // Ignore events that don't actually change auth state
+      // TOKEN_REFRESHED and USER_UPDATED fire on tab focus and should not cause re-renders
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "USER_UPDATED"
+      ) return;
+
+      // Only re-sync if the session actually changed (user logged in or out)
       void syncAuthState(nextSession);
     });
 
