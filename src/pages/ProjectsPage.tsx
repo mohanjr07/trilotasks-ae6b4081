@@ -498,24 +498,21 @@ function ProjectCard({
                       {projectTeams.map((team) => {
                         const teamMembers = projectMembers.filter((m) => m.team_id === team.id);
                         const isMember = teamMembers.some((m) => m.user_id === currentUserId);
-                        return (
+                        return isMember ? (
+                          /* Clickable — user is in this team */
                           <button
                             key={team.id}
                             onClick={() => setActiveTeam(team)}
-                            className={`text-left rounded-lg border-2 p-4 transition-all hover:shadow-md hover:border-primary/50 group ${
-                              isMember ? "border-primary/20 bg-accent-light/40" : "border-border bg-muted/20"
-                            }`}
+                            className="text-left rounded-lg border-2 border-primary/20 bg-accent-light/40 p-4 transition-all hover:shadow-md hover:border-primary/50 group"
                           >
                             <div className="flex items-center gap-2 mb-3">
                               <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
                               <span className="text-sm font-semibold text-ink-primary group-hover:text-primary transition-colors">
                                 {team.name}
                               </span>
-                              {isMember && (
-                                <span className="ml-auto text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-pill">
-                                  You're in this team
-                                </span>
-                              )}
+                              <span className="ml-auto text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-pill">
+                                You're in this team
+                              </span>
                             </div>
                             <div className="flex -space-x-2 mb-3">
                               {teamMembers.slice(0, 5).map((m) => (
@@ -533,6 +530,32 @@ function ProjectCard({
                               {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""} · Click to view your tasks
                             </p>
                           </button>
+                        ) : (
+                          /* Non-clickable — user is not in this team */
+                          <div
+                            key={team.id}
+                            className="text-left rounded-lg border-2 border-border bg-muted/20 p-4 opacity-50 cursor-not-allowed"
+                          >
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                              <span className="text-sm font-semibold text-ink-primary">{team.name}</span>
+                            </div>
+                            <div className="flex -space-x-2 mb-3">
+                              {teamMembers.slice(0, 5).map((m) => (
+                                <div key={m.id} className="ring-2 ring-card rounded-full">
+                                  <UserAvatar name={m.user?.full_name ?? ""} avatarUrl={m.user?.avatar_url} size="sm" />
+                                </div>
+                              ))}
+                              {teamMembers.length > 5 && (
+                                <div className="h-7 w-7 rounded-full bg-muted ring-2 ring-card flex items-center justify-center text-[10px] font-medium text-ink-muted">
+                                  +{teamMembers.length - 5}
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-ink-muted">
+                              {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""} · Not your team
+                            </p>
+                          </div>
                         );
                       })}
                       {projectTeams.length === 0 && (
