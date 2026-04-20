@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +36,61 @@ export default function AdminLeavePage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Revert an already-approved leave so it no longer counts as leave.
+  // Primary strategy: set reverted_at + reverted_by and drop status back to "pending"
+  //   (this way the quota calculator will skip the row because reverted_at is set).
+  // Fallback (if the columns don't exist yet): set status to "rejected" with a note
+  //   so the day no longer counts.
+  const revertRequest = useMutation({
+    mutationFn: async (req: any) => {
+      // Try primary: reverted_at columns
+      const primary = await supabase
+        .from("leave_requests")
+        .update({
+          status: "pending",
+          reverted_at: new Date().toISOString(),
+          reverted_by: user!.id,
+          admin_note: "Leave reverted by admin — does not count as leave.",
+        })
+        .eq("id", req.id);
+      if (primary.error) {
+        const msg = primary.error.message ?? "";
+        const missingCol =
+          msg.includes("reverted_at") ||
+          msg.includes("reverted_by") ||
+          msg.includes("schema cache") ||
+          primary.error.code === "42703";
+        if (missingCol) {
+          // Fallback: mark rejected so the day no longer counts
+          const fallback = await supabase
+            .from("leave_requests")
+            .update({
+              status: "rejected",
+              admin_note: "Reverted by admin (rollback). Does not count as leave.",
+              reviewed_by: user!.id,
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq("id", req.id);
+          if (fallback.error) throw fallback.error;
+          return { usedFallback: true };
+        }
+        throw primary.error;
+      }
+      return { usedFallback: false };
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
+      queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
+      queryClient.invalidateQueries({ queryKey: ["my-leave"] });
+      if (result?.usedFallback) {
+        toast.message("Reverted (as rejected). Run fix_half_day_and_revert.sql to enable a dedicated Reverted status.");
+      } else {
+        toast.success("Leave reverted — no longer counted as leave");
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: requests = [] } = useQuery({
     queryKey: ["admin-leave"],
     queryFn: async () => {
@@ -47,20 +102,28 @@ export default function AdminLeavePage() {
   });
 
   const filtered = requests.filter((r: any) => {
-    if (tab !== "all" && r.status !== tab) return false;
+    const isReverted = !!r.reverted_at;
+    if (tab === "reverted") {
+      if (!isReverted) return false;
+    } else if (tab !== "all") {
+      if (isReverted) return false;           // hide reverted from pending/approved/rejected
+      if (r.status !== tab) return false;
+    }
     if (search && !r.employee?.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  const pending = requests.filter((r: any) => r.status === "pending").length;
-  const approved = requests.filter((r: any) => r.status === "approved").length;
-  const rejected = requests.filter((r: any) => r.status === "rejected").length;
+  const pending = requests.filter((r: any) => r.status === "pending" && !r.reverted_at).length;
+  const approved = requests.filter((r: any) => r.status === "approved" && !r.reverted_at).length;
+  const rejected = requests.filter((r: any) => r.status === "rejected" && !r.reverted_at).length;
+  const reverted = requests.filter((r: any) => !!r.reverted_at).length;
 
   const tabs = [
     { key: "all", label: "All" },
     { key: "pending", label: `Pending (${pending})` },
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
+    { key: "reverted", label: `Reverted${reverted ? ` (${reverted})` : ""}` },
   ];
 
   return (
@@ -100,22 +163,31 @@ export default function AdminLeavePage() {
       </div>
 
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
-        {filtered.map((req: any) => (
+        {filtered.map((req: any) => {
+          const isReverted = !!req.reverted_at;
+          const displayStatus = isReverted ? "reverted" : (req.status ?? "pending");
+          return (
           <motion.div key={req.id} variants={staggerItem}
-            className="flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow">
+            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow ${isReverted ? "opacity-70" : ""}`}>
             <UserAvatar name={req.employee?.full_name ?? "?"} avatarUrl={req.employee?.avatar_url} size="md" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink-primary">{req.employee?.full_name}</p>
+              <p className="text-sm font-medium text-ink-primary">
+                {req.employee?.full_name}
+                {req.is_half_day && (
+                  <span className="ml-2 text-[10px] font-semibold bg-purple-light text-purple px-1.5 py-0.5 rounded-pill align-middle">
+                    Half Day{req.half_day_period ? ` · ${req.half_day_period}` : ""}
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-ink-muted">
                 {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category ?? req.type}
-                {" · "}
                 {" · "}
                 {req.start_date && format(new Date(req.start_date), "MMM d")}
                 {req.end_date && req.end_date !== req.start_date && `–${format(new Date(req.end_date), "MMM d")}`}
               </p>
             </div>
-            <StatusBadge status={req.status ?? "pending"} />
-            {isStrictAdmin && req.status === "pending" && (
+            <StatusBadge status={displayStatus} />
+            {isStrictAdmin && req.status === "pending" && !isReverted && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" className="text-success border-success/30 hover:bg-success-light"
                   onClick={() => setReviewReq({ ...req, action: "approved" })}>✓</Button>
@@ -123,8 +195,26 @@ export default function AdminLeavePage() {
                   onClick={() => setReviewReq({ ...req, action: "rejected" })}>✗</Button>
               </div>
             )}
+            {isStrictAdmin && req.status === "approved" && !isReverted && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-ink-muted border-border hover:bg-muted gap-1.5"
+                onClick={() => {
+                  if (window.confirm(`Revert approved leave for ${req.employee?.full_name}? It will no longer count as leave.`)) {
+                    revertRequest.mutate(req);
+                  }
+                }}
+                disabled={revertRequest.isPending}
+                title="Revert this approved leave"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Revert
+              </Button>
+            )}
           </motion.div>
-        ))}
+          );
+        })}
         {filtered.length === 0 && <div className="py-16 text-center text-sm text-ink-muted">No requests found</div>}
       </motion.div>
 
