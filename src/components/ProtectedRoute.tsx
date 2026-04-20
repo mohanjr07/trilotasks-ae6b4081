@@ -9,7 +9,10 @@ type Props = {
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const { session, profile, loading } = useAuth();
 
-  if (loading) {
+  // Only show spinner on the very first load (no session yet and still loading)
+  // Once authenticated, never unmount children due to a loading state —
+  // this was causing open modals to close on tab switch
+  if (loading && !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
