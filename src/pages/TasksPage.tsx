@@ -77,10 +77,11 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
 
   const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
   // Renaming is PER-USER (stored in user_task_column_prefs) so every signed-in
-  // user — employee, intern, manager, admin — can rename their own view.
-  // Add / delete still modify the shared task_columns table, so those remain
-  // restricted to admins + managers.
-  const canRenameColumns = !myTasksOnly && !!user;
+  // user — employee, intern, manager, admin — can rename their own view on
+  // ANY board (Tasks or My Tasks). Add / delete still modify the shared
+  // task_columns table, so those remain restricted to admins + managers on
+  // the main Tasks page only.
+  const canRenameColumns = !!user;
   const canManageColumns = !myTasksOnly && isAdmin; // admin + manager (add / delete)
   const showAllTasks = isAdmin && !myTasksOnly;
 
