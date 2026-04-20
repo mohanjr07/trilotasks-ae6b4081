@@ -201,9 +201,12 @@ function ProjectCard({
 
   const membersWithoutTeam = projectMembers.filter((m) => !m.team_id);
 
-  // Fetch tasks for the current employee in the selected team's project
+  // Fetch tasks for the current employee in the selected team's project.
+  // A task belongs to a team when its project_team_id matches. If the
+  // employee hasn't picked a team yet we fall back to all tasks in the
+  // project so nothing disappears on the landing view.
   const { data: myTeamTasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ["my-team-tasks", project.id, currentUserId],
+    queryKey: ["my-team-tasks", project.id, currentUserId, activeTeam?.id ?? null],
     queryFn: async () => {
       const { data: assignedIds } = await supabase
         .from("task_assignees")
@@ -211,26 +214,32 @@ function ProjectCard({
         .eq("user_id", currentUserId);
       if (!assignedIds?.length) return [];
       const taskIds = assignedIds.map((a: any) => a.task_id);
-      const { data } = await supabase
+      let q = supabase
         .from("tasks")
         .select("*, task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
         .in("id", taskIds)
         .eq("project_id", project.id)
         .order("created_at", { ascending: false });
+      if (activeTeam?.id) q = q.eq("project_team_id", activeTeam.id);
+      const { data } = await q;
       return data ?? [];
     },
     enabled: !isAdmin && !!currentUserId && isExpanded,
   });
 
-  // Fetch ALL tasks in a team's project for admin view
+  // Fetch tasks for the team the admin drilled into. Filtering by
+  // project_team_id is what keeps Mechanical tasks out of the Software
+  // team view (and vice versa).
   const { data: adminTeamTasks = [], isLoading: adminTasksLoading } = useQuery({
     queryKey: ["admin-team-tasks", project.id, adminActiveTeam?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      let q = supabase
         .from("tasks")
         .select("*, task_assignees(user_id, user:profiles(id, full_name, avatar_url))")
         .eq("project_id", project.id)
         .order("created_at", { ascending: false });
+      if (adminActiveTeam?.id) q = q.eq("project_team_id", adminActiveTeam.id);
+      const { data } = await q;
       return data ?? [];
     },
     enabled: isAdmin && !!adminActiveTeam,
