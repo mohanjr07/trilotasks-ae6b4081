@@ -176,11 +176,15 @@ export default function OrganisationFlowPage() {
     const measure = () => {
       const naturalWidth = content.offsetWidth;
       const naturalHeight = content.offsetHeight;
-      if (naturalWidth === 0) return;
-      // Container padding is p-4 (16px each side) → subtract 32.
+      if (naturalWidth === 0 || naturalHeight === 0) return;
+      // Container padding is p-4 (16px each side) → subtract 32 from each.
       const availableWidth = Math.max(0, container.clientWidth - 32);
+      const availableHeight = Math.max(0, container.clientHeight - 32);
+      // Fit both dimensions — the chart scales as big as possible while
+      // staying inside the container. No 1.0x cap, so if the container is
+      // large enough the chart upscales to fill the view.
       const nextZoom = autoFit
-        ? Math.min(1, availableWidth / naturalWidth)
+        ? Math.max(0.2, Math.min(availableWidth / naturalWidth, availableHeight / naturalHeight))
         : zoom;
       if (autoFit && Math.abs(nextZoom - zoom) > 0.001) setZoom(nextZoom);
       setScaledSize({ w: naturalWidth * nextZoom, h: naturalHeight * nextZoom });
@@ -268,12 +272,16 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
+          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4 flex items-center justify-center"
+          // Fills the viewport under the header + page title so the chart
+          // has room to scale up. 220px ≈ top navbar (60) + page header
+          // (~100) + outer page padding (~60).
+          style={{ height: "calc(100vh - 220px)", minHeight: 360 }}
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the
               CSS transform doesn't leave empty whitespace around the chart. */}
           <div
-            className="relative mx-auto"
+            className="relative"
             style={{
               width: scaledSize?.w,
               height: scaledSize?.h,
@@ -288,7 +296,7 @@ export default function OrganisationFlowPage() {
                 transition: "transform 120ms ease-out",
               }}
             >
-              <div className="flex flex-col items-center gap-8">
+              <div className="flex flex-col items-center gap-16">
                 {tree.map((root) => (
                 <OrgNodeView
                   key={root.id}
@@ -500,15 +508,16 @@ function OrgNodeView({
       {/* Children block */}
       {hasChildren && (
         <>
-          {/* Vertical connector from parent down to the horizontal bar */}
-          <div className={`w-0.5 h-4 ${LINE}`} />
+          {/* Vertical connector from parent down to the horizontal bar.
+              Generous height so the chart has real vertical presence. */}
+          <div className={`w-0.5 h-10 ${LINE}`} />
 
           {/* Row of children. The horizontal bar is built from each child's
               own top half-border: first child gets right-half, last child
               gets left-half, middle children get full width. This guarantees
               the bar spans exactly from the first child's centre to the
               last child's centre, regardless of how wide each subtree is. */}
-          <div className="flex gap-3 items-start">
+          <div className="flex gap-4 items-start">
             {node.children.map((child, i) => {
               const isFirst = i === 0;
               const isLast = i === childCount - 1;
@@ -517,7 +526,7 @@ function OrgNodeView({
                 <div key={child.id} className="flex flex-col items-center relative">
                   {/* Top horizontal half-bars (skipped entirely for only children) */}
                   {!onlyChild && (
-                    <div className="relative w-full h-4 flex items-start justify-center">
+                    <div className="relative w-full h-10 flex items-start justify-center">
                       {/* left half */}
                       {!isFirst && (
                         <div className={`absolute top-0 left-0 right-1/2 h-0.5 ${LINE}`} />
@@ -527,11 +536,11 @@ function OrgNodeView({
                         <div className={`absolute top-0 left-1/2 right-0 h-0.5 ${LINE}`} />
                       )}
                       {/* Upward stub from child's top into the horizontal bar */}
-                      <div className={`w-0.5 h-4 ${LINE}`} />
+                      <div className={`w-0.5 h-10 ${LINE}`} />
                     </div>
                   )}
-                  {/* For an only child we still need the short vertical stub */}
-                  {onlyChild && <div className={`w-0.5 h-4 ${LINE}`} />}
+                  {/* For an only child we still need the vertical stub */}
+                  {onlyChild && <div className={`w-0.5 h-10 ${LINE}`} />}
 
                   <OrgNodeView
                     node={child}
