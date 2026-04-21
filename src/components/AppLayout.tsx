@@ -90,11 +90,24 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex md:w-60 md:flex-col md:fixed md:inset-y-0 border-r border-border bg-card z-30">
         <div className="flex h-[60px] items-center gap-2 px-5 border-b border-border">
-          <img
-            src={isDark ? "/logo-dark.png" : "/logo.png"}
-            alt="Trilo Automation"
-            className="h-28 object-contain"
-          />
+          {/* Both logos are always mounted — we just toggle visibility via CSS
+              so the browser never has to re-fetch/decode on theme switch. */}
+          <div className="relative h-28 flex items-center">
+            <img
+              src="/logo.png"
+              alt="Trilo Automation"
+              className={cn("h-28 object-contain transition-opacity duration-150", isDark ? "opacity-0 absolute inset-0" : "opacity-100")}
+              fetchPriority="high"
+              decoding="sync"
+            />
+            <img
+              src="/logo-dark.png"
+              alt="Trilo Automation"
+              className={cn("h-28 object-contain transition-opacity duration-150", isDark ? "opacity-100" : "opacity-0 absolute inset-0")}
+              fetchPriority="high"
+              decoding="sync"
+            />
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -161,11 +174,22 @@ export default function AppLayout() {
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
-                <img
-                  src={isDark ? "/logo-dark.png" : "/logo.png"}
-                  alt="Trilo Automation"
-                  className="h-24 object-contain"
-                />
+                <div className="relative h-24 flex items-center">
+                  <img
+                    src="/logo.png"
+                    alt="Trilo Automation"
+                    className={cn("h-24 object-contain transition-opacity duration-150", isDark ? "opacity-0 absolute inset-0" : "opacity-100")}
+                    fetchPriority="high"
+                    decoding="sync"
+                  />
+                  <img
+                    src="/logo-dark.png"
+                    alt="Trilo Automation"
+                    className={cn("h-24 object-contain transition-opacity duration-150", isDark ? "opacity-100" : "opacity-0 absolute inset-0")}
+                    fetchPriority="high"
+                    decoding="sync"
+                  />
+                </div>
               </div>
               <button onClick={() => setSidebarOpen(false)} className="text-ink-muted">
                 <X className="h-5 w-5" />
