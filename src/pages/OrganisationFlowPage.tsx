@@ -177,14 +177,14 @@ export default function OrganisationFlowPage() {
       const naturalWidth = content.offsetWidth;
       const naturalHeight = content.offsetHeight;
       if (naturalWidth === 0 || naturalHeight === 0) return;
-      // Container padding is p-4 (16px each side) → subtract 32 from each.
+      // Container padding is p-4 (16px each side) → subtract 32.
       const availableWidth = Math.max(0, container.clientWidth - 32);
-      const availableHeight = Math.max(0, container.clientHeight - 32);
-      // Fit both dimensions — the chart scales as big as possible while
-      // staying inside the container. No 1.0x cap, so if the container is
-      // large enough the chart upscales to fill the view.
+      // Fit to WIDTH exactly — chart always spans the full container width,
+      // no left/right gaps. Container height then follows the chart's
+      // scaled height (set via scaledSize.h below), so no top/bottom gap
+      // either. Capped at 1.5x so a tiny chart doesn't get silly-sized.
       const nextZoom = autoFit
-        ? Math.max(0.2, Math.min(availableWidth / naturalWidth, availableHeight / naturalHeight))
+        ? Math.min(1.5, availableWidth / naturalWidth)
         : zoom;
       if (autoFit && Math.abs(nextZoom - zoom) > 0.001) setZoom(nextZoom);
       setScaledSize({ w: naturalWidth * nextZoom, h: naturalHeight * nextZoom });
@@ -272,16 +272,14 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4 flex items-center justify-center"
-          // Fills the viewport under the header + page title so the chart
-          // has room to scale up. 220px ≈ top navbar (60) + page header
-          // (~100) + outer page padding (~60).
-          style={{ height: "calc(100vh - 220px)", minHeight: 360 }}
+          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the
-              CSS transform doesn't leave empty whitespace around the chart. */}
+              container exactly hugs the chart — no empty space on any side.
+              Since auto-fit scales to full container width, the wrapper's
+              width will always equal (container.clientWidth - 32). */}
           <div
-            className="relative"
+            className="relative mx-auto"
             style={{
               width: scaledSize?.w,
               height: scaledSize?.h,
