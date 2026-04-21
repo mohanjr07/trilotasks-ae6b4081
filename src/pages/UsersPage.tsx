@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Users as UsersIcon, Shield, UserCheck, UserPlus, MoreVertical, X, Copy, CheckSquare, Calendar } from "lucide-react";
+import { Search, Users as UsersIcon, Shield, UserCheck, UserPlus, MoreVertical, X, Copy, CheckSquare, Calendar, Eye, EyeOff } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useForm } from "react-hook-form";
@@ -303,6 +303,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [passwordMode, setPasswordMode] = useState<"email" | "password">("email");
+  const [showPassword, setShowPassword] = useState(false);
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
@@ -411,7 +412,23 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
             {passwordMode === "password" && (
               <>
-                <Input {...register("password")} type="password" placeholder="Min 8 characters" className="h-10" />
+                <div className="relative">
+                  <Input
+                    {...register("password")}
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Min 8 characters"
+                    className="h-10 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-ink-muted hover:text-ink-primary transition-colors"
+                    title={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
               </>
             )}
