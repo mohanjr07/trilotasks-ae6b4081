@@ -62,8 +62,9 @@ export default function OrganisationFlowPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newSubtitle, setNewSubtitle] = useState("");
 
-  // Pan + zoom for the chart
-  const [zoom, setZoom] = useState(1);
+  // Pan + zoom for the chart. Start a touch below 100% so wider charts
+  // fit on screen without horizontal scrolling on first load.
+  const [zoom, setZoom] = useState(0.9);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: nodes = [], isLoading } = useQuery<OrgNode[]>({
@@ -201,7 +202,7 @@ export default function OrganisationFlowPage() {
               <ZoomIn className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setZoom(1)}
+              onClick={() => setZoom(0.9)}
               className="p-1.5 rounded-md text-ink-secondary hover:bg-muted"
               title="Reset zoom"
             >
@@ -230,7 +231,7 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-auto p-8"
+          className="rounded-xl border border-border bg-muted/20 overflow-auto p-4"
           style={{ minHeight: "60vh" }}
         >
           <div
@@ -241,7 +242,7 @@ export default function OrganisationFlowPage() {
               transition: "transform 120ms ease-out",
             }}
           >
-            <div className="flex flex-col items-center gap-12">
+            <div className="flex flex-col items-center gap-8">
               {tree.map((root) => (
                 <OrgNodeView
                   key={root.id}
@@ -351,6 +352,11 @@ function OrgNodeView({
 }) {
   const isEditing = editing === node.id;
   const hasChildren = node.children.length > 0;
+  const childCount = node.children.length;
+
+  // Tailwind class applied to every connector line — dark enough to be
+  // clearly visible against the muted chart background in both themes.
+  const LINE = "bg-slate-400 dark:bg-slate-500";
 
   return (
     <div className="flex flex-col items-center">
@@ -358,7 +364,7 @@ function OrgNodeView({
       <div className="relative group">
         <motion.div
           layout
-          className="rounded-xl bg-card border-2 border-primary/30 shadow-md px-5 py-3 min-w-[180px] text-center hover:border-primary/60 transition-colors"
+          className="rounded-xl bg-card border-2 border-primary/30 shadow-md px-3 py-2 min-w-[140px] max-w-[200px] text-center hover:border-primary/60 transition-colors"
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -448,23 +454,38 @@ function OrgNodeView({
       {hasChildren && (
         <>
           {/* Vertical connector from parent down to the horizontal bar */}
-          <div className="w-px h-6 bg-border" />
-          {/* Horizontal bar spanning across all children (only visible when >1 child) */}
-          <div className="flex items-start justify-center relative">
-            {node.children.length > 1 && (
-              <div
-                className="absolute top-0 h-px bg-border"
-                // The horizontal bar spans from the first child's center to the last child's center.
-                // We approximate that by stretching the full width; each child has its own
-                // upward stub which naturally meets the bar.
-                style={{ left: "10%", right: "10%" }}
-              />
-            )}
-            <div className="flex gap-6 items-start">
-              {node.children.map((child) => (
-                <div key={child.id} className="flex flex-col items-center">
-                  {/* Upward stub from child into the horizontal bar */}
-                  <div className="w-px h-6 bg-border" />
+          <div className={`w-0.5 h-4 ${LINE}`} />
+
+          {/* Row of children. The horizontal bar is built from each child's
+              own top half-border: first child gets right-half, last child
+              gets left-half, middle children get full width. This guarantees
+              the bar spans exactly from the first child's centre to the
+              last child's centre, regardless of how wide each subtree is. */}
+          <div className="flex gap-3 items-start">
+            {node.children.map((child, i) => {
+              const isFirst = i === 0;
+              const isLast = i === childCount - 1;
+              const onlyChild = childCount === 1;
+              return (
+                <div key={child.id} className="flex flex-col items-center relative">
+                  {/* Top horizontal half-bars (skipped entirely for only children) */}
+                  {!onlyChild && (
+                    <div className="relative w-full h-4 flex items-start justify-center">
+                      {/* left half */}
+                      {!isFirst && (
+                        <div className={`absolute top-0 left-0 right-1/2 h-0.5 ${LINE}`} />
+                      )}
+                      {/* right half */}
+                      {!isLast && (
+                        <div className={`absolute top-0 left-1/2 right-0 h-0.5 ${LINE}`} />
+                      )}
+                      {/* Upward stub from child's top into the horizontal bar */}
+                      <div className={`w-0.5 h-4 ${LINE}`} />
+                    </div>
+                  )}
+                  {/* For an only child we still need the short vertical stub */}
+                  {onlyChild && <div className={`w-0.5 h-4 ${LINE}`} />}
+
                   <OrgNodeView
                     node={child}
                     canEdit={canEdit}
@@ -480,8 +501,8 @@ function OrgNodeView({
                     onAddChild={onAddChild}
                   />
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </>
       )}
