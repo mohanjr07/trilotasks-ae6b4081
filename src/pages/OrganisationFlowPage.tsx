@@ -269,7 +269,6 @@ export default function OrganisationFlowPage() {
         <div
           ref={scrollRef}
           className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
-          style={{ minHeight: "60vh" }}
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the
               CSS transform doesn't leave empty whitespace around the chart. */}
