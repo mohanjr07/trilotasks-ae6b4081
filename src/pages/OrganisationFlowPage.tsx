@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, Check, X as XIcon, Network, ZoomIn, ZoomOut, Maximize,
@@ -62,10 +62,14 @@ export default function OrganisationFlowPage() {
   const [newTitle, setNewTitle] = useState("");
   const [newSubtitle, setNewSubtitle] = useState("");
 
-  // Pan + zoom for the chart. Start a touch below 100% so wider charts
-  // fit on screen without horizontal scrolling on first load.
-  const [zoom, setZoom] = useState(0.9);
+  // Zoom for the chart. Auto-fit mode measures the chart's natural width
+  // and scales it so the whole tree fits the container width — no horizontal
+  // scrollbar. The +/- buttons disable auto-fit for manual zooming.
+  const [zoom, setZoom] = useState(1);
+  const [autoFit, setAutoFit] = useState(true);
+  const [scaledSize, setScaledSize] = useState<{ w: number; h: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const { data: nodes = [], isLoading } = useQuery<OrgNode[]>({
     queryKey: ["organisation-flow"],
@@ -159,6 +163,39 @@ export default function OrganisationFlowPage() {
     addNode.mutate({ parent_id: parent, title: newTitle, subtitle: newSubtitle || null });
   };
 
+  // ── Fit-to-width autoscaler ───────────────────────────────────────────
+  // Measures the unscaled chart (offsetWidth/Height are unaffected by CSS
+  // transforms) against the available container width, then sets the zoom
+  // so the tree just fits. Also sizes a wrapper to the *scaled* pixel
+  // dimensions so the transform doesn't leave phantom scrollable space.
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+
+    const measure = () => {
+      const naturalWidth = content.offsetWidth;
+      const naturalHeight = content.offsetHeight;
+      if (naturalWidth === 0) return;
+      // Container padding is p-4 (16px each side) → subtract 32.
+      const availableWidth = Math.max(0, container.clientWidth - 32);
+      const nextZoom = autoFit
+        ? Math.min(1, availableWidth / naturalWidth)
+        : zoom;
+      if (autoFit && Math.abs(nextZoom - zoom) > 0.001) setZoom(nextZoom);
+      setScaledSize({ w: naturalWidth * nextZoom, h: naturalHeight * nextZoom });
+    };
+
+    // First measurement after layout
+    measure();
+    // Re-measure whenever either the container or the content's natural
+    // dimensions change (e.g. window resize, sidebar toggle, tree edits).
+    const ro = new ResizeObserver(() => requestAnimationFrame(measure));
+    ro.observe(container);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [autoFit, zoom, nodes]);
+
   // Escape key cancels any inline edit / add
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -187,7 +224,7 @@ export default function OrganisationFlowPage() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-border p-1 bg-card">
             <button
-              onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
+              onClick={() => { setAutoFit(false); setZoom((z) => Math.max(0.3, z - 0.1)); }}
               className="p-1.5 rounded-md text-ink-secondary hover:bg-muted"
               title="Zoom out"
             >
@@ -195,16 +232,16 @@ export default function OrganisationFlowPage() {
             </button>
             <span className="text-xs text-ink-muted w-10 text-center">{Math.round(zoom * 100)}%</span>
             <button
-              onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
+              onClick={() => { setAutoFit(false); setZoom((z) => Math.min(2, z + 0.1)); }}
               className="p-1.5 rounded-md text-ink-secondary hover:bg-muted"
               title="Zoom in"
             >
               <ZoomIn className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setZoom(0.9)}
-              className="p-1.5 rounded-md text-ink-secondary hover:bg-muted"
-              title="Reset zoom"
+              onClick={() => setAutoFit(true)}
+              className={`p-1.5 rounded-md hover:bg-muted ${autoFit ? "text-primary" : "text-ink-secondary"}`}
+              title="Fit to width"
             >
               <Maximize className="h-4 w-4" />
             </button>
@@ -231,19 +268,29 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-auto p-4"
+          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
           style={{ minHeight: "60vh" }}
         >
+          {/* The wrapper is sized to the *scaled* pixel dimensions so the
+              CSS transform doesn't leave empty whitespace around the chart. */}
           <div
-            className="inline-block min-w-full"
+            className="relative mx-auto"
             style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: "top center",
-              transition: "transform 120ms ease-out",
+              width: scaledSize?.w,
+              height: scaledSize?.h,
             }}
           >
-            <div className="flex flex-col items-center gap-8">
-              {tree.map((root) => (
+            <div
+              ref={contentRef}
+              className="absolute top-0 left-0"
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: "top left",
+                transition: "transform 120ms ease-out",
+              }}
+            >
+              <div className="flex flex-col items-center gap-8">
+                {tree.map((root) => (
                 <OrgNodeView
                   key={root.id}
                   node={root}
@@ -264,6 +311,7 @@ export default function OrganisationFlowPage() {
                   onAddChild={(n) => setAddingUnder(n.id)}
                 />
               ))}
+              </div>
             </div>
           </div>
         </div>
