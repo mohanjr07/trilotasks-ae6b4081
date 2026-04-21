@@ -212,11 +212,22 @@ export default function OrganisationFlowPage() {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  // Shared full-bleed margins — applied to both the header row and the
+  // chart canvas so the whole page uses the full flex-1 width beside the
+  // sidebar (breaks out of <main>'s max-w-[1280px] cap on wide screens).
+  const fullBleed = {
+    marginLeft: "calc(-1 * max(0px, (100vw - 1520px) / 2))",
+    marginRight: "calc(-1 * max(0px, (100vw - 1520px) / 2))",
+  } as const;
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <AnimatedPage>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+      <div
+        className="flex items-center justify-between mb-6 gap-3 flex-wrap"
+        style={fullBleed}
+      >
         <div>
           <h1 className="font-heading text-[28px] font-bold text-ink-primary">Organisation Flow</h1>
           <p className="text-sm text-ink-muted">
@@ -273,6 +284,7 @@ export default function OrganisationFlowPage() {
         <div
           ref={scrollRef}
           className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
+          style={fullBleed}
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the
               container exactly hugs the chart — no empty space on any side.
