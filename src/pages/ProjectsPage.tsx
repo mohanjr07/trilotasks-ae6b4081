@@ -192,19 +192,13 @@ function ProjectCard({
   const [assignOpen, setAssignOpen] = useState<string | null>(null);
   const [draggedMemberId, setDraggedMemberId] = useState<string | null>(null);
   const [dragOverTeam, setDragOverTeam] = useState<string | null>(null);
-  // For employee: which team was clicked to show tasks
   const [activeTeam, setActiveTeam] = useState<ProjectTeam | null>(null);
-  // For admin: which team was clicked to view all tasks
   const [adminActiveTeam, setAdminActiveTeam] = useState<ProjectTeam | null>(null);
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const qc = useQueryClient();
 
   const membersWithoutTeam = projectMembers.filter((m) => !m.team_id);
 
-  // Fetch tasks for the current employee in the selected team's project.
-  // A task belongs to a team when its project_team_id matches. If the
-  // employee hasn't picked a team yet we fall back to all tasks in the
-  // project so nothing disappears on the landing view.
   const { data: myTeamTasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ["my-team-tasks", project.id, currentUserId, activeTeam?.id ?? null],
     queryFn: async () => {
@@ -227,9 +221,6 @@ function ProjectCard({
     enabled: !isAdmin && !!currentUserId && isExpanded,
   });
 
-  // Fetch tasks for the team the admin drilled into. Filtering by
-  // project_team_id is what keeps Mechanical tasks out of the Software
-  // team view (and vice versa).
   const { data: adminTeamTasks = [], isLoading: adminTasksLoading } = useQuery({
     queryKey: ["admin-team-tasks", project.id, adminActiveTeam?.id],
     queryFn: async () => {
@@ -285,7 +276,6 @@ function ProjectCard({
     setDragOverTeam(null);
   };
 
-  // Check if current user is a member of this project
   const isMemberOfProject = projectMembers.some((m) => m.user_id === currentUserId);
 
   return (
@@ -922,7 +912,6 @@ function AssignMemberModal({
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Show ALL active profiles — members already in project can join additional teams
   const available = allProfiles.filter(
     (p) => p.full_name.toLowerCase().includes(search.toLowerCase())
   );
@@ -935,36 +924,42 @@ function AssignMemberModal({
     if (!selectedUsers.length) { toast.error("Select at least one member"); return; }
     setSaving(true);
     try {
-      // Fetch existing memberships for this project+team in one query to avoid per-user round trips
-      // (per-user maybeSingle calls can fail silently under RLS, causing false "already assigned" results)
-      let existingInThisTeam: string[] = [];
-      if (teamId) {
-        const { data: existing } = await supabase
-          .from("project_members")
-          .select("user_id")
-          .eq("project_id", projectId)
-          .eq("team_id", teamId)
-          .in("user_id", selectedUsers);
-        existingInThisTeam = (existing ?? []).map((r: any) => r.user_id);
+      // Split into: already in project (UPDATE team_id) vs brand new (INSERT)
+      const alreadyInProject = selectedUsers.filter((id) => existingMemberIds.includes(id));
+      const newToProject = selectedUsers.filter((id) => !existingMemberIds.includes(id));
+
+      const promises: Promise<any>[] = [];
+
+      // Update existing project members to the new team
+      if (alreadyInProject.length > 0) {
+        promises.push(
+          supabase
+            .from("project_members")
+            .update({ team_id: teamId ?? null })
+            .eq("project_id", projectId)
+            .in("user_id", alreadyInProject)
+        );
       }
 
-      const rowsToInsert = selectedUsers
-        .filter((userId) => !existingInThisTeam.includes(userId))
-        .map((userId) => ({ project_id: projectId, team_id: teamId || null, user_id: userId }));
-
-      const alreadyDuplicates = selectedUsers
-        .filter((userId) => existingInThisTeam.includes(userId))
-        .map((userId) => allProfiles.find((x) => x.id === userId)?.full_name ?? userId);
-
-      if (rowsToInsert.length > 0) {
-        const { error } = await supabase.from("project_members").insert(rowsToInsert);
-        if (error) throw error;
-        qc.invalidateQueries({ queryKey: ["project-members"] });
-        toast.success(`${rowsToInsert.length} member${rowsToInsert.length > 1 ? "s" : ""} assigned`);
+      // Insert brand-new project members
+      if (newToProject.length > 0) {
+        promises.push(
+          supabase.from("project_members").insert(
+            newToProject.map((userId) => ({
+              project_id: projectId,
+              team_id: teamId ?? null,
+              user_id: userId,
+            }))
+          )
+        );
       }
-      if (alreadyDuplicates.length > 0) {
-        toast.warning(`${alreadyDuplicates.join(", ")} already in this team`);
-      }
+
+      const results = await Promise.all(promises);
+      const firstError = results.find((r) => r.error)?.error;
+      if (firstError) throw firstError;
+
+      qc.invalidateQueries({ queryKey: ["project-members"] });
+      toast.success(`${selectedUsers.length} member${selectedUsers.length > 1 ? "s" : ""} assigned`);
       onClose();
     } catch (e: any) {
       toast.error(e.message);
