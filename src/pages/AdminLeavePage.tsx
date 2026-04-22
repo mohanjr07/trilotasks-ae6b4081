@@ -180,7 +180,7 @@ export default function AdminLeavePage() {
                 )}
               </p>
               <p className="text-xs text-ink-muted">
-                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category ?? req.type}
+                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category ?? req.type}
                 {" · "}
                 {req.start_date && format(new Date(req.start_date), "MMM d")}
                 {req.end_date && req.end_date !== req.start_date && `–${format(new Date(req.end_date), "MMM d")}`}
@@ -299,6 +299,22 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
+  // "Late" sub-options — only used when leaveCategory === "late"
+  const [lateDuration, setLateDuration] = useState<"full" | "half">("half");
+  const [lateHalfPeriod, setLateHalfPeriod] = useState<"AM" | "PM">("AM");
+
+  const isLate = leaveCategory === "late";
+  const isLateHalfDay = isLate && lateDuration === "half";
+
+  const resetForm = () => {
+    setEmployeeId("");
+    setLeaveCategory("casual_leave");
+    setStartDate("");
+    setEndDate("");
+    setReason("");
+    setLateDuration("half");
+    setLateHalfPeriod("AM");
+  };
 
   const { data: employees = [] } = useQuery({
     queryKey: ["all-employees"],
@@ -318,23 +334,36 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         toast.error("Employee, start date, and reason are required");
         return;
       }
-      const { error } = await supabase.from("leave_requests").insert([{
+      const payload: Record<string, unknown> = {
         employee_id: employeeId,
-        type: leaveCategory === "casual_leave" ? "leave" : leaveCategory === "on_duty" ? "on_duty" : "leave",
+        type:
+          leaveCategory === "casual_leave"
+            ? "leave"
+            : leaveCategory === "on_duty"
+            ? "on_duty"
+            : "leave",
         leave_category: leaveCategory,
         start_date: startDate,
-        end_date: endDate || startDate,
+        // Half-day leaves always collapse to a single date
+        end_date: isLateHalfDay ? startDate : endDate || startDate,
         reason: reason.trim(),
         status: "approved",
         reviewed_by: user!.id,
         reviewed_at: new Date().toISOString(),
-      }]);
+      };
+      if (isLateHalfDay) {
+        payload.is_half_day = true;
+        payload.half_day_period = lateHalfPeriod; // AM = First Half, PM = Second Half
+      }
+      const { error } = await supabase.from("leave_requests").insert([payload]);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
+      queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
+      queryClient.invalidateQueries({ queryKey: ["my-leave"] });
       toast.success("Leave assigned on behalf of employee");
-      setEmployeeId(""); setLeaveCategory("casual_leave"); setStartDate(""); setEndDate(""); setReason("");
+      resetForm();
       onClose();
     },
     onError: (e: any) => toast.error(e.message),
@@ -373,17 +402,92 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                     <SelectItem value="casual_leave">Casual Leave</SelectItem>
                     <SelectItem value="on_duty">On Duty</SelectItem>
                     <SelectItem value="unauthorised_leave">Unauthorised Leave</SelectItem>
+                    <SelectItem value="late">Late</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {isLate && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-secondary">Late Duration *</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setLateDuration("full")}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                          lateDuration === "full"
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-ink-secondary hover:bg-muted"
+                        }`}
+                      >
+                        Full Day
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLateDuration("half")}
+                        className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                          lateDuration === "half"
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-ink-secondary hover:bg-muted"
+                        }`}
+                      >
+                        Half Day
+                      </button>
+                    </div>
+                  </div>
+
+                  {lateDuration === "half" && (
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-ink-secondary">Half Day Period *</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLateHalfPeriod("AM")}
+                          className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                            lateHalfPeriod === "AM"
+                              ? "border-primary bg-accent-light text-primary"
+                              : "border-border bg-card text-ink-secondary hover:bg-muted"
+                          }`}
+                        >
+                          First Half
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLateHalfPeriod("PM")}
+                          className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                            lateHalfPeriod === "PM"
+                              ? "border-primary bg-accent-light text-primary"
+                              : "border-border bg-card text-ink-secondary hover:bg-muted"
+                          }`}
+                        >
+                          Second Half
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-ink-muted">
+                        Employee will be marked as half-day leave for the {lateHalfPeriod === "AM" ? "first" : "second"} half of the day.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Date *</label>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">
+                    {isLateHalfDay ? "Date *" : "Start Date *"}
+                  </label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
-                  <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={isLateHalfDay ? "" : endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    disabled={isLateHalfDay}
+                    placeholder={isLateHalfDay ? "Not used for half-day" : undefined}
+                  />
                 </div>
               </div>
               <div>
