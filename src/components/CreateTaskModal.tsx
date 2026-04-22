@@ -84,6 +84,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
@@ -158,6 +159,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   const handleClose = () => {
     setAssigneeDropdownOpen(false);
+    setAssigneeSearch("");
     onClose();
   };
 
@@ -318,49 +320,60 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Assign To * <span className="text-ink-muted font-normal">(select multiple)</span></label>
                 <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
-                    className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                  {/* Selected tags + trigger */}
+                  <div
+                    className="flex w-full flex-wrap items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm gap-1 cursor-text"
+                    onClick={() => setAssigneeDropdownOpen(true)}
                   >
-                    {selectedAssignees.length === 0 ? (
-                      <span className="text-muted-foreground">Select members...</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {selectedAssignees.map((id) => {
-                          const emp = employees.find((employee: any) => employee.id === id);
-                          return (
-                            <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
-                              {emp?.full_name ?? "Unknown"}
-                              <button type="button" onClick={(event) => { event.stopPropagation(); toggleAssignee(id); }}>
-                                <X className="h-3 w-3" />
-                              </button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </button>
+                    {selectedAssignees.map((id) => {
+                      const emp = employees.find((employee: any) => employee.id === id);
+                      return (
+                        <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
+                          {emp?.full_name ?? "Unknown"}
+                          <button type="button" onClick={(event) => { event.stopPropagation(); toggleAssignee(id); }}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                    <input
+                      type="text"
+                      value={assigneeSearch}
+                      onChange={(e) => { setAssigneeSearch(e.target.value); setAssigneeDropdownOpen(true); }}
+                      onFocus={() => setAssigneeDropdownOpen(true)}
+                      placeholder={selectedAssignees.length === 0 ? "Type to search members..." : ""}
+                      className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-ink-primary placeholder:text-muted-foreground"
+                    />
+                  </div>
                   {assigneeDropdownOpen && (
                     <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-[200px] overflow-y-auto">
-                      {employees.map((emp: any) => {
-                        const selected = selectedAssignees.includes(emp.id);
-                        return (
-                          <button
-                            key={emp.id}
-                            type="button"
-                            onClick={() => toggleAssignee(emp.id)}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
-                          >
-                            <div className={`h-4 w-4 rounded border flex items-center justify-center ${selected ? "bg-primary border-primary" : "border-border"}`}>
-                              {selected && <Check className="h-3 w-3 text-primary-foreground" />}
-                            </div>
-                            <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
-                            <span className="text-ink-primary">{emp.full_name}</span>
-                          </button>
-                        );
-                      })}
+                      {employees
+                        .filter((emp: any) => emp.full_name.toLowerCase().includes(assigneeSearch.toLowerCase()))
+                        .map((emp: any) => {
+                          const selected = selectedAssignees.includes(emp.id);
+                          return (
+                            <button
+                              key={emp.id}
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); toggleAssignee(emp.id); setAssigneeSearch(""); }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                            >
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                                {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                              </div>
+                              <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
+                              <span className="text-ink-primary">{emp.full_name}</span>
+                            </button>
+                          );
+                        })}
+                      {employees.filter((emp: any) => emp.full_name.toLowerCase().includes(assigneeSearch.toLowerCase())).length === 0 && (
+                        <p className="px-3 py-2 text-sm text-ink-muted">No members found</p>
+                      )}
                     </div>
+                  )}
+                  {/* Click-outside handler */}
+                  {assigneeDropdownOpen && (
+                    <div className="fixed inset-0 z-40" onClick={() => { setAssigneeDropdownOpen(false); setAssigneeSearch(""); }} />
                   )}
                 </div>
                 {errors.assigned_to && <p className="mt-1 text-xs text-destructive">{errors.assigned_to.message}</p>}
