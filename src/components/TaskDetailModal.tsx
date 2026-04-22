@@ -413,24 +413,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         .insert(allAssigneeRows);
       if (insError) throw insError;
 
-      const deadlineText = editDeadline ? ` Deadline: ${new Date(editDeadline).toLocaleDateString()}.` : "";
-      const allNotifUsers = [...editAssignees, ...editCoOwners];
-      if (allNotifUsers.length > 0) {
-        await supabase.from("notifications").insert(
-          allNotifUsers.map((uid) => {
-            const isCoOwner = editCoOwners.includes(uid);
-            return {
-              user_id: uid,
-              title: isCoOwner ? "Task Shared With You" : "Task Updated & Assigned",
-              body: isCoOwner
-                ? `You have been added as co-owner (view only) on task: "${editTitle}".`
-                : `You have been assigned to task: "${editTitle}".${deadlineText}`,
-              type: "task",
-              reference_id: task.id,
-            };
-          })
-        );
-      }
+      // Notifications are handled by the DB trigger — no manual insert needed.
     },
     onSuccess: () => { invalidateTasks(); setEditMode(false); toast.success("Task saved successfully"); },
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
