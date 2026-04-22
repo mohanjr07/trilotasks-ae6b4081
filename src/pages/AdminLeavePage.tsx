@@ -180,10 +180,11 @@ export default function AdminLeavePage() {
                 )}
               </p>
               <p className="text-xs text-ink-muted">
-                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category ?? req.type}
+                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
                 {" · "}
                 {req.start_date && format(new Date(req.start_date), "MMM d")}
                 {req.end_date && req.end_date !== req.start_date && `–${format(new Date(req.end_date), "MMM d")}`}
+                {req.start_time && ` · ${String(req.start_time).slice(0, 5)}–${String(req.end_time).slice(0, 5)}`}
               </p>
             </div>
             <StatusBadge status={displayStatus} />
@@ -302,9 +303,13 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   // "Late" sub-options — only used when leaveCategory === "late"
   const [lateDuration, setLateDuration] = useState<"full" | "half">("half");
   const [lateHalfPeriod, setLateHalfPeriod] = useState<"AM" | "PM">("AM");
+  // "Permission" time range — only used when leaveCategory === "permission"
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
 
   const isLate = leaveCategory === "late";
   const isLateHalfDay = isLate && lateDuration === "half";
+  const isPermission = leaveCategory === "permission";
 
   const resetForm = () => {
     setEmployeeId("");
@@ -314,6 +319,8 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
     setReason("");
     setLateDuration("half");
     setLateHalfPeriod("AM");
+    setStartTime("");
+    setEndTime("");
   };
 
   const { data: employees = [] } = useQuery({
@@ -334,18 +341,27 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         toast.error("Employee, start date, and reason are required");
         return;
       }
+      if (isPermission) {
+        if (!startTime || !endTime) {
+          toast.error("Start time and end time are required for Permission");
+          return;
+        }
+        if (startTime >= endTime) {
+          toast.error("End time must be after start time");
+          return;
+        }
+      }
       const payload: Record<string, unknown> = {
         employee_id: employeeId,
-        type:
-          leaveCategory === "casual_leave"
-            ? "leave"
-            : leaveCategory === "on_duty"
-            ? "on_duty"
-            : "leave",
+        type: isPermission
+          ? "permission"
+          : leaveCategory === "on_duty"
+          ? "on_duty"
+          : "leave",
         leave_category: leaveCategory,
         start_date: startDate,
-        // Half-day leaves always collapse to a single date
-        end_date: isLateHalfDay ? startDate : endDate || startDate,
+        // Half-day and Permission both collapse to a single date
+        end_date: isLateHalfDay || isPermission ? startDate : endDate || startDate,
         reason: reason.trim(),
         status: "approved",
         reviewed_by: user!.id,
@@ -354,6 +370,10 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
       if (isLateHalfDay) {
         payload.is_half_day = true;
         payload.half_day_period = lateHalfPeriod; // AM = First Half, PM = Second Half
+      }
+      if (isPermission) {
+        payload.start_time = startTime;
+        payload.end_time = endTime;
       }
       const { error } = await supabase.from("leave_requests").insert([payload]);
       if (error) throw error;
@@ -378,7 +398,9 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
             className="relative w-full max-w-[460px] rounded-modal bg-card p-6 shadow-modal mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-heading text-xl font-bold text-ink-primary">Assign Leave on Behalf</h2>
+              <h2 className="font-heading text-xl font-bold text-ink-primary">
+                {isPermission ? "Assign Permission on Behalf" : "Assign Leave on Behalf"}
+              </h2>
               <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
             </div>
 
@@ -403,8 +425,14 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                     <SelectItem value="on_duty">On Duty</SelectItem>
                     <SelectItem value="unauthorised_leave">Unauthorised Leave</SelectItem>
                     <SelectItem value="late">Late</SelectItem>
+                    <SelectItem value="permission">Permission</SelectItem>
                   </SelectContent>
                 </Select>
+                {isPermission && (
+                  <p className="mt-1 text-[11px] text-ink-muted">
+                    Short time-off during work hours — pick date, start time, and end time.
+                  </p>
+                )}
               </div>
 
               {isLate && (
@@ -472,24 +500,43 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">
-                    {isLateHalfDay ? "Date *" : "Start Date *"}
-                  </label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              {isPermission ? (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date *</label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Time *</label>
+                      <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Time *</label>
+                      <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">
+                      {isLateHalfDay ? "Date *" : "Start Date *"}
+                    </label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
+                    <Input
+                      type="date"
+                      value={isLateHalfDay ? "" : endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      disabled={isLateHalfDay}
+                      placeholder={isLateHalfDay ? "Not used for half-day" : undefined}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
-                  <Input
-                    type="date"
-                    value={isLateHalfDay ? "" : endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    disabled={isLateHalfDay}
-                    placeholder={isLateHalfDay ? "Not used for half-day" : undefined}
-                  />
-                </div>
-              </div>
+              )}
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Reason *</label>
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Reason for leave..." />
@@ -497,7 +544,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
                 <Button onClick={() => assign.mutate()} disabled={assign.isPending} className="flex-1">
-                  {assign.isPending ? "Assigning..." : "Assign Leave"}
+                  {assign.isPending ? "Assigning..." : isPermission ? "Assign Permission" : "Assign Leave"}
                 </Button>
               </div>
             </div>
