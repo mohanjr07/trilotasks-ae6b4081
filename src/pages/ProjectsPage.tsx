@@ -922,9 +922,9 @@ function AssignMemberModal({
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Show ALL active profiles — members already in project can join additional teams
   const available = allProfiles.filter(
-    (p) => !existingMemberIds.includes(p.id) &&
-      p.full_name.toLowerCase().includes(search.toLowerCase())
+    (p) => p.full_name.toLowerCase().includes(search.toLowerCase())
   );
 
   const toggle = (id: string) => {
@@ -935,15 +935,37 @@ function AssignMemberModal({
     if (!selectedUsers.length) { toast.error("Select at least one member"); return; }
     setSaving(true);
     try {
-      const rows = selectedUsers.map((userId) => ({
-        project_id: projectId,
-        team_id: teamId || null,
-        user_id: userId,
-      }));
-      const { error } = await supabase.from("project_members").insert(rows);
-      if (error) throw error;
-      qc.invalidateQueries({ queryKey: ["project-members"] });
-      toast.success(`${selectedUsers.length} member${selectedUsers.length > 1 ? "s" : ""} assigned`);
+      const rowsToInsert: { project_id: string; team_id: string | null; user_id: string }[] = [];
+      const alreadyDuplicates: string[] = [];
+
+      for (const userId of selectedUsers) {
+        let dupCheck;
+        if (teamId) {
+          dupCheck = await supabase
+            .from("project_members")
+            .select("id")
+            .eq("project_id", projectId)
+            .eq("user_id", userId)
+            .eq("team_id", teamId)
+            .maybeSingle();
+        }
+        if (dupCheck?.data) {
+          const p = allProfiles.find((x) => x.id === userId);
+          alreadyDuplicates.push(p?.full_name ?? userId);
+        } else {
+          rowsToInsert.push({ project_id: projectId, team_id: teamId || null, user_id: userId });
+        }
+      }
+
+      if (rowsToInsert.length > 0) {
+        const { error } = await supabase.from("project_members").insert(rowsToInsert);
+        if (error) throw error;
+        qc.invalidateQueries({ queryKey: ["project-members"] });
+        toast.success(`${rowsToInsert.length} member${rowsToInsert.length > 1 ? "s" : ""} assigned`);
+      }
+      if (alreadyDuplicates.length > 0) {
+        toast.warning(`${alreadyDuplicates.join(", ")} already in this team`);
+      }
       onClose();
     } catch (e: any) {
       toast.error(e.message);
@@ -989,17 +1011,16 @@ function AssignMemberModal({
         )}
 
         <div className="mb-3">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search members..." className="h-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search members..." className="h-9" autoFocus />
         </div>
 
         <div className="max-h-[240px] overflow-y-auto space-y-1 mb-4">
           {available.length === 0 ? (
-            <p className="text-sm text-ink-muted text-center py-4">
-              {allProfiles.length === existingMemberIds.length ? "All members already assigned" : "No members found"}
-            </p>
+            <p className="text-sm text-ink-muted text-center py-4">No members found</p>
           ) : (
             available.map((p) => {
               const selected = selectedUsers.includes(p.id);
+              const alreadyInProject = existingMemberIds.includes(p.id);
               return (
                 <button
                   key={p.id}
@@ -1010,10 +1031,15 @@ function AssignMemberModal({
                     {selected && <Check className="h-3 w-3 text-white" />}
                   </div>
                   <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="sm" />
-                  <div className="text-left">
+                  <div className="text-left flex-1">
                     <p className="text-sm font-medium text-ink-primary">{p.full_name}</p>
                     <p className="text-xs text-ink-muted capitalize">{p.role}</p>
                   </div>
+                  {alreadyInProject && (
+                    <span className="text-[10px] bg-accent-light text-primary px-1.5 py-0.5 rounded-pill font-medium shrink-0">
+                      In project
+                    </span>
+                  )}
                 </button>
               );
             })
