@@ -173,6 +173,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const { user, isAdmin, profile } = useAuth();
   const queryClient = useQueryClient();
   const canManageTasks = profile?.role === "admin" || profile?.role === "manager";
+  // Co-owner: assigned with co_owner role — can view but not edit progress
+  const isCoOwnerOnly = !canManageTasks &&
+    task?.task_assignees?.some((a: any) => a.user_id === user?.id && a.assignee_role === "co_owner") === true &&
+    task?.task_assignees?.some((a: any) => a.user_id === user?.id && a.assignee_role !== "co_owner") !== true;
 
   const [progress, setProgress] = useState(task?.progress ?? 0);
   const [status, setStatus] = useState(task?.status ?? "todo");
@@ -193,9 +197,15 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [editDeadline, setEditDeadline] = useState(task?.deadline ?? "");
   const [editCategory, setEditCategory] = useState(task?.category ?? "");
   const [editAssignees, setEditAssignees] = useState<string[]>(
-    task?.task_assignees?.map((a: any) => a.user_id) ?? []
+    task?.task_assignees?.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => a.user_id) ?? []
+  );
+  const [editCoOwners, setEditCoOwners] = useState<string[]>(
+    task?.task_assignees?.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => a.user_id) ?? []
   );
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const [coOwnerDropdownOpen, setCoOwnerDropdownOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [coOwnerSearch, setCoOwnerSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Move-to-project state
@@ -377,21 +387,33 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       const { error: delError } = await supabase.from("task_assignees").delete().eq("task_id", task.id);
       if (delError) throw delError;
 
+      const allAssigneeRows = [
+        ...editAssignees.map((uid) => ({ task_id: task.id, user_id: uid, assignee_role: "owner" })),
+        ...editCoOwners.map((uid) => ({ task_id: task.id, user_id: uid, assignee_role: "co_owner" })),
+      ];
       const { error: insError } = await supabase
         .from("task_assignees")
-        .insert(editAssignees.map((uid) => ({ task_id: task.id, user_id: uid })));
+        .insert(allAssigneeRows);
       if (insError) throw insError;
 
       const deadlineText = editDeadline ? ` Deadline: ${new Date(editDeadline).toLocaleDateString()}.` : "";
-      await supabase.from("notifications").insert(
-        editAssignees.map((uid) => ({
-          user_id: uid,
-          title: "Task Updated & Assigned",
-          body: `You have been assigned to task: "${editTitle}".${deadlineText}`,
-          type: "task",
-          reference_id: task.id,
-        }))
-      );
+      const allNotifUsers = [...editAssignees, ...editCoOwners];
+      if (allNotifUsers.length > 0) {
+        await supabase.from("notifications").insert(
+          allNotifUsers.map((uid) => {
+            const isCoOwner = editCoOwners.includes(uid);
+            return {
+              user_id: uid,
+              title: isCoOwner ? "Task Shared With You" : "Task Updated & Assigned",
+              body: isCoOwner
+                ? `You have been added as co-owner (view only) on task: "${editTitle}".`
+                : `You have been assigned to task: "${editTitle}".${deadlineText}`,
+              type: "task",
+              reference_id: task.id,
+            };
+          })
+        );
+      }
     },
     onSuccess: () => { invalidateTasks(); setEditMode(false); toast.success("Task saved successfully"); },
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
@@ -498,8 +520,16 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     onError: () => toast.error("Failed to upload file"),
   });
 
-  const toggleAssignee = (id: string) =>
+  const toggleAssignee = (id: string) => {
     setEditAssignees((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]);
+    // Remove from co-owners if being added as owner
+    setEditCoOwners((prev) => prev.filter((a) => a !== id));
+  };
+  const toggleCoOwner = (id: string) => {
+    setEditCoOwners((prev) => prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]);
+    // Remove from owners if being added as co-owner
+    setEditAssignees((prev) => prev.filter((a) => a !== id));
+  };
 
   const cancelEdit = () => {
     setEditTitle(task?.title ?? "");
@@ -507,8 +537,12 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     setEditPriority(task?.priority ?? "medium");
     setEditDeadline(task?.deadline ?? "");
     setEditCategory(task?.category ?? "");
-    setEditAssignees(task?.task_assignees?.map((a: any) => a.user_id) ?? []);
+    setEditAssignees(task?.task_assignees?.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => a.user_id) ?? []);
+    setEditCoOwners(task?.task_assignees?.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => a.user_id) ?? []);
     setAssigneeDropdownOpen(false);
+    setCoOwnerDropdownOpen(false);
+    setAssigneeSearch("");
+    setCoOwnerSearch("");
     setEditMode(false);
   };
 
@@ -756,14 +790,18 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                     <SelectItem value="completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button
-                  size="sm"
-                  onClick={() => updateProgressStatus.mutate()}
-                  disabled={updateProgressStatus.isPending}
-                  className="mt-3"
-                >
-                  {updateProgressStatus.isPending ? "Saving..." : "Save Progress"}
-                </Button>
+                {!isCoOwnerOnly ? (
+                  <Button
+                    size="sm"
+                    onClick={() => updateProgressStatus.mutate()}
+                    disabled={updateProgressStatus.isPending}
+                    className="mt-3"
+                  >
+                    {updateProgressStatus.isPending ? "Saving..." : "Save Progress"}
+                  </Button>
+                ) : (
+                  <p className="mt-3 text-xs text-ink-muted italic">View only — co-owners cannot update progress</p>
+                )}
               </div>
 
               {editMode && (
@@ -863,68 +901,165 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 <div>
                   <p className="text-[10px] uppercase tracking-wider text-ink-muted mb-2">Assigned to</p>
                   {editMode ? (
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
-                        className="flex w-full items-center min-h-[40px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring gap-1"
-                      >
-                        <span className="flex-1 flex flex-wrap gap-1 text-left">
-                          {editAssignees.length === 0 ? (
-                            <span className="text-muted-foreground">Select members...</span>
-                          ) : (
-                            editAssignees.map((id) => {
+                    <div className="space-y-3">
+                      {/* Owner selector */}
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-ink-muted mb-1 font-semibold">Owner (can edit & view progress)</p>
+                        <div className="relative">
+                          <div
+                            className="flex w-full flex-wrap items-center min-h-[38px] rounded-md border border-input bg-background px-3 py-1.5 text-sm gap-1 cursor-text"
+                            onClick={() => setAssigneeDropdownOpen(true)}
+                          >
+                            {editAssignees.map((id) => {
                               const emp = employees.find((e: any) => e.id === id);
                               return (
                                 <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-accent-light text-primary px-2 py-0.5 text-xs font-medium">
                                   {emp?.full_name ?? "..."}
-                                  <button
-                                    type="button"
-                                    onClick={(ev) => { ev.stopPropagation(); toggleAssignee(id); }}
-                                  >
+                                  <button type="button" onClick={(ev) => { ev.stopPropagation(); toggleAssignee(id); }}>
                                     <X className="h-3 w-3" />
                                   </button>
                                 </span>
                               );
-                            })
+                            })}
+                            <input
+                              type="text"
+                              value={assigneeSearch}
+                              onChange={(e) => { setAssigneeSearch(e.target.value); setAssigneeDropdownOpen(true); }}
+                              onFocus={() => setAssigneeDropdownOpen(true)}
+                              placeholder={editAssignees.length === 0 ? "Search owners..." : ""}
+                              className="flex-1 min-w-[100px] bg-transparent outline-none text-sm text-ink-primary placeholder:text-muted-foreground"
+                            />
+                          </div>
+                          {assigneeDropdownOpen && (
+                            <>
+                              <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-[180px] overflow-y-auto">
+                                {employees
+                                  .filter((emp: any) => emp.full_name.toLowerCase().includes(assigneeSearch.toLowerCase()))
+                                  .map((emp: any) => {
+                                    const selected = editAssignees.includes(emp.id);
+                                    const isCoOwner = editCoOwners.includes(emp.id);
+                                    return (
+                                      <button
+                                        key={emp.id}
+                                        type="button"
+                                        onMouseDown={(e) => { e.preventDefault(); toggleAssignee(emp.id); setAssigneeSearch(""); }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                      >
+                                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                                          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                        </div>
+                                        <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
+                                        <span className="text-ink-primary flex-1">{emp.full_name}</span>
+                                        {isCoOwner && <span className="text-[9px] bg-muted text-ink-muted px-1.5 py-0.5 rounded">co-owner</span>}
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                              <div className="fixed inset-0 z-40" onClick={() => { setAssigneeDropdownOpen(false); setAssigneeSearch(""); }} />
+                            </>
                           )}
-                        </span>
-                        <ChevronDown className="h-4 w-4 text-ink-muted shrink-0" />
-                      </button>
-                      {assigneeDropdownOpen && (
-                        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-[200px] overflow-y-auto">
-                          {employees.map((emp: any) => {
-                            const selected = editAssignees.includes(emp.id);
-                            return (
-                              <button
-                                key={emp.id}
-                                type="button"
-                                onClick={() => toggleAssignee(emp.id)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
-                              >
-                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-border"}`}>
-                                  {selected && <Check className="h-3 w-3 text-primary-foreground" />}
-                                </div>
-                                <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
-                                <span className="text-ink-primary">{emp.full_name}</span>
-                              </button>
-                            );
-                          })}
                         </div>
-                      )}
+                      </div>
+                      {/* Co-Owner selector */}
+                      <div>
+                        <p className="text-[9px] uppercase tracking-wider text-ink-muted mb-1 font-semibold">Co-Owner (view only)</p>
+                        <div className="relative">
+                          <div
+                            className="flex w-full flex-wrap items-center min-h-[38px] rounded-md border border-input bg-background px-3 py-1.5 text-sm gap-1 cursor-text"
+                            onClick={() => setCoOwnerDropdownOpen(true)}
+                          >
+                            {editCoOwners.map((id) => {
+                              const emp = employees.find((e: any) => e.id === id);
+                              return (
+                                <span key={id} className="inline-flex items-center gap-1 rounded-pill bg-muted text-ink-secondary px-2 py-0.5 text-xs font-medium">
+                                  {emp?.full_name ?? "..."}
+                                  <button type="button" onClick={(ev) => { ev.stopPropagation(); toggleCoOwner(id); }}>
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                            <input
+                              type="text"
+                              value={coOwnerSearch}
+                              onChange={(e) => { setCoOwnerSearch(e.target.value); setCoOwnerDropdownOpen(true); }}
+                              onFocus={() => setCoOwnerDropdownOpen(true)}
+                              placeholder={editCoOwners.length === 0 ? "Search co-owners..." : ""}
+                              className="flex-1 min-w-[100px] bg-transparent outline-none text-sm text-ink-primary placeholder:text-muted-foreground"
+                            />
+                          </div>
+                          {coOwnerDropdownOpen && (
+                            <>
+                              <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-[180px] overflow-y-auto">
+                                {employees
+                                  .filter((emp: any) => emp.full_name.toLowerCase().includes(coOwnerSearch.toLowerCase()))
+                                  .map((emp: any) => {
+                                    const selected = editCoOwners.includes(emp.id);
+                                    const isOwner = editAssignees.includes(emp.id);
+                                    return (
+                                      <button
+                                        key={emp.id}
+                                        type="button"
+                                        onMouseDown={(e) => { e.preventDefault(); toggleCoOwner(emp.id); setCoOwnerSearch(""); }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                      >
+                                        <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-border"}`}>
+                                          {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                        </div>
+                                        <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
+                                        <span className="text-ink-primary flex-1">{emp.full_name}</span>
+                                        {isOwner && <span className="text-[9px] bg-accent-light text-primary px-1.5 py-0.5 rounded">owner</span>}
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                              <div className="fixed inset-0 z-40" onClick={() => { setCoOwnerDropdownOpen(false); setCoOwnerSearch(""); }} />
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {task.task_assignees && task.task_assignees.length > 0 ? (
-                        task.task_assignees.map((a: any) => (
-                          <div key={a.user_id} className="flex items-center gap-2">
-                            <UserAvatar name={a.user?.full_name ?? "?"} avatarUrl={a.user?.avatar_url} size="sm" />
+                        <>
+                          {/* Owners */}
+                          {task.task_assignees.filter((a: any) => a.assignee_role !== "co_owner").length > 0 && (
                             <div>
-                              <p className="text-sm font-medium text-ink-primary">{a.user?.full_name}</p>
-                              <p className="text-xs text-ink-muted">{a.user?.email}</p>
+                              <p className="text-[9px] uppercase tracking-wider text-ink-muted mb-1.5 font-semibold">Owner{task.task_assignees.filter((a: any) => a.assignee_role !== "co_owner").length > 1 ? "s" : ""}</p>
+                              <div className="space-y-1.5">
+                                {task.task_assignees.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => (
+                                  <div key={a.user_id} className="flex items-center gap-2">
+                                    <UserAvatar name={a.user?.full_name ?? "?"} avatarUrl={a.user?.avatar_url} size="sm" />
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-ink-primary">{a.user?.full_name}</p>
+                                      <p className="text-xs text-ink-muted">{a.user?.email}</p>
+                                    </div>
+                                    <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">Owner</span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          )}
+                          {/* Co-Owners */}
+                          {task.task_assignees.filter((a: any) => a.assignee_role === "co_owner").length > 0 && (
+                            <div>
+                              <p className="text-[9px] uppercase tracking-wider text-ink-muted mb-1.5 font-semibold">Co-Owner{task.task_assignees.filter((a: any) => a.assignee_role === "co_owner").length > 1 ? "s" : ""}</p>
+                              <div className="space-y-1.5">
+                                {task.task_assignees.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => (
+                                  <div key={a.user_id} className="flex items-center gap-2">
+                                    <UserAvatar name={a.user?.full_name ?? "?"} avatarUrl={a.user?.avatar_url} size="sm" />
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-ink-primary">{a.user?.full_name}</p>
+                                      <p className="text-xs text-ink-muted">{a.user?.email}</p>
+                                    </div>
+                                    <span className="text-[9px] bg-muted text-ink-muted px-1.5 py-0.5 rounded font-medium">View only</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div className="flex items-center gap-2">
                           <UserAvatar name={task.assigned?.full_name ?? "?"} avatarUrl={task.assigned?.avatar_url} size="sm" />
