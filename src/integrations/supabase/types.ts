@@ -265,18 +265,21 @@ export type Database = {
       }
       task_assignees: {
         Row: {
+          assignee_role: string
           created_at: string | null
           id: string
           task_id: string
           user_id: string
         }
         Insert: {
+          assignee_role?: string
           created_at?: string | null
           id?: string
           task_id: string
           user_id: string
         }
         Update: {
+          assignee_role?: string
           created_at?: string | null
           id?: string
           task_id?: string
