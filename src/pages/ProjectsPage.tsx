@@ -924,42 +924,48 @@ function AssignMemberModal({
     if (!selectedUsers.length) { toast.error("Select at least one member"); return; }
     setSaving(true);
     try {
-      // Split into: already in project (UPDATE team_id) vs brand new (INSERT)
-      const alreadyInProject = selectedUsers.filter((id) => existingMemberIds.includes(id));
-      const newToProject = selectedUsers.filter((id) => !existingMemberIds.includes(id));
-
-      const promises: Promise<any>[] = [];
-
-      // Update existing project members to the new team
-      if (alreadyInProject.length > 0) {
-        promises.push(
-          supabase
-            .from("project_members")
-            .update({ team_id: teamId ?? null })
-            .eq("project_id", projectId)
-            .in("user_id", alreadyInProject)
-        );
+      // Find who's already in this exact team to avoid duplicates
+      let alreadyInThisTeam: string[] = [];
+      if (teamId) {
+        const { data: existing } = await supabase
+          .from("project_members")
+          .select("user_id")
+          .eq("project_id", projectId)
+          .eq("team_id", teamId)
+          .in("user_id", selectedUsers);
+        alreadyInThisTeam = (existing ?? []).map((r: any) => r.user_id);
+      } else {
+        // For "Unassigned", check users already unassigned in this project
+        const { data: existing } = await supabase
+          .from("project_members")
+          .select("user_id")
+          .eq("project_id", projectId)
+          .is("team_id", null)
+          .in("user_id", selectedUsers);
+        alreadyInThisTeam = (existing ?? []).map((r: any) => r.user_id);
       }
 
-      // Insert brand-new project members
-      if (newToProject.length > 0) {
-        promises.push(
-          supabase.from("project_members").insert(
-            newToProject.map((userId) => ({
-              project_id: projectId,
-              team_id: teamId ?? null,
-              user_id: userId,
-            }))
-          )
+      const toInsert = selectedUsers.filter((id) => !alreadyInThisTeam.includes(id));
+      const duplicateNames = selectedUsers
+        .filter((id) => alreadyInThisTeam.includes(id))
+        .map((id) => allProfiles.find((p) => p.id === id)?.full_name ?? id);
+
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from("project_members").insert(
+          toInsert.map((userId) => ({
+            project_id: projectId,
+            team_id: teamId ?? null,
+            user_id: userId,
+          }))
         );
+        if (error) throw error;
+        qc.invalidateQueries({ queryKey: ["project-members"] });
+        toast.success(`${toInsert.length} member${toInsert.length > 1 ? "s" : ""} assigned`);
+      }
+      if (duplicateNames.length > 0) {
+        toast.warning(`${duplicateNames.join(", ")} already in this team`);
       }
 
-      const results = await Promise.all(promises);
-      const firstError = results.find((r) => r.error)?.error;
-      if (firstError) throw firstError;
-
-      qc.invalidateQueries({ queryKey: ["project-members"] });
-      toast.success(`${selectedUsers.length} member${selectedUsers.length > 1 ? "s" : ""} assigned`);
       onClose();
     } catch (e: any) {
       toast.error(e.message);
