@@ -33,7 +33,15 @@ export default function EmployeeLeavePage() {
 
   const filtered = requests.filter((r: any) => {
     if (tab === "all") return true;
-    if (tab === "casual_leave" || tab === "on_duty" || tab === "unauthorised_leave") return r.leave_category === tab;
+    if (
+      tab === "casual_leave" ||
+      tab === "on_duty" ||
+      tab === "unauthorised_leave" ||
+      tab === "late" ||
+      tab === "permission"
+    ) {
+      return r.leave_category === tab;
+    }
     return r.status === tab;
   });
 
@@ -45,9 +53,13 @@ export default function EmployeeLeavePage() {
     { key: "casual_leave", label: "Casual" },
     { key: "on_duty", label: "On Duty" },
     { key: "unauthorised_leave", label: "Unauthorised" },
+    { key: "permission", label: "Permission" },
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
   ];
+
+  // Strip seconds ("14:30:00" -> "14:30") for display
+  const fmtTime = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
   return (
     <AnimatedPage>
@@ -86,7 +98,7 @@ export default function EmployeeLeavePage() {
               <div>
                 <div className="flex gap-2 mb-1 flex-wrap">
                   <span className="text-xs font-medium bg-accent-light text-primary px-2 py-0.5 rounded-pill capitalize">
-                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category ?? req.type}
+                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
                   </span>
                   {req.is_half_day && (
                     <span className="text-xs font-medium bg-purple-light text-purple px-2 py-0.5 rounded-pill">
@@ -102,7 +114,7 @@ export default function EmployeeLeavePage() {
                 <p className="text-sm text-ink-primary font-medium">
                   {req.start_date && format(new Date(req.start_date), "MMM d, yyyy")}
                   {req.end_date && req.end_date !== req.start_date && ` — ${format(new Date(req.end_date), "MMM d, yyyy")}`}
-                  {req.start_time && ` · ${req.start_time}–${req.end_time}`}
+                  {req.start_time && ` · ${fmtTime(req.start_time)}–${fmtTime(req.end_time)}`}
                 </p>
                 <p className="text-xs text-ink-muted mt-1">{req.reason}</p>
                 {req.admin_note && req.status === "rejected" && (
@@ -134,6 +146,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   // Half-day state
   const [isHalfDay, setIsHalfDay] = useState(false);
   const [halfDayPeriod, setHalfDayPeriod] = useState<"AM" | "PM">("AM");
+  // Permission state — a short time-based leave on a single date
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
 
   // Check how many casual leave days were approved this month (half-day = 0.5)
   const { data: approvedCasualDays = 0 } = useQuery({
@@ -203,21 +218,42 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   // Auto-switch away from casual if fully disabled
   const effectiveCategory = casualDisabled && category === "casual_leave" ? "on_duty" : category;
 
+  const isPermission = category === "permission";
+
   const submit = useMutation({
     mutationFn: async () => {
       const useHalfDay = effectiveCategory === "casual_leave" && isHalfDay;
+
+      // Permission-specific validation: time range required and start < end
+      if (isPermission) {
+        if (!startTime || !endTime) {
+          toast.error("Start time and end time are required for Permission");
+          throw new Error("missing time");
+        }
+        if (startTime >= endTime) {
+          toast.error("End time must be after start time");
+          throw new Error("bad time range");
+        }
+      }
+
       const payload: any = {
         employee_id: user!.id,
-        type: "leave",
+        type: isPermission ? "permission" : "leave",
         reason,
         start_date: startDate,
-        end_date: useHalfDay ? startDate : (endDate || startDate),
-        leave_category: effectiveCategory,
+        // Permission and half-day both collapse to a single date
+        end_date: isPermission || useHalfDay ? startDate : (endDate || startDate),
+        leave_category: isPermission ? "permission" : effectiveCategory,
       };
       if (useHalfDay) {
         payload.is_half_day = true;
         payload.half_day_period = halfDayPeriod;
       }
+      if (isPermission) {
+        payload.start_time = startTime;
+        payload.end_time = endTime;
+      }
+
       const tryInsert = await supabase.from("leave_requests").insert([payload]);
       if (tryInsert.error) {
         // If the new columns are missing, retry without them so the request still goes through
@@ -237,16 +273,21 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-leave"] });
       queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
-      toast.success("Request submitted successfully");
+      toast.success(isPermission ? "Permission request submitted" : "Request submitted successfully");
       // Reset form
       setIsHalfDay(false);
       setHalfDayPeriod("AM");
       setStartDate("");
       setEndDate("");
+      setStartTime("");
+      setEndTime("");
       setReason("");
       onClose();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      if (e?.message === "missing time" || e?.message === "bad time range") return;
+      toast.error(e.message);
+    },
   });
 
   const categories = [
@@ -260,6 +301,12 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
     },
     { value: "on_duty", label: "On Duty", disabled: false },
     { value: "unauthorised_leave", label: "Unauthorised Leave", disabled: false },
+    {
+      value: "permission",
+      label: "Permission",
+      disabled: false,
+      hint: "Short time-off during work hours — pick start and end time.",
+    },
   ];
 
   return (
@@ -273,7 +320,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
             className="relative w-full md:max-w-[500px] rounded-t-modal md:rounded-modal bg-card p-6 shadow-modal"
           >
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-heading text-xl font-bold text-ink-primary">New Leave Request</h2>
+              <h2 className="font-heading text-xl font-bold text-ink-primary">
+                {isPermission ? "New Permission Request" : "New Leave Request"}
+              </h2>
               <button onClick={onClose} className="text-ink-muted"><X className="h-5 w-5" /></button>
             </div>
 
@@ -347,27 +396,61 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">
-                    {isHalfDay ? "Date" : "Start Date"}
-                  </label>
-                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
-                </div>
-                {!isHalfDay && (
+              {isPermission ? (
+                <>
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
-                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
+                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date</label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
                   </div>
-                )}
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">Start Time</label>
+                      <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="h-10" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Time</label>
+                      <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="h-10" />
+                    </div>
+                  </div>
+                  {startTime && endTime && startTime < endTime && (
+                    <p className="text-[11px] text-ink-muted -mt-2">
+                      You're requesting permission from {fmtTime(startTime)} to {fmtTime(endTime)}
+                      {startDate && ` on ${format(new Date(startDate), "MMM d, yyyy")}`}.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-ink-primary">
+                      {isHalfDay ? "Date" : "Start Date"}
+                    </label>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
+                  </div>
+                  {!isHalfDay && (
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
+                      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Reason</label>
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Explain your reason..." />
               </div>
-              <Button onClick={() => submit.mutate()} disabled={submit.isPending || !startDate || !reason} className="w-full h-11">
-                {submit.isPending ? "Submitting..." : "Submit Request"}
+              <Button
+                onClick={() => submit.mutate()}
+                disabled={
+                  submit.isPending ||
+                  !startDate ||
+                  !reason ||
+                  (isPermission && (!startTime || !endTime))
+                }
+                className="w-full h-11"
+              >
+                {submit.isPending ? "Submitting..." : isPermission ? "Request Permission" : "Submit Request"}
               </Button>
             </div>
           </motion.div>
