@@ -935,27 +935,26 @@ function AssignMemberModal({
     if (!selectedUsers.length) { toast.error("Select at least one member"); return; }
     setSaving(true);
     try {
-      const rowsToInsert: { project_id: string; team_id: string | null; user_id: string }[] = [];
-      const alreadyDuplicates: string[] = [];
-
-      for (const userId of selectedUsers) {
-        let dupCheck;
-        if (teamId) {
-          dupCheck = await supabase
-            .from("project_members")
-            .select("id")
-            .eq("project_id", projectId)
-            .eq("user_id", userId)
-            .eq("team_id", teamId)
-            .maybeSingle();
-        }
-        if (dupCheck?.data) {
-          const p = allProfiles.find((x) => x.id === userId);
-          alreadyDuplicates.push(p?.full_name ?? userId);
-        } else {
-          rowsToInsert.push({ project_id: projectId, team_id: teamId || null, user_id: userId });
-        }
+      // Fetch existing memberships for this project+team in one query to avoid per-user round trips
+      // (per-user maybeSingle calls can fail silently under RLS, causing false "already assigned" results)
+      let existingInThisTeam: string[] = [];
+      if (teamId) {
+        const { data: existing } = await supabase
+          .from("project_members")
+          .select("user_id")
+          .eq("project_id", projectId)
+          .eq("team_id", teamId)
+          .in("user_id", selectedUsers);
+        existingInThisTeam = (existing ?? []).map((r: any) => r.user_id);
       }
+
+      const rowsToInsert = selectedUsers
+        .filter((userId) => !existingInThisTeam.includes(userId))
+        .map((userId) => ({ project_id: projectId, team_id: teamId || null, user_id: userId }));
+
+      const alreadyDuplicates = selectedUsers
+        .filter((userId) => existingInThisTeam.includes(userId))
+        .map((userId) => allProfiles.find((x) => x.id === userId)?.full_name ?? userId);
 
       if (rowsToInsert.length > 0) {
         const { error } = await supabase.from("project_members").insert(rowsToInsert);
