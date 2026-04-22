@@ -213,6 +213,27 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [moveProjectId, setMoveProjectId] = useState<string>(task?.project_id ?? "");
   const [moveTeamId, setMoveTeamId] = useState<string>(task?.project_team_id ?? "");
 
+  // Sync edit fields whenever the task prop changes (e.g. opening a different task)
+  useEffect(() => {
+    if (!task) return;
+    setProgress(task.progress ?? 0);
+    setStatus(task.status ?? "todo");
+    setEditTitle(task.title ?? "");
+    setEditDescription(task.description ?? "");
+    setEditPriority(task.priority ?? "medium");
+    setEditDeadline(task.deadline ?? "");
+    setEditCategory(task.category ?? "");
+    setEditAssignees(
+      task.task_assignees?.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => a.user_id) ?? []
+    );
+    setEditCoOwners(
+      task.task_assignees?.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => a.user_id) ?? []
+    );
+    setEditMode(false);
+    setMoveProjectId(task.project_id ?? "");
+    setMoveTeamId(task.project_team_id ?? "");
+  }, [task?.id]);
+
   useEffect(() => {
     if (replyingTo) setTimeout(() => replyInputRef.current?.focus(), 60);
   }, [replyingTo?.id]);
@@ -352,11 +373,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     onError: (e: any) => toast.error(e.message ?? "Failed to move task"),
   });
 
-  // Sync the move-form fields when the selected task changes
-  useEffect(() => {
-    setMoveProjectId(task?.project_id ?? "");
-    setMoveTeamId(task?.project_team_id ?? "");
-  }, [task?.id, task?.project_id, task?.project_team_id]);
+
 
   const updateProgressStatus = useMutation({
     mutationFn: async () => {
