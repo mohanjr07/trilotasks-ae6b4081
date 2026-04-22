@@ -73,7 +73,7 @@ const App = () => (
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
-              <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
+              <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["admin", "employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
