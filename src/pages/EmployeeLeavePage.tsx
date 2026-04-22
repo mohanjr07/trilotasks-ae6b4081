@@ -86,7 +86,7 @@ export default function EmployeeLeavePage() {
               <div>
                 <div className="flex gap-2 mb-1 flex-wrap">
                   <span className="text-xs font-medium bg-accent-light text-primary px-2 py-0.5 rounded-pill capitalize">
-                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category ?? req.type}
+                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category ?? req.type}
                   </span>
                   {req.is_half_day && (
                     <span className="text-xs font-medium bg-purple-light text-purple px-2 py-0.5 rounded-pill">
