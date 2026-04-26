@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw, FileSpreadsheet } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { exportLeavesToExcel } from "@/lib/leaveExcelExport";
 
 export default function AdminLeavePage() {
   const { user, profile } = useAuth();
@@ -23,6 +24,7 @@ export default function AdminLeavePage() {
   const [search, setSearch] = useState("");
   const [reviewReq, setReviewReq] = useState<any>(null);
   const [showAssignLeave, setShowAssignLeave] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const clearRequest = useMutation({
     mutationFn: async (id: string) => {
@@ -133,9 +135,14 @@ export default function AdminLeavePage() {
           Leave & Permissions {pending > 0 && <span className="text-sm font-body bg-warning-light text-warning px-2 py-0.5 rounded-pill ml-2">{pending} pending</span>}
         </h1>
         {isStrictAdmin && (
-          <Button onClick={() => setShowAssignLeave(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1.5" /> Assign Leave
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowExport(true)} size="sm" variant="outline">
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Export to Excel
+            </Button>
+            <Button onClick={() => setShowAssignLeave(true)} size="sm">
+              <Plus className="h-4 w-4 mr-1.5" /> Assign Leave
+            </Button>
+          </div>
         )}
       </div>
 
@@ -221,6 +228,7 @@ export default function AdminLeavePage() {
 
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
       {isStrictAdmin && <AssignLeaveModal open={showAssignLeave} onClose={() => setShowAssignLeave(false)} />}
+      {isStrictAdmin && <ExportLeaveModal open={showExport} onClose={() => setShowExport(false)} />}
     </AnimatedPage>
   );
 }
@@ -547,6 +555,128 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                   {assign.isPending ? "Assigning..." : isPermission ? "Assign Permission" : "Assign Leave"}
                 </Button>
               </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─── Export Leave Modal (admin only) ─────────────────────────────────────────
+//   Asks the admin to pick a month + year, fetches every active employee and
+//   every leave_request that overlaps the chosen month, then hands the data
+//   to leaveExcelExport.ts which renders the attendance grid spreadsheet.
+function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const now = new Date();
+  const [year, setYear] = useState<number>(now.getFullYear());
+  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+  const [exporting, setExporting] = useState(false);
+
+  const monthOptions = [
+    { v: 1, l: "January" }, { v: 2, l: "February" }, { v: 3, l: "March" },
+    { v: 4, l: "April" }, { v: 5, l: "May" }, { v: 6, l: "June" },
+    { v: 7, l: "July" }, { v: 8, l: "August" }, { v: 9, l: "September" },
+    { v: 10, l: "October" }, { v: 11, l: "November" }, { v: 12, l: "December" },
+  ];
+  const yearOptions: number[] = [];
+  for (let y = now.getFullYear() - 3; y <= now.getFullYear() + 1; y++) yearOptions.push(y);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      // Active employees in alphabetical order (mirrors the paper sheet's S.No layout)
+      const empRes = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("is_active", true)
+        .order("full_name");
+      if (empRes.error) throw empRes.error;
+      const employees = (empRes.data ?? []) as Array<{ id: string; full_name: string }>;
+
+      // Bound the leave query to the chosen month so we don't ship the whole table
+      const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+      const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
+      // A request "touches" this month if start_date <= monthEnd AND end_date >= monthStart
+      const reqRes = await supabase
+        .from("leave_requests")
+        .select("employee_id, start_date, end_date, reverted_at, status, type, leave_category, is_half_day, half_day_period")
+        .lte("start_date", monthEnd)
+        .gte("end_date", monthStart);
+      if (reqRes.error) {
+        // Fallback if reverted_at column doesn't exist yet — re-query without it
+        if (reqRes.error.code === "42703" || (reqRes.error.message ?? "").includes("reverted_at")) {
+          const fallback = await supabase
+            .from("leave_requests")
+            .select("employee_id, start_date, end_date, status, type, leave_category, is_half_day, half_day_period")
+            .lte("start_date", monthEnd)
+            .gte("end_date", monthStart);
+          if (fallback.error) throw fallback.error;
+          await exportLeavesToExcel({ year, month, employees, leaveRequests: fallback.data ?? [] });
+        } else {
+          throw reqRes.error;
+        }
+      } else {
+        await exportLeavesToExcel({ year, month, employees, leaveRequests: reqRes.data ?? [] });
+      }
+      toast.success("Excel file ready — check your downloads");
+      onClose();
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to export");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-[420px] rounded-modal bg-card p-6 shadow-modal mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-heading text-xl font-bold text-ink-primary">Export Leave Records</h2>
+              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
+            </div>
+
+            <p className="text-sm text-ink-muted mb-4">
+              Generates the monthly attendance sheet — present rows stay blank, leaves are marked
+              <span className="font-semibold text-ink-primary"> L</span>, half-days mark only F or A,
+              and Sundays are shaded red.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Month</label>
+                <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((m) => (
+                      <SelectItem key={m.v} value={String(m.v)}>{m.l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Year</label>
+                <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {yearOptions.map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+              <Button onClick={handleExport} disabled={exporting} className="flex-1">
+                {exporting ? "Generating..." : "Download .xlsx"}
+              </Button>
             </div>
           </motion.div>
         </div>
