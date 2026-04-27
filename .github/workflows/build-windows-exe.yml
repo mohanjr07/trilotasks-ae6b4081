@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  build-windows-exe.yml
+#  Builds the TaskFlow Windows installer (.exe) on a GitHub-hosted Windows
+#  runner. No Wine, no local Windows PC required.
+#
+#  Triggers:
+#    • Manually from GitHub → Actions tab → "Build Windows .exe" → Run workflow
+#    • Automatically when a commit is pushed to main that changes
+#      package.json, electron/, src/, or vite.config.ts
+#
+#  Output:
+#    • Artifact named "TaskFlow-Windows-Installer" containing
+#      "TaskFlow Setup <version>.exe". Download it from the workflow run page.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build Windows .exe
+
+on:
+  workflow_dispatch:        # manual trigger from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "electron/**"
+      - "src/**"
+      - "vite.config.ts"
+      - "index.html"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Vite bundle + Electron .exe
+        run: npm run electron:build
+        env:
+          # Skip notarisation / code-signing entirely — we don't have a paid cert.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaskFlow-Windows-Installer
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30
