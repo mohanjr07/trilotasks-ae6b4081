@@ -1,19 +1,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
-#  build-windows-exe.yml
-#  Builds the TaskFlow Windows installer (.exe) on a GitHub-hosted Windows
-#  runner. No Wine, no local Windows PC required.
+#  build-macos-dmg.yml
+#  Builds the TaskFlow macOS installer (.dmg) on a GitHub-hosted macOS
+#  runner. No paid Apple Developer account / code-signing required —
+#  users will see a "developer cannot be verified" prompt on first launch
+#  and need to right-click → Open OR allow the app in
+#  System Settings → Privacy & Security.
 #
 #  Triggers:
-#    • Manually from GitHub → Actions tab → "Build Windows .exe" → Run workflow
+#    • Manually from GitHub → Actions tab → "Build macOS .dmg" → Run workflow
 #    • Automatically when a commit is pushed to main that changes
-#      package.json, electron/, src/, or vite.config.ts
+#      package.json, electron/, src/, vite.config.ts, or index.html
 #
 #  Output:
-#    • Artifact named "TaskFlow-Windows-Installer" containing
-#      "TaskFlow Setup <version>.exe". Download it from the workflow run page.
+#    • Artifact named "TaskFlow-macOS-Installer" containing
+#      "TaskFlow-<version>.dmg" (Intel) and "TaskFlow-<version>-arm64.dmg"
+#      (Apple Silicon). Download from the workflow run page.
+#
+#  Note on macOS runner minutes: GitHub's free tier counts macOS minutes at
+#  10× the rate of Linux minutes (so 2000 free Linux min = 200 macOS min).
+#  For a handful of builds a month this is well within the free quota.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Build Windows .exe
+name: Build macOS .dmg
 
 on:
   workflow_dispatch:        # manual trigger from the Actions tab
@@ -29,8 +37,11 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: macos-latest
     timeout-minutes: 30
+    env:
+      # Opt into Node.js 24 for built-in actions (silences deprecation warning).
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout source
@@ -45,16 +56,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vite bundle + Electron .exe
-        run: npm run electron:build
+      - name: Build Vite bundle + Electron .dmg
+        run: npm run electron:build:mac
         env:
-          # Skip notarisation / code-signing entirely — we don't have a paid cert.
+          # Skip notarisation / code-signing entirely — we don't have a paid
+          # Apple Developer ID. The .dmg still installs fine, the user just
+          # has to right-click → Open the first time.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - name: Upload installer as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TaskFlow-Windows-Installer
-          path: release/*.exe
+          name: TaskFlow-macOS-Installer
+          path: release/*.dmg
           if-no-files-found: error
           retention-days: 30
