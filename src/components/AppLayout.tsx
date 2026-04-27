@@ -98,14 +98,14 @@ export default function AppLayout() {
               so the browser never has to re-fetch/decode on theme switch. */}
           <div className="relative h-28 flex items-center">
             <img
-              src="/logo.png"
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Trilo Automation"
               className={cn("h-28 object-contain transition-opacity duration-150", isDark ? "opacity-0 absolute inset-0" : "opacity-100")}
               fetchPriority="high"
               decoding="sync"
             />
             <img
-              src="/logo-dark.png"
+              src={`${import.meta.env.BASE_URL}logo-dark.png`}
               alt="Trilo Automation"
               className={cn("h-28 object-contain transition-opacity duration-150", isDark ? "opacity-100" : "opacity-0 absolute inset-0")}
               fetchPriority="high"
@@ -180,14 +180,14 @@ export default function AppLayout() {
               <div className="flex items-center gap-2">
                 <div className="relative h-24 flex items-center">
                   <img
-                    src="/logo.png"
+                    src={`${import.meta.env.BASE_URL}logo.png`}
                     alt="Trilo Automation"
                     className={cn("h-24 object-contain transition-opacity duration-150", isDark ? "opacity-0 absolute inset-0" : "opacity-100")}
                     fetchPriority="high"
                     decoding="sync"
                   />
                   <img
-                    src="/logo-dark.png"
+                    src={`${import.meta.env.BASE_URL}logo-dark.png`}
                     alt="Trilo Automation"
                     className={cn("h-24 object-contain transition-opacity duration-150", isDark ? "opacity-100" : "opacity-0 absolute inset-0")}
                     fetchPriority="high"
