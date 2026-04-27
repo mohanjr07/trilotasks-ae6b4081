@@ -114,15 +114,13 @@
     "win": {
       "target": [
         { "target": "nsis", "arch": ["x64"] }
-      ],
-      "icon": "build/icon.ico"
+      ]
     },
     "mac": {
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
-      "category": "public.app-category.productivity",
-      "icon": "build/icon.icns"
+      "category": "public.app-category.productivity"
     },
     "nsis": {
       "oneClick": false,
