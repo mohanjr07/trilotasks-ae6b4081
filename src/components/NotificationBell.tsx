@@ -3,10 +3,18 @@ import { Bell } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+
+// Bridge exposed by electron/preload.cjs (only present inside the .exe).
+declare global {
+  interface Window {
+    IS_ELECTRON?: boolean;
+    taskflowDesktop?: { focusWindow: () => void };
+  }
+}
 
 const iconColors: Record<string, string> = {
   task: "bg-accent-light text-primary",
@@ -17,6 +25,7 @@ const iconColors: Record<string, string> = {
 export default function NotificationBell() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,7 +41,19 @@ export default function NotificationBell() {
 
   const unreadCount = notifications.filter((n: any) => !n.is_read).length;
 
-  // Realtime subscription
+  // Ask the OS for permission to show desktop notifications. Only prompts
+  // once — subsequent calls are a no-op if the user already accepted/declined.
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      // Fire-and-forget — we don't block the UI on the prompt.
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Realtime subscription — fires both an in-app toast and (if allowed) a
+  // native OS desktop notification (Windows Action Center / macOS Notification
+  // Center). Clicking the OS notification brings the TaskFlow window to the
+  // front and navigates to /notifications.
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -46,12 +67,43 @@ export default function NotificationBell() {
         queryClient.invalidateQueries({ queryKey: ["notifications-bell"] });
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
         const n = payload.new as any;
-        toast(n.title, { description: n.body });
+        const title = n.title ?? "TaskFlow";
+        const body = n.body ?? "";
+
+        // In-app toast (visible only when the window is open and focused).
+        toast(title, { description: body });
+
+        // Native desktop notification (visible regardless of window state —
+        // even when TaskFlow is hidden in the system tray).
+        if (
+          typeof Notification !== "undefined" &&
+          Notification.permission === "granted"
+        ) {
+          try {
+            const desktop = new Notification(title, {
+              body,
+              tag: n.id ?? undefined,    // dedupes if Supabase replays an event
+              silent: false,
+            });
+            desktop.onclick = () => {
+              // Inside the .exe: ask main process to un-hide / focus window.
+              if (window.taskflowDesktop?.focusWindow) {
+                window.taskflowDesktop.focusWindow();
+              }
+              // Inside a browser tab: focus the tab.
+              window.focus();
+              navigate("/notifications");
+            };
+          } catch {
+            // Some platforms/permissions throw on construction — ignore;
+            // the in-app toast already handled the user-visible part.
+          }
+        }
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [user?.id]);
+  }, [user?.id, navigate, queryClient]);
 
   const markRead = useMutation({
     mutationFn: async (id: string) => {
