@@ -1,5 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, HashRouter, Route, Routes, Navigate } from "react-router-dom";
+
+// When running inside the Electron desktop build, the app is loaded over
+// file:// — BrowserRouter can't handle deep links / reloads on that origin,
+// so we transparently switch to HashRouter. preload.cjs sets window.IS_ELECTRON.
+const Router =
+  typeof window !== "undefined" && (window as any).IS_ELECTRON
+    ? HashRouter
+    : BrowserRouter;
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
@@ -48,7 +56,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner position="bottom-right" />
-      <BrowserRouter>
+      <Router>
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
@@ -73,7 +81,7 @@ const App = () => (
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
-              <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["admin", "employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
+              <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
@@ -84,7 +92,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
-      </BrowserRouter>
+      </Router>
     </TooltipProvider>
   </QueryClientProvider>
 );
