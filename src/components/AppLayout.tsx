@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes, UsersRound,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -19,6 +19,7 @@ const adminNav: NavItem[] = [
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Boxes },
+  { label: "People", path: "/people", icon: UsersRound },
   { label: "Users", path: "/users", icon: Users },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -34,6 +35,7 @@ const managerNav: NavItem[] = [
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Boxes },
+  { label: "People", path: "/people", icon: UsersRound },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
