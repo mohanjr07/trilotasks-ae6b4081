@@ -32,6 +32,7 @@ import NotesPage from "@/pages/NotesPage";
 import InternDashboard from "@/pages/InternDashboard";
 import ProjectsPage from "@/pages/ProjectsPage";
 import OrganisationFlowPage from "@/pages/OrganisationFlowPage";
+import AssetsPage from "@/pages/AssetsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -71,6 +72,7 @@ const App = () => (
               {/* Organisation Flow — visible to every signed-in role.
                   Admin-only writes are enforced at the DB level via RLS. */}
               <Route path="/organisation-flow" element={<OrganisationFlowPage />} />
+              <Route path="/assets" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AssetsPage /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Navigate to="/users" replace /></ProtectedRoute>} />
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
