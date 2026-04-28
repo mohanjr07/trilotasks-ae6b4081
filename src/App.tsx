@@ -73,9 +73,7 @@ const App = () => (
               {/* Organisation Flow — visible to every signed-in role.
                   Admin-only writes are enforced at the DB level via RLS. */}
               <Route path="/organisation-flow" element={<OrganisationFlowPage />} />
-              {/* Assets — admins/managers can edit; employees & interns see view-only.
-                  Per-action guards live inside AssetsPage via isAdmin. */}
-              <Route path="/assets" element={<AssetsPage />} />
+              <Route path="/assets" element={<ProtectedRoute allowedRoles={["admin"]}><AssetsPage /></ProtectedRoute>} />
               <Route path="/people" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><PeoplePage /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Navigate to="/users" replace /></ProtectedRoute>} />
