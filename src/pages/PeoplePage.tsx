@@ -5,10 +5,12 @@ import {
   format, differenceInYears, parseISO, eachDayOfInterval,
   startOfMonth, endOfMonth, isWeekend, isAfter, isBefore, min, max,
 } from "date-fns";
+import { Link } from "react-router-dom";
 import {
   Search, X, Mail, Phone, Briefcase, Building2, Calendar as CalendarIcon,
   Cake, Shield, User as UserIcon, Users as UsersIcon, Package,
   CheckCircle2, XCircle, Clock as ClockIcon, Pencil, Save,
+  Target, FileText, Download, Upload, ArrowRight, Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -232,6 +234,57 @@ export default function PeoplePage() {
     },
     enabled: !!selected,
   });
+
+  // KRA & KPI summary for the selected user (admin only consumer)
+  const { data: kraKpiItems = [] } = useQuery({
+    queryKey: ["people-kra-kpi", selected?.id],
+    queryFn: async () => {
+      if (!selected) return [] as any[];
+      const { data, error } = await supabase
+        .from("kra_kpi")
+        .select("id, focus_area, goal, kpi, weightage, final_rating, cycle_year")
+        .eq("user_id", selected.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!selected && isAdmin,
+  });
+
+  // Documents for the selected user (admin only consumer)
+  const { data: userDocs = [] } = useQuery({
+    queryKey: ["people-user-docs", selected?.id],
+    queryFn: async () => {
+      if (!selected) return [] as any[];
+      const { data, error } = await supabase
+        .from("user_documents")
+        .select("*")
+        .eq("user_id", selected.id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!selected && isAdmin,
+  });
+
+  const handleDownloadDoc = async (doc: any) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("user-documents")
+        .createSignedUrl(doc.file_path, 60);
+      if (error) throw error;
+      const a = document.createElement("a");
+      a.href = data.signedUrl;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.download = doc.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e: any) {
+      toast.error("Download failed: " + (e?.message ?? ""));
+    }
+  };
 
   const { data: leaves = [] } = useQuery({
     queryKey: ["people-leaves", selected?.id],
@@ -709,6 +762,101 @@ export default function PeoplePage() {
                     </ul>
                   )}
                 </div>
+
+                {/* KRA & KPI summary (admin only) */}
+                {isAdmin && (
+                  <div className="px-5 py-4 border-t border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
+                        <Target className="h-4 w-4" /> KRA &amp; KPI
+                      </h5>
+                      <Link
+                        to={`/kra-kpi?user=${selected.id}`}
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        Manage <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    {kraKpiItems.length === 0 ? (
+                      <p className="text-sm text-ink-muted">No goals assigned yet.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {kraKpiItems.slice(0, 5).map((g: any) => (
+                          <li key={g.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2 flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[11px] uppercase tracking-wide text-ink-muted">{g.focus_area}</span>
+                                {g.weightage != null && (
+                                  <span className="inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium bg-primary/10 text-primary">
+                                    {g.weightage}%
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm font-medium text-ink-primary truncate">{g.goal}</p>
+                              {g.kpi && <p className="text-xs text-ink-muted truncate">{g.kpi}</p>}
+                            </div>
+                            {g.final_rating != null && (
+                              <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-primary/10 text-primary shrink-0">
+                                {g.final_rating}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                        {kraKpiItems.length > 5 && (
+                          <li className="text-xs text-ink-muted text-center pt-1">
+                            +{kraKpiItems.length - 5} more — open Manage to view all
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {/* Documents (admin only) */}
+                {isAdmin && (
+                  <div className="px-5 py-4 border-t border-border">
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
+                        <FileText className="h-4 w-4" /> Documents
+                        <span className="text-ink-muted font-normal">· {userDocs.length}</span>
+                      </h5>
+                      <Link
+                        to={`/documents?user=${selected.id}`}
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Upload className="h-3 w-3" /> Upload / Manage
+                      </Link>
+                    </div>
+                    {userDocs.length === 0 ? (
+                      <p className="text-sm text-ink-muted">No documents uploaded yet.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {userDocs.slice(0, 6).map((d: any) => (
+                          <li key={d.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2 flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-ink-primary truncate">{d.name}</p>
+                              <p className="text-xs text-ink-muted truncate">
+                                {(d.category ?? "Other")} · {formatDate(d.uploaded_at)}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDownloadDoc(d)}
+                              className="p-1.5 rounded-lg hover:bg-muted text-ink-muted hover:text-ink-primary shrink-0"
+                              title="Download"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </button>
+                          </li>
+                        ))}
+                        {userDocs.length > 6 && (
+                          <li className="text-xs text-ink-muted text-center pt-1">
+                            +{userDocs.length - 6} more — open Manage to view all
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </>
