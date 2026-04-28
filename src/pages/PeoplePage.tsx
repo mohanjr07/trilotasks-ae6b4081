@@ -31,6 +31,7 @@ type Profile = {
   avatar_url: string | null;
   phone: string | null;
   date_of_birth: string | null;
+  joined_at: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -165,6 +166,10 @@ export default function PeoplePage() {
   const [editingDob, setEditingDob] = useState(false);
   const [dobDraft, setDobDraft] = useState<string>("");
 
+  // Edit-Joined state (admin only)
+  const [editingJoined, setEditingJoined] = useState(false);
+  const [joinedDraft, setJoinedDraft] = useState<string>("");
+
   const { data: people = [], isLoading } = useQuery({
     queryKey: ["people-profiles"],
     queryFn: async () => {
@@ -259,6 +264,25 @@ export default function PeoplePage() {
       }
       toast.success("Date of birth updated");
       setEditingDob(false);
+    },
+    onError: (e: any) => toast.error("Failed: " + (e?.message ?? "Unknown error")),
+  });
+
+  const updateJoinedMutation = useMutation({
+    mutationFn: async ({ id, joined }: { id: string; joined: string | null }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ joined_at: joined })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["people-profiles"] });
+      if (selected && selected.id === vars.id) {
+        setSelected({ ...selected, joined_at: vars.joined });
+      }
+      toast.success("Joined date updated");
+      setEditingJoined(false);
     },
     onError: (e: any) => toast.error("Failed: " + (e?.message ?? "Unknown error")),
   });
@@ -405,7 +429,7 @@ export default function PeoplePage() {
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/40 z-40"
-              onClick={() => { setSelected(null); setEditingDob(false); }}
+              onClick={() => { setSelected(null); setEditingDob(false); setEditingJoined(false); }}
             />
             <motion.div
               initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
@@ -416,7 +440,7 @@ export default function PeoplePage() {
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <h3 className="text-lg font-semibold text-ink-primary">Profile</h3>
                 <button
-                  onClick={() => { setSelected(null); setEditingDob(false); }}
+                  onClick={() => { setSelected(null); setEditingDob(false); setEditingJoined(false); }}
                   className="text-ink-muted hover:text-ink-primary"
                 >
                   <X className="h-5 w-5" />
@@ -504,7 +528,65 @@ export default function PeoplePage() {
                     </div>
                   </div>
 
-                  <InfoRow icon={CalendarIcon} label="Joined" value={formatDate(selected.created_at)} />
+                  {/* Joined row — editable for admins, falls back to created_at when joined_at is null */}
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 h-8 w-8 rounded-lg bg-muted flex items-center justify-center text-ink-muted shrink-0">
+                      <CalendarIcon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-ink-muted">Joined</p>
+                      {editingJoined && isAdmin ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Input
+                            type="date"
+                            value={joinedDraft}
+                            onChange={(e) => setJoinedDraft(e.target.value)}
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            className="h-8 px-3"
+                            onClick={() => updateJoinedMutation.mutate({ id: selected.id, joined: joinedDraft || null })}
+                            disabled={updateJoinedMutation.isPending}
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-3"
+                            onClick={() => {
+                              setEditingJoined(false);
+                              setJoinedDraft(selected.joined_at ?? (selected.created_at ? selected.created_at.slice(0, 10) : ""));
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-ink-primary">
+                            {formatDate(selected.joined_at ?? selected.created_at)}
+                            {!selected.joined_at && (
+                              <span className="text-ink-muted ml-1 text-xs">(auto)</span>
+                            )}
+                          </p>
+                          {isAdmin && (
+                            <button
+                              onClick={() => {
+                                setEditingJoined(true);
+                                setJoinedDraft(selected.joined_at ?? (selected.created_at ? selected.created_at.slice(0, 10) : ""));
+                              }}
+                              className="text-ink-muted hover:text-ink-primary p-1 -my-1 rounded"
+                              title="Edit joined date"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Assets held */}
