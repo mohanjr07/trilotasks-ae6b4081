@@ -34,6 +34,8 @@ import ProjectsPage from "@/pages/ProjectsPage";
 import OrganisationFlowPage from "@/pages/OrganisationFlowPage";
 import AssetsPage from "@/pages/AssetsPage";
 import PeoplePage from "@/pages/PeoplePage";
+import KraKpiPage from "@/pages/KraKpiPage";
+import DocumentsPage from "@/pages/DocumentsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -76,6 +78,10 @@ const App = () => (
               {/* Assets — admins see/edit everything; everyone else sees only their own assets (read-only). */}
               <Route path="/assets" element={<AssetsPage />} />
               <Route path="/people" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><PeoplePage /></ProtectedRoute>} />
+              {/* KRA & KPI — every signed-in role can access; UI scopes write access. */}
+              <Route path="/kra-kpi" element={<KraKpiPage />} />
+              {/* Documents — every signed-in role can access; users see only their own. */}
+              <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Navigate to="/users" replace /></ProtectedRoute>} />
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
