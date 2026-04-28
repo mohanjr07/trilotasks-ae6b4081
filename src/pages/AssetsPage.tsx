@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,16 +13,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Monitor, Search, Plus, X, Pencil, Trash2,
   Laptop, Smartphone, Printer, Server, Headphones,
   Package, CheckCircle2, AlertCircle, Clock, Eye,
+  ChevronsUpDown, Check, Cpu, Cog, Code,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+type AssetCategory = "IT" | "Machines" | "Softwares";
+
 type Asset = {
   id: string;
   asset_name: string;
+  asset_category: AssetCategory;
   asset_type: string;
   serial_number: string | null;
   holder_name: string | null;
@@ -38,7 +55,21 @@ type Profile = {
   full_name: string;
 };
 
-const ASSET_TYPES = ["Laptop", "Desktop", "Monitor", "Phone", "Tablet", "Printer", "Server", "Headset", "Other"];
+const CATEGORY_OPTIONS: AssetCategory[] = ["IT", "Machines", "Softwares"];
+
+const categoryConfig: Record<AssetCategory, { label: string; icon: any; color: string }> = {
+  IT:        { label: "IT",        icon: Cpu,  color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  Machines:  { label: "Machines",  icon: Cog,  color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  Softwares: { label: "Softwares", icon: Code, color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+};
+
+// Default suggested types per category (admin can still type any custom value)
+const DEFAULT_TYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
+  IT:        ["Laptop", "Desktop", "Monitor", "Phone", "Tablet", "Printer", "Server", "Headset"],
+  Machines:  ["Lathe", "CNC", "3D Printer", "Drill", "Compressor", "Forklift"],
+  Softwares: ["License", "Subscription", "OS", "Productivity", "Design", "Development"],
+};
+
 const STATUS_OPTIONS = ["available", "assigned", "maintenance", "retired"] as const;
 
 const assetTypeIcon = (type: string) => {
@@ -62,6 +93,7 @@ const statusConfig = {
 
 const emptyForm = {
   asset_name: "",
+  asset_category: "IT" as AssetCategory,
   asset_type: "Laptop",
   serial_number: "",
   holder_name: "",
@@ -77,12 +109,17 @@ export default function AssetsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | AssetCategory>("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [viewAsset, setViewAsset] = useState<Asset | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Combobox state for the Type field (typeable + selectable)
+  const [typeOpen, setTypeOpen] = useState(false);
+  const [typeQuery, setTypeQuery] = useState("");
 
   const { data: assets = [], isLoading } = useQuery({
     queryKey: ["assets"],
@@ -112,6 +149,7 @@ export default function AssetsPage() {
     mutationFn: async (values: typeof emptyForm) => {
       const { error } = await supabase.from("assets").insert({
         asset_name: values.asset_name,
+        asset_category: values.asset_category,
         asset_type: values.asset_type,
         serial_number: values.serial_number || null,
         holder_name: values.holder_name || null,
@@ -133,6 +171,7 @@ export default function AssetsPage() {
     mutationFn: async ({ id, values }: { id: string; values: typeof emptyForm }) => {
       const { error } = await supabase.from("assets").update({
         asset_name: values.asset_name,
+        asset_category: values.asset_category,
         asset_type: values.asset_type,
         serial_number: values.serial_number || null,
         holder_name: values.holder_name || null,
@@ -168,6 +207,7 @@ export default function AssetsPage() {
     setEditAsset(a);
     setForm({
       asset_name: a.asset_name,
+      asset_category: a.asset_category ?? "IT",
       asset_type: a.asset_type,
       serial_number: a.serial_number ?? "",
       holder_name: a.holder_name ?? "",
@@ -176,13 +216,37 @@ export default function AssetsPage() {
     });
     setModalOpen(true);
   };
-  const closeModal = () => { setModalOpen(false); setEditAsset(null); setForm(emptyForm); };
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditAsset(null);
+    setForm(emptyForm);
+    setTypeOpen(false);
+    setTypeQuery("");
+  };
 
   const handleSubmit = () => {
     if (!form.asset_name.trim()) { toast.error("Asset name is required"); return; }
+    if (!form.asset_type.trim()) { toast.error("Asset type is required"); return; }
     if (editAsset) updateMutation.mutate({ id: editAsset.id, values: form });
     else createMutation.mutate(form);
   };
+
+  // Type suggestions = defaults for the chosen category + any types already used in DB
+  const typeSuggestions = useMemo(() => {
+    const fromDb = assets
+      .filter(a => a.asset_category === form.asset_category)
+      .map(a => a.asset_type);
+    const defaults = DEFAULT_TYPES_BY_CATEGORY[form.asset_category] ?? [];
+    return Array.from(new Set([...defaults, ...fromDb])).sort();
+  }, [assets, form.asset_category]);
+
+  // For the filter bar — every type ever used (across categories), deduped
+  const allTypesInUse = useMemo(() => {
+    const all = new Set<string>();
+    Object.values(DEFAULT_TYPES_BY_CATEGORY).forEach(arr => arr.forEach(t => all.add(t)));
+    assets.forEach(a => all.add(a.asset_type));
+    return Array.from(all).sort();
+  }, [assets]);
 
   const filtered = assets.filter((a) => {
     const q = search.toLowerCase();
@@ -190,6 +254,7 @@ export default function AssetsPage() {
         !(a.holder_name ?? "").toLowerCase().includes(q) &&
         !(a.serial_number ?? "").toLowerCase().includes(q)) return false;
     if (statusFilter !== "all" && a.status !== statusFilter) return false;
+    if (categoryFilter !== "all" && a.asset_category !== categoryFilter) return false;
     if (typeFilter !== "all" && a.asset_type !== typeFilter) return false;
     return true;
   });
@@ -200,6 +265,9 @@ export default function AssetsPage() {
     assigned: assets.filter(a => a.status === "assigned").length,
     maintenance: assets.filter(a => a.status === "maintenance").length,
   };
+
+  const queryTrim = typeQuery.trim();
+  const exactExists = typeSuggestions.some(t => t.toLowerCase() === queryTrim.toLowerCase());
 
   return (
     <div className="p-6 space-y-6">
@@ -250,6 +318,15 @@ export default function AssetsPage() {
             className="pl-9"
           />
         </div>
+        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as any)}>
+          <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {CATEGORY_OPTIONS.map((c) => (
+              <SelectItem key={c} value={c}>{categoryConfig[c].label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
@@ -263,7 +340,7 @@ export default function AssetsPage() {
           <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            {ASSET_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            {allTypesInUse.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -281,7 +358,7 @@ export default function AssetsPage() {
             </div>
             <h3 className="text-lg font-semibold text-ink-primary mb-1">No assets found</h3>
             <p className="text-sm text-ink-muted mb-4">
-              {search || statusFilter !== "all" || typeFilter !== "all"
+              {search || statusFilter !== "all" || categoryFilter !== "all" || typeFilter !== "all"
                 ? "Try adjusting your filters"
                 : isAdmin ? "Add your first asset to get started" : "No assets have been added yet"}
             </p>
@@ -297,6 +374,7 @@ export default function AssetsPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-ink-muted text-xs uppercase tracking-wide">
                   <th className="text-left px-5 py-3 font-medium">Asset</th>
+                  <th className="text-left px-5 py-3 font-medium">Category</th>
                   <th className="text-left px-5 py-3 font-medium">Type</th>
                   <th className="text-left px-5 py-3 font-medium">Serial No.</th>
                   <th className="text-left px-5 py-3 font-medium">Holder</th>
@@ -310,6 +388,8 @@ export default function AssetsPage() {
                   const Icon = assetTypeIcon(asset.asset_type);
                   const sc = statusConfig[asset.status] ?? statusConfig.available;
                   const StatusIcon = sc.icon;
+                  const cat = categoryConfig[asset.asset_category] ?? categoryConfig.IT;
+                  const CatIcon = cat.icon;
                   return (
                     <tr
                       key={asset.id}
@@ -322,6 +402,12 @@ export default function AssetsPage() {
                           </div>
                           <span className="font-medium text-ink-primary">{asset.asset_name}</span>
                         </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", cat.color)}>
+                          <CatIcon className="h-3 w-3" />
+                          {cat.label}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5 text-ink-secondary">{asset.asset_type}</td>
                       <td className="px-5 py-3.5 text-ink-muted font-mono text-xs">
@@ -398,7 +484,7 @@ export default function AssetsPage() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
             >
-              <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+              <div className="bg-card border border-border rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-ink-primary">
                     {editAsset ? "Edit Asset" : "Add Asset"}
@@ -416,15 +502,98 @@ export default function AssetsPage() {
                       onChange={(e) => setForm(f => ({ ...f, asset_name: e.target.value }))}
                     />
                   </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-ink-muted mb-1.5 block">Category *</label>
+                    <Select
+                      value={form.asset_category}
+                      onValueChange={(v) => setForm(f => ({ ...f, asset_category: v as AssetCategory }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_OPTIONS.map(c => (
+                          <SelectItem key={c} value={c}>{categoryConfig[c].label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-ink-muted mb-1.5 block">Type</label>
-                      <Select value={form.asset_type} onValueChange={(v) => setForm(f => ({ ...f, asset_type: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {ASSET_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <label className="text-xs font-medium text-ink-muted mb-1.5 block">Type *</label>
+                      <Popover open={typeOpen} onOpenChange={setTypeOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between font-normal"
+                          >
+                            <span className={cn("truncate", !form.asset_type && "text-ink-muted")}>
+                              {form.asset_type || "Select or type new…"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="Search or type new type…"
+                              value={typeQuery}
+                              onValueChange={setTypeQuery}
+                            />
+                            <CommandList>
+                              <CommandEmpty>
+                                {queryTrim ? (
+                                  <button
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-md flex items-center gap-2"
+                                    onClick={() => {
+                                      setForm(f => ({ ...f, asset_type: queryTrim }));
+                                      setTypeQuery("");
+                                      setTypeOpen(false);
+                                    }}
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Add &ldquo;{queryTrim}&rdquo;
+                                  </button>
+                                ) : (
+                                  <span className="text-sm text-ink-muted">No types yet — start typing.</span>
+                                )}
+                              </CommandEmpty>
+                              <CommandGroup heading="Types">
+                                {typeSuggestions.map((t) => (
+                                  <CommandItem
+                                    key={t}
+                                    value={t}
+                                    onSelect={() => {
+                                      setForm(f => ({ ...f, asset_type: t }));
+                                      setTypeQuery("");
+                                      setTypeOpen(false);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", form.asset_type === t ? "opacity-100" : "opacity-0")} />
+                                    {t}
+                                  </CommandItem>
+                                ))}
+                                {queryTrim && !exactExists && (
+                                  <CommandItem
+                                    value={`__add__${queryTrim}`}
+                                    onSelect={() => {
+                                      setForm(f => ({ ...f, asset_type: queryTrim }));
+                                      setTypeQuery("");
+                                      setTypeOpen(false);
+                                    }}
+                                  >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add &ldquo;{queryTrim}&rdquo;
+                                  </CommandItem>
+                                )}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-ink-muted mb-1.5 block">Status</label>
@@ -438,6 +607,7 @@ export default function AssetsPage() {
                       </Select>
                     </div>
                   </div>
+
                   <div>
                     <label className="text-xs font-medium text-ink-muted mb-1.5 block">Serial Number</label>
                     <Input
@@ -526,6 +696,18 @@ export default function AssetsPage() {
                   </button>
                 </div>
                 <div className="divide-y divide-border text-sm">
+                  <div className="flex items-center justify-between py-3">
+                    <span className="text-ink-muted font-medium">Category</span>
+                    {(() => {
+                      const cat = categoryConfig[viewAsset.asset_category] ?? categoryConfig.IT;
+                      const CI = cat.icon;
+                      return (
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", cat.color)}>
+                          <CI className="h-3 w-3" />{cat.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <div className="flex items-center justify-between py-3">
                     <span className="text-ink-muted font-medium">Status</span>
                     {(() => {
