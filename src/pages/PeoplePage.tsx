@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { format, differenceInYears, parseISO } from "date-fns";
+import {
+  format, differenceInYears, parseISO, eachDayOfInterval,
+  startOfMonth, endOfMonth, isWeekend, isAfter, isBefore, min, max,
+} from "date-fns";
 import {
   Search, X, Mail, Phone, Briefcase, Building2, Calendar as CalendarIcon,
   Cake, Shield, User as UserIcon, Users as UsersIcon, Package,
@@ -55,8 +58,72 @@ type LeaveRow = {
   end_time: string | null;
   reason: string;
   status: "pending" | "approved" | "rejected";
+  is_half_day?: boolean | null;
+  reverted_at?: string | null;
   created_at: string;
 };
+
+// ---- Attendance helpers --------------------------------------------------
+// Working days = Mon–Fri in the current month, capped at today.
+function workingDaysSoFar(monthStart: Date, monthEnd: Date): Date[] {
+  const today = new Date();
+  const cap = isBefore(today, monthEnd) ? today : monthEnd;
+  if (isBefore(cap, monthStart)) return [];
+  return eachDayOfInterval({ start: monthStart, end: cap }).filter(d => !isWeekend(d));
+}
+
+// Effective weekday-leave days for a single approved (non-reverted) leave row,
+// counted within [monthStart, cappedEnd].
+function leaveDaysInMonth(l: LeaveRow, monthStart: Date, cappedEnd: Date): number {
+  if (l.status !== "approved" || l.reverted_at) return 0;
+  if (l.type === "permission") {
+    // Permissions are partial-day — count as 0.25 day if the date falls in window.
+    const d = parseISO(l.start_date);
+    if (isBefore(d, monthStart) || isAfter(d, cappedEnd) || isWeekend(d)) return 0;
+    return 0.25;
+  }
+  // type === "leave"
+  const start = parseISO(l.start_date);
+  const end = parseISO(l.end_date ?? l.start_date);
+  const s = max([start, monthStart]);
+  const e = min([end, cappedEnd]);
+  if (isAfter(s, e)) return 0;
+  const weekdays = eachDayOfInterval({ start: s, end: e }).filter(d => !isWeekend(d)).length;
+  if (weekdays === 0) return 0;
+  if (l.is_half_day) return Math.min(0.5, weekdays); // half-day flag → 0.5 regardless of span
+  return weekdays;
+}
+
+function attendancePctForUser(userId: string, leaves: LeaveRow[]): {
+  pct: number;
+  workingDays: number;
+  leaveDays: number;
+} {
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+  const days = workingDaysSoFar(monthStart, monthEnd);
+  const workingDays = days.length;
+  if (workingDays === 0) return { pct: 100, workingDays: 0, leaveDays: 0 };
+
+  const cappedEnd = days[days.length - 1];
+  const userLeaves = leaves.filter(l => l.employee_id === userId);
+  const leaveDays = userLeaves.reduce(
+    (sum, l) => sum + leaveDaysInMonth(l, monthStart, cappedEnd),
+    0
+  );
+  const present = Math.max(0, workingDays - leaveDays);
+  const pct = Math.round((present / workingDays) * 1000) / 10; // 1 decimal
+  return { pct, workingDays, leaveDays };
+}
+
+function attendanceColor(pct: number) {
+  if (pct >= 95) return "text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-400";
+  if (pct >= 85) return "text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400";
+  if (pct >= 70) return "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400";
+  return "text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400";
+}
+// --------------------------------------------------------------------------
 
 const roleColor = (role: string) => {
   switch (role) {
@@ -109,6 +176,42 @@ export default function PeoplePage() {
       return (data ?? []) as Profile[];
     },
   });
+
+  // All approved, non-reverted leaves overlapping this month — used to show
+  // attendance % on every person card without one-query-per-user.
+  const { data: monthLeaves = [] } = useQuery({
+    queryKey: ["people-month-leaves"],
+    queryFn: async () => {
+      const monthStart = startOfMonth(new Date());
+      const monthEnd = endOfMonth(new Date());
+      const startStr = format(monthStart, "yyyy-MM-dd");
+      const endStr = format(monthEnd, "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("leave_requests")
+        .select("*")
+        .eq("status", "approved")
+        .is("reverted_at", null)
+        .lte("start_date", endStr)
+        // end_date may be null for single-day rows, so include rows where
+        // end_date is null OR end_date >= startStr
+        .or(`end_date.gte.${startStr},end_date.is.null`);
+      if (error) throw error;
+      return (data ?? []) as LeaveRow[];
+    },
+  });
+
+  const attendanceByUser = useMemo(() => {
+    const map: Record<string, { pct: number; workingDays: number; leaveDays: number }> = {};
+    people.forEach(p => { map[p.id] = attendancePctForUser(p.id, monthLeaves); });
+    return map;
+  }, [people, monthLeaves]);
+
+  const orgAttendance = useMemo(() => {
+    const vals = Object.values(attendanceByUser);
+    if (vals.length === 0) return 0;
+    const sum = vals.reduce((s, v) => s + v.pct, 0);
+    return Math.round((sum / vals.length) * 10) / 10;
+  }, [attendanceByUser]);
 
   const { data: heldAssets = [] } = useQuery({
     queryKey: ["people-held-assets", selected?.id],
@@ -196,10 +299,10 @@ export default function PeoplePage() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Total People", value: stats.total,     icon: UsersIcon, bg: "bg-primary/10",                  color: "text-primary" },
-          { label: "Admins",       value: stats.admins,    icon: Shield,    bg: "bg-purple-100 dark:bg-purple-900/30", color: "text-purple-600" },
-          { label: "Employees",    value: stats.employees, icon: UserIcon,  bg: "bg-green-100 dark:bg-green-900/30",   color: "text-green-600" },
-          { label: "Interns",      value: stats.interns,   icon: UserIcon,  bg: "bg-amber-100 dark:bg-amber-900/30",   color: "text-amber-600" },
+          { label: "Total People",   value: stats.total,                 icon: UsersIcon,    bg: "bg-primary/10",                       color: "text-primary" },
+          { label: "Admins",         value: stats.admins,                icon: Shield,       bg: "bg-purple-100 dark:bg-purple-900/30", color: "text-purple-600" },
+          { label: "Employees",      value: stats.employees,             icon: UserIcon,     bg: "bg-green-100 dark:bg-green-900/30",   color: "text-green-600" },
+          { label: "Avg Attendance", value: `${orgAttendance}%`,         icon: CheckCircle2, bg: "bg-blue-100 dark:bg-blue-900/30",     color: "text-blue-600" },
         ].map(({ label, value, icon: Icon, bg, color }) => (
           <div key={label} className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-start justify-between">
@@ -253,34 +356,45 @@ export default function PeoplePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => { setSelected(p); setEditingDob(false); setDobDraft(p.date_of_birth ?? ""); }}
-              className="text-left rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all group"
-            >
-              <div className="flex items-center gap-3">
-                <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="md" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-ink-primary truncate group-hover:text-primary transition-colors">{p.full_name}</p>
-                  <p className="text-xs text-ink-muted truncate">{p.email}</p>
+          {filtered.map((p) => {
+            const att = attendanceByUser[p.id];
+            return (
+              <button
+                key={p.id}
+                onClick={() => { setSelected(p); setEditingDob(false); setDobDraft(p.date_of_birth ?? ""); }}
+                className="text-left rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-ink-primary truncate group-hover:text-primary transition-colors">{p.full_name}</p>
+                    <p className="text-xs text-ink-muted truncate">{p.email}</p>
+                  </div>
+                  {att && (
+                    <span
+                      className={cn("shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums", attendanceColor(att.pct))}
+                      title={`This month: ${att.workingDays - att.leaveDays}/${att.workingDays} working days`}
+                    >
+                      {att.pct}%
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", roleColor(p.role))}>
-                  {p.role.replace("_", " ")}
-                </span>
-                {!p.is_active && (
-                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                    Inactive
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize", roleColor(p.role))}>
+                    {p.role.replace("_", " ")}
                   </span>
-                )}
-                {p.department && (
-                  <span className="text-[11px] text-ink-muted truncate">· {p.department}</span>
-                )}
-              </div>
-            </button>
-          ))}
+                  {!p.is_active && (
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                      Inactive
+                    </span>
+                  )}
+                  {p.department && (
+                    <span className="text-[11px] text-ink-muted truncate">· {p.department}</span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -428,7 +542,42 @@ export default function PeoplePage() {
                     <h5 className="text-sm font-semibold text-ink-primary flex items-center gap-2">
                       <CalendarIcon className="h-4 w-4" /> Attendance Record
                     </h5>
+                    <span className="text-[11px] text-ink-muted">{format(new Date(), "MMMM yyyy")}</span>
                   </div>
+
+                  {/* Attendance % progress block */}
+                  {(() => {
+                    const att = attendanceByUser[selected.id] ?? { pct: 0, workingDays: 0, leaveDays: 0 };
+                    const presentDays = Math.max(0, att.workingDays - att.leaveDays);
+                    return (
+                      <div className="rounded-lg border border-border bg-muted/30 p-3 mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-ink-muted">Attendance this month</span>
+                          <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums", attendanceColor(att.pct))}>
+                            {att.pct}%
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all",
+                              att.pct >= 95 ? "bg-green-500"
+                              : att.pct >= 85 ? "bg-blue-500"
+                              : att.pct >= 70 ? "bg-yellow-500"
+                              : "bg-red-500"
+                            )}
+                            style={{ width: `${Math.min(100, Math.max(0, att.pct))}%` }}
+                          />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[11px] text-ink-muted tabular-nums">
+                          <span>Present: {presentDays}</span>
+                          <span>Off: {att.leaveDays}</span>
+                          <span>Working days: {att.workingDays}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div className="grid grid-cols-3 gap-2 mb-4">
                     <div className="rounded-lg border border-border bg-green-50 dark:bg-green-900/10 p-3 text-center">
                       <p className="text-lg font-semibold text-green-700 dark:text-green-400">{leaveCounts.approved}</p>
