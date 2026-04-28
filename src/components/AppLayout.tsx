@@ -34,6 +34,7 @@ const managerNav: NavItem[] = [
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
+  { label: "My Assets", path: "/assets", icon: Boxes },
   { label: "People", path: "/people", icon: UsersRound },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
   { label: "Teams", path: "/teams", icon: Video },
@@ -50,6 +51,7 @@ const employeeNav: NavItem[] = [
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
+  { label: "My Assets", path: "/assets", icon: Boxes },
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
@@ -62,6 +64,7 @@ const internNav: NavItem[] = [
   { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
+  { label: "My Assets", path: "/assets", icon: Boxes },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
