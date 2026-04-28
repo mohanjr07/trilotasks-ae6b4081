@@ -106,6 +106,8 @@ export default function AssetsPage() {
   const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === "admin";
+  // Non-admins see only assets assigned to them.
+  const myAssetsOnly = !isAdmin;
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -122,15 +124,23 @@ export default function AssetsPage() {
   const [typeQuery, setTypeQuery] = useState("");
 
   const { data: assets = [], isLoading } = useQuery({
-    queryKey: ["assets"],
+    queryKey: ["assets", myAssetsOnly ? `mine:${profile?.id ?? "anon"}` : "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("assets")
         .select("*")
         .order("created_at", { ascending: false });
+      if (myAssetsOnly && profile) {
+        // Match by holder_id (preferred) or fall back to holder_name for legacy rows.
+        query = query.or(
+          `holder_id.eq.${profile.id},holder_name.eq.${profile.full_name}`
+        );
+      }
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as Asset[];
     },
+    enabled: !!profile,
   });
 
   const { data: profiles = [] } = useQuery({
@@ -275,8 +285,12 @@ export default function AssetsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-ink-primary">Assets</h2>
-          <p className="text-sm text-ink-muted mt-0.5">Track company assets and their holders</p>
+          <h2 className="text-2xl font-bold text-ink-primary">
+            {myAssetsOnly ? "My Assets" : "Assets"}
+          </h2>
+          <p className="text-sm text-ink-muted mt-0.5">
+            {myAssetsOnly ? "Assets currently assigned to you" : "Track company assets and their holders"}
+          </p>
         </div>
         {isAdmin && (
           <Button onClick={openAdd} className="gap-2">
@@ -360,7 +374,9 @@ export default function AssetsPage() {
             <p className="text-sm text-ink-muted mb-4">
               {search || statusFilter !== "all" || categoryFilter !== "all" || typeFilter !== "all"
                 ? "Try adjusting your filters"
-                : isAdmin ? "Add your first asset to get started" : "No assets have been added yet"}
+                : myAssetsOnly
+                  ? "You don't have any assets assigned yet."
+                  : isAdmin ? "Add your first asset to get started" : "No assets have been added yet"}
             </p>
             {isAdmin && assets.length === 0 && (
               <Button onClick={openAdd} className="gap-2">
