@@ -544,6 +544,151 @@ export type Database = {
         }
         Relationships: []
       }
+      kra_kpi: {
+        Row: {
+          id: string
+          user_id: string
+          created_by: string | null
+          cycle_year: number
+          focus_area: string
+          goal: string
+          kpi: string | null
+          weightage: number | null
+          q1_progress: string | null
+          q1_manager_feedback: string | null
+          q1_admin_feedback: string | null
+          q1_rating: number | null
+          q2_progress: string | null
+          q2_manager_feedback: string | null
+          q2_admin_feedback: string | null
+          q2_rating: number | null
+          q3_progress: string | null
+          q3_manager_feedback: string | null
+          q3_admin_feedback: string | null
+          q3_rating: number | null
+          q4_progress: string | null
+          q4_manager_feedback: string | null
+          q4_admin_feedback: string | null
+          q4_rating: number | null
+          final_rating: number | null
+          final_feedback: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          created_by?: string | null
+          cycle_year?: number
+          focus_area: string
+          goal: string
+          kpi?: string | null
+          weightage?: number | null
+          q1_progress?: string | null
+          q1_manager_feedback?: string | null
+          q1_admin_feedback?: string | null
+          q1_rating?: number | null
+          q2_progress?: string | null
+          q2_manager_feedback?: string | null
+          q2_admin_feedback?: string | null
+          q2_rating?: number | null
+          q3_progress?: string | null
+          q3_manager_feedback?: string | null
+          q3_admin_feedback?: string | null
+          q3_rating?: number | null
+          q4_progress?: string | null
+          q4_manager_feedback?: string | null
+          q4_admin_feedback?: string | null
+          q4_rating?: number | null
+          final_rating?: number | null
+          final_feedback?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          created_by?: string | null
+          cycle_year?: number
+          focus_area?: string
+          goal?: string
+          kpi?: string | null
+          weightage?: number | null
+          q1_progress?: string | null
+          q1_manager_feedback?: string | null
+          q1_admin_feedback?: string | null
+          q1_rating?: number | null
+          q2_progress?: string | null
+          q2_manager_feedback?: string | null
+          q2_admin_feedback?: string | null
+          q2_rating?: number | null
+          q3_progress?: string | null
+          q3_manager_feedback?: string | null
+          q3_admin_feedback?: string | null
+          q3_rating?: number | null
+          q4_progress?: string | null
+          q4_manager_feedback?: string | null
+          q4_admin_feedback?: string | null
+          q4_rating?: number | null
+          final_rating?: number | null
+          final_feedback?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kra_kpi_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_documents: {
+        Row: {
+          id: string
+          user_id: string
+          uploaded_by: string | null
+          name: string
+          category: string | null
+          file_path: string
+          file_size: number | null
+          mime_type: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          uploaded_by?: string | null
+          name: string
+          category?: string | null
+          file_path: string
+          file_size?: number | null
+          mime_type?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          uploaded_by?: string | null
+          name?: string
+          category?: string | null
+          file_path?: string
+          file_size?: number | null
+          mime_type?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
