@@ -90,17 +90,34 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
   // Managers can only assign tasks to their own team. Admins see everyone.
-  // Employees can also assign tasks to anyone (admin, manager, or employee).
+  // Employees/interns can assign to anyone — uses an RPC that bypasses RLS on profiles.
   const isManagerRole = profile?.role === "manager";
   const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern";
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list", isManagerRole ? `team:${user?.id}` : "all"],
     queryFn: async () => {
-      let q = supabase.from("profiles").select("id, full_name, avatar_url, role").eq("is_active", true);
-      if (isManagerRole && user?.id) q = q.eq("manager_id", user.id);
-      // Employees and interns see everyone so they can assign tasks to admins/managers too
-      const { data } = await q;
+      // Employees & interns: use the SECURITY DEFINER RPC so RLS doesn't
+      // restrict results to only their own row.
+      if (isEmployeeRole) {
+        const { data, error } = await supabase.rpc("get_active_profiles");
+        if (error) throw error;
+        return data ?? [];
+      }
+      // Managers: scoped to their team
+      if (isManagerRole && user?.id) {
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, role")
+          .eq("is_active", true)
+          .eq("manager_id", user.id);
+        return data ?? [];
+      }
+      // Admins: everyone
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, role")
+        .eq("is_active", true);
       return data ?? [];
     },
     enabled: open,
