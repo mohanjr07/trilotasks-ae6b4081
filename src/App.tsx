@@ -27,7 +27,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import ProfilePage from "@/pages/ProfilePage";
 import CalendarPage from "@/pages/CalendarPage";
-import TeamsPage from "@/pages/TeamsPage";
+import TeamMembersPage from "@/pages/TeamMembersPage";
 import NotesPage from "@/pages/NotesPage";
 import InternDashboard from "@/pages/InternDashboard";
 import ProjectsPage from "@/pages/ProjectsPage";
@@ -87,11 +87,16 @@ const App = () => (
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ReportsPage /></ProtectedRoute>} />
               <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/teams" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TeamsPage /></ProtectedRoute>} />
+              {/* Team Members — replaces the old Microsoft-Teams-style /teams page.
+                  Visible to everyone signed in. Admin assigns; manager sees own team;
+                  employees & interns see their manager + teammates. */}
+              <Route path="/team-members" element={<TeamMembersPage />} />
+              {/* Legacy redirects so existing /teams and /my-teams links don't 404 */}
+              <Route path="/teams" element={<Navigate to="/team-members" replace />} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><SettingsPage /></ProtectedRoute>} />
               <Route path="/my-dashboard" element={<ProtectedRoute allowedRoles={["employee"]}><EmployeeDashboard /></ProtectedRoute>} />
               <Route path="/my-tasks" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
-              <Route path="/my-teams" element={<ProtectedRoute allowedRoles={["employee"]}><TeamsPage /></ProtectedRoute>} />
+              <Route path="/my-teams" element={<Navigate to="/team-members" replace />} />
               <Route path="/my-leave" element={<ProtectedRoute allowedRoles={["employee", "manager"]}><EmployeeLeavePage /></ProtectedRoute>} />
               <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
