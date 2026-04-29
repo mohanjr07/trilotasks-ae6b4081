@@ -87,10 +87,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   // Admins + managers can still delete shared (global) columns from
   // task_columns. Any user can delete their OWN personal columns.
   const canManageSharedColumns = !myTasksOnly && isAdmin;
-  const showAllTasks = isAdmin && !myTasksOnly;
+  // Strict admin sees ALL tasks. Manager (which is also `isAdmin` from auth
+  // context) is now scoped to their team via the team-tasks branch below.
+  const isStrictAdmin = profile?.role === "admin" || profile?.role === "super_admin";
+  const isManagerRole = profile?.role === "manager";
+  const showAllTasks = isStrictAdmin && !myTasksOnly;
+  const showTeamTasks = isManagerRole && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", showAllTasks, user?.id, myTasksOnly],
+    queryKey: ["tasks", showAllTasks, showTeamTasks, user?.id, myTasksOnly],
     queryFn: async () => {
       if (showAllTasks) {
         const { data } = await supabase
@@ -99,6 +104,29 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
           .order("created_at", { ascending: false });
         return data ?? [];
       }
+
+      if (showTeamTasks) {
+        // Manager: only tasks where any assignee is on their team
+        // (manager_id = current manager) OR the manager themselves.
+        const { data: teamRows } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("manager_id", user!.id);
+        const teamIds = [user!.id, ...((teamRows ?? []).map((r: any) => r.id))];
+        const { data: assigneeRows } = await supabase
+          .from("task_assignees")
+          .select("task_id")
+          .in("user_id", teamIds);
+        const taskIds = Array.from(new Set((assigneeRows ?? []).map((a: any) => a.task_id)));
+        if (!taskIds.length) return [];
+        const { data } = await supabase
+          .from("tasks")
+          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+          .in("id", taskIds)
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      }
+
       const { data: assignedTaskIds } = await supabase
         .from("task_assignees")
         .select("task_id")
@@ -118,9 +146,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const { data: columns = DEFAULT_TASK_COLUMNS } = useTaskColumns();
 
   const { data: members = [] } = useQuery({
-    queryKey: ["members-list"],
+    queryKey: ["members-list", isManagerRole ? `team:${user?.id}` : "all"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true).order("full_name");
+      let q = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true).order("full_name");
+      // Manager filter list and assignee picker is scoped to their team only.
+      if (isManagerRole && user?.id) q = q.eq("manager_id", user.id);
+      const { data } = await q;
       return data ?? [];
     },
     enabled: isAdmin,
@@ -305,7 +336,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     }
     // Optimistic update
     queryClient.setQueryData(
-      ["tasks", showAllTasks, user?.id, myTasksOnly],
+      ["tasks", showAllTasks, showTeamTasks, user?.id, myTasksOnly],
       (old: any[]) => old.map((t: any) => t.id === draggedTaskId ? { ...t, status: targetStatus } : t)
     );
     setDraggedTaskId(null);
