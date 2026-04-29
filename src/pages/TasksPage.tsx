@@ -75,7 +75,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     if (editingColKey) editInputRef.current?.focus();
   }, [editingColKey]);
 
-  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager");
+  const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager" || profile?.role === "employee" || profile?.role === "intern");
   // Renaming is PER-USER (stored in user_task_column_prefs) so every signed-in
   // user — employee, intern, manager, admin — can rename their own view on
   // ANY board (Tasks or My Tasks).
