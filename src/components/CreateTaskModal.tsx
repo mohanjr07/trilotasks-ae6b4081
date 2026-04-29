@@ -89,14 +89,17 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
-  // Managers can only assign tasks to their own team. Admins still see everyone.
+  // Managers can only assign tasks to their own team. Admins see everyone.
+  // Employees can also assign tasks to anyone (admin, manager, or employee).
   const isManagerRole = profile?.role === "manager";
+  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern";
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list", isManagerRole ? `team:${user?.id}` : "all"],
     queryFn: async () => {
-      let q = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      let q = supabase.from("profiles").select("id, full_name, avatar_url, role").eq("is_active", true);
       if (isManagerRole && user?.id) q = q.eq("manager_id", user.id);
+      // Employees and interns see everyone so they can assign tasks to admins/managers too
       const { data } = await q;
       return data ?? [];
     },
@@ -357,6 +360,9 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                               </div>
                               <UserAvatar name={emp.full_name} avatarUrl={emp.avatar_url} size="sm" />
                               <span className="text-ink-primary">{emp.full_name}</span>
+                              {(emp.role === "admin" || emp.role === "manager") && (
+                                <span className="ml-auto text-[10px] font-semibold bg-accent-light text-primary px-1.5 py-0.5 rounded-pill capitalize">{emp.role}</span>
+                              )}
                             </button>
                           );
                         })}
