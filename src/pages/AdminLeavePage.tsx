@@ -187,7 +187,7 @@ export default function AdminLeavePage() {
                 )}
               </p>
               <p className="text-xs text-ink-muted">
-                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
+                {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "work_from_home" ? "Work From Home" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
                 {" · "}
                 {req.start_date && format(new Date(req.start_date), "MMM d")}
                 {req.end_date && req.end_date !== req.start_date && `–${format(new Date(req.end_date), "MMM d")}`}
@@ -431,6 +431,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                   <SelectContent>
                     <SelectItem value="casual_leave">Casual Leave</SelectItem>
                     <SelectItem value="on_duty">On Duty</SelectItem>
+                    <SelectItem value="work_from_home">Work From Home</SelectItem>
                     <SelectItem value="unauthorised_leave">Unauthorised Leave</SelectItem>
                     <SelectItem value="late">Late</SelectItem>
                     <SelectItem value="permission">Permission</SelectItem>
