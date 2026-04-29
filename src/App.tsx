@@ -70,7 +70,7 @@ const App = () => (
 
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminDashboard /></ProtectedRoute>} />
-              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TasksPage /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin", "manager", "employee"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/projects" element={<ProjectsPage />} />
               {/* Organisation Flow — visible to every signed-in role.
                   Admin-only writes are enforced at the DB level via RLS. */}
