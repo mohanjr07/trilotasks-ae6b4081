@@ -18,11 +18,15 @@
 //    • This keeps the renderer alive so Supabase realtime keeps firing
 //      desktop notifications even when the window is closed.
 //
+//  Desktop notifications (Teams-style):
+//    • Uses Electron's native Notification module (not the Web API) so the
+//      app icon appears in the toast, sound plays, and it groups correctly
+//      in Windows Action Center / macOS Notification Center.
+//    • Renderer sends "notify:show" IPC → main fires the native toast.
+//    • Clicking the toast sends "notify:clicked" back → renderer navigates.
+//
 //  Single-instance lock: launching TaskFlow a second time just brings
 //  the existing window to the front instead of starting a duplicate.
-//
-//  We open external http(s) links (Supabase auth flows, etc.) in the user's
-//  default browser instead of inside the app shell.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const {
@@ -33,6 +37,7 @@ const {
   Tray,
   nativeImage,
   ipcMain,
+  Notification,
 } = require("electron");
 const path = require("path");
 
@@ -89,11 +94,8 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.loadURL("http://localhost:8080");
-    // Open DevTools automatically in dev for easier debugging.
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    // dist/index.html is produced by `vite build`. The trailing #/ ensures
-    // HashRouter starts at the root and the React app picks up RootRedirect.
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"), {
       hash: "/",
     });
@@ -107,8 +109,7 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  // Override window close: hide to tray instead of quitting. The app stays
-  // alive in the background so Supabase realtime can keep firing notifications.
+  // Override window close: hide to tray instead of quitting.
   mainWindow.on("close", (event) => {
     if (!isQuittingForReal) {
       event.preventDefault();
@@ -122,15 +123,12 @@ function createWindow() {
 }
 
 function createTray() {
-  // Use the existing favicon as the tray icon — Electron auto-resizes
-  // for the OS (16×16 on Windows, 22×22 on macOS, etc.).
   const iconPath = isDev
     ? path.join(__dirname, "..", "public", "favicon.png")
     : path.join(__dirname, "..", "dist", "favicon.png");
 
   let trayIcon = nativeImage.createFromPath(iconPath);
   if (trayIcon.isEmpty()) {
-    // Last-resort fallback: an empty 16×16 transparent image so Tray() doesn't throw.
     trayIcon = nativeImage.createEmpty();
   }
 
@@ -150,16 +148,56 @@ function createTray() {
   ]);
   tray.setContextMenu(contextMenu);
 
-  // Left-click (Windows) or single-click (mac/Linux) → open window.
   tray.on("click", showMainWindow);
-  // Double-click is the long-standing Windows convention too.
   tray.on("double-click", showMainWindow);
 }
 
-// ─── IPC: renderer asks main to bring the window to the front. ────────────
-// Used when the user clicks a native desktop notification.
+// ─── IPC: focus window (legacy path kept for compatibility) ───────────────
 ipcMain.on("taskflow:focus-window", () => {
   showMainWindow();
+});
+
+// ─── IPC: Teams-style native desktop notification ────────────────────────
+//
+//  Renderer sends:  ipcRenderer.send("notify:show", { title, body, route })
+//  Main fires a native Electron Notification with the app icon.
+//  Clicking the toast:
+//    1. Brings the window to the front.
+//    2. Sends "notify:clicked" back to the renderer with { route } so React
+//       can navigate to the right page (e.g. "/notifications").
+//
+ipcMain.on("notify:show", (event, { title, body, route }) => {
+  if (!Notification.isSupported()) return;
+
+  // Resolve the app icon for the notification badge.
+  const iconPath = isDev
+    ? path.join(__dirname, "..", "public", "favicon.png")
+    : path.join(__dirname, "..", "dist", "favicon.png");
+
+  const icon = nativeImage.createFromPath(iconPath);
+
+  const notification = new Notification({
+    title: title ?? "TaskFlow",
+    body: body ?? "",
+    icon: icon.isEmpty() ? undefined : icon,
+    // urgency only applies on Linux but is harmless on other platforms.
+    urgency: "normal",
+    // timeoutType "default" lets the OS decide how long to show the toast
+    // (5 s on Windows, slide-in on macOS). "never" keeps it until dismissed.
+    timeoutType: "default",
+    // toastXml is Windows-only — we omit it so the default Teams-style
+    // layout (icon + title + body) is used automatically.
+  });
+
+  notification.on("click", () => {
+    showMainWindow();
+    // Tell the renderer to navigate to the relevant page.
+    if (mainWindow) {
+      mainWindow.webContents.send("notify:clicked", { route: route ?? "/notifications" });
+    }
+  });
+
+  notification.show();
 });
 
 app.whenReady().then(() => {
@@ -172,9 +210,6 @@ app.whenReady().then(() => {
   });
 });
 
-// We deliberately do NOT call app.quit() in window-all-closed — that's
-// what keeps the tray icon alive after the user closes the window. The
-// app only exits via the tray Quit menu (or OS shutdown / Cmd+Q on macOS).
 app.on("window-all-closed", () => {
   // intentionally empty — stay alive in the tray.
 });
