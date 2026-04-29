@@ -91,11 +91,13 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   // context) is now scoped to their team via the team-tasks branch below.
   const isStrictAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const isManagerRole = profile?.role === "manager";
+  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern";
   const showAllTasks = isStrictAdmin && !myTasksOnly;
   const showTeamTasks = isManagerRole && !myTasksOnly;
+  const showEmployeeTasks = isEmployeeRole && !myTasksOnly;
 
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", showAllTasks, showTeamTasks, user?.id, myTasksOnly],
+    queryKey: ["tasks", showAllTasks, showTeamTasks, showEmployeeTasks, user?.id, myTasksOnly],
     queryFn: async () => {
       if (showAllTasks) {
         const { data } = await supabase
@@ -123,6 +125,24 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
           .from("tasks")
           .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
           .in("id", taskIds)
+          .order("created_at", { ascending: false });
+        return data ?? [];
+      }
+
+      // Employee on /tasks (not myTasksOnly): show tasks they created OR are assigned to
+      if (showEmployeeTasks) {
+        const [assignedRes, createdRes] = await Promise.all([
+          supabase.from("task_assignees").select("task_id").eq("user_id", user!.id),
+          supabase.from("tasks").select("id").eq("assigned_by", user!.id),
+        ]);
+        const assignedIds = (assignedRes.data ?? []).map((a: any) => a.task_id);
+        const createdIds = (createdRes.data ?? []).map((t: any) => t.id);
+        const allIds = Array.from(new Set([...assignedIds, ...createdIds]));
+        if (!allIds.length) return [];
+        const { data } = await supabase
+          .from("tasks")
+          .select("*, assigner:profiles!tasks_assigned_by_fkey(full_name), task_assignees(user_id, user:profiles(id, full_name, avatar_url, email))")
+          .in("id", allIds)
           .order("created_at", { ascending: false });
         return data ?? [];
       }
@@ -336,7 +356,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     }
     // Optimistic update
     queryClient.setQueryData(
-      ["tasks", showAllTasks, showTeamTasks, user?.id, myTasksOnly],
+      ["tasks", showAllTasks, showTeamTasks, showEmployeeTasks, user?.id, myTasksOnly],
       (old: any[]) => old.map((t: any) => t.id === draggedTaskId ? { ...t, status: targetStatus } : t)
     );
     setDraggedTaskId(null);
