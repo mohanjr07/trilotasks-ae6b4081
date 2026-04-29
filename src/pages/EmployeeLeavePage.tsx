@@ -36,6 +36,7 @@ export default function EmployeeLeavePage() {
     if (
       tab === "casual_leave" ||
       tab === "on_duty" ||
+      tab === "work_from_home" ||
       tab === "unauthorised_leave" ||
       tab === "late" ||
       tab === "permission"
@@ -52,6 +53,7 @@ export default function EmployeeLeavePage() {
     { key: "all", label: "All" },
     { key: "casual_leave", label: "Casual" },
     { key: "on_duty", label: "On Duty" },
+    { key: "work_from_home", label: "WFH" },
     { key: "unauthorised_leave", label: "Unauthorised" },
     { key: "permission", label: "Permission" },
     { key: "approved", label: "Approved" },
@@ -98,7 +100,7 @@ export default function EmployeeLeavePage() {
               <div>
                 <div className="flex gap-2 mb-1 flex-wrap">
                   <span className="text-xs font-medium bg-accent-light text-primary px-2 py-0.5 rounded-pill capitalize">
-                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
+                    {req.leave_category === "casual_leave" ? "Casual Leave" : req.leave_category === "on_duty" ? "On Duty" : req.leave_category === "work_from_home" ? "Work From Home" : req.leave_category === "unauthorised_leave" ? "Unauthorised Leave" : req.leave_category === "late" ? "Late" : req.leave_category === "permission" || req.type === "permission" ? "Permission" : req.leave_category ?? req.type}
                   </span>
                   {req.is_half_day && (
                     <span className="text-xs font-medium bg-purple-light text-purple px-2 py-0.5 rounded-pill">
@@ -219,6 +221,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   const effectiveCategory = casualDisabled && category === "casual_leave" ? "on_duty" : category;
 
   const isPermission = category === "permission";
+  const isWFH = effectiveCategory === "work_from_home";
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -273,7 +276,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-leave"] });
       queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
-      toast.success(isPermission ? "Permission request submitted" : "Request submitted successfully");
+      toast.success(isPermission ? "Permission request submitted" : isWFH ? "WFH request submitted" : "Request submitted successfully");
       // Reset form
       setIsHalfDay(false);
       setHalfDayPeriod("AM");
@@ -300,6 +303,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
         : `${remainingDays} day${remainingDays !== 1 ? "s" : ""} remaining (or ${remainingHalfDays} half-day${remainingHalfDays !== 1 ? "s" : ""}) this month`,
     },
     { value: "on_duty", label: "On Duty", disabled: false },
+    { value: "work_from_home", label: "Work From Home", disabled: false, hint: "Request to work remotely from home." },
     { value: "unauthorised_leave", label: "Unauthorised Leave", disabled: false },
     {
       value: "permission",
@@ -321,7 +325,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-xl font-bold text-ink-primary">
-                {isPermission ? "New Permission Request" : "New Leave Request"}
+                {isPermission ? "New Permission Request" : isWFH ? "Work From Home Request" : "New Leave Request"}
               </h2>
               <button onClick={onClose} className="text-ink-muted"><X className="h-5 w-5" /></button>
             </div>
@@ -450,7 +454,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                 }
                 className="w-full h-11"
               >
-                {submit.isPending ? "Submitting..." : isPermission ? "Request Permission" : "Submit Request"}
+                {submit.isPending ? "Submitting..." : isPermission ? "Request Permission" : isWFH ? "Request WFH" : "Submit Request"}
               </Button>
             </div>
           </motion.div>
