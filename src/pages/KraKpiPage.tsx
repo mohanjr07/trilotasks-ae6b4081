@@ -88,12 +88,15 @@ export default function KraKpiPage() {
   const targetUserId = canManage ? selectedUserId : profile?.id ?? "";
 
   const { data: people = [] } = useQuery({
-    queryKey: ["kra-people"],
+    queryKey: ["kra-people", isManager ? `team:${profile?.id}` : "all"],
     queryFn: async () => {
-      const { data } = await supabase
+      let q = supabase
         .from("profiles")
         .select("id, full_name, email, avatar_url, role")
         .order("full_name");
+      // Manager only sees and rates their own team members.
+      if (isManager && profile?.id) q = q.eq("manager_id", profile.id);
+      const { data } = await q;
       return data ?? [];
     },
     enabled: canManage,
