@@ -81,7 +81,7 @@ const getInitialDraft = (preselectedAssignee?: string): FormData => {
 };
 
 export default function CreateTaskModal({ open, onClose, preselectedAssignee }: Props) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
@@ -89,10 +89,15 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initialDraft = useMemo(() => getInitialDraft(preselectedAssignee), [preselectedAssignee]);
 
+  // Managers can only assign tasks to their own team. Admins still see everyone.
+  const isManagerRole = profile?.role === "manager";
+
   const { data: employees = [] } = useQuery({
-    queryKey: ["employees-list"],
+    queryKey: ["employees-list", isManagerRole ? `team:${user?.id}` : "all"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      let q = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      if (isManagerRole && user?.id) q = q.eq("manager_id", user.id);
+      const { data } = await q;
       return data ?? [];
     },
     enabled: open,
