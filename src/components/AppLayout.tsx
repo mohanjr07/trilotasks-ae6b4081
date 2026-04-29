@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes, UsersRound, Target, FileText,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes, UsersRound, Target, FileText, Workflow,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -23,7 +23,7 @@ const adminNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: FileText },
   { label: "Users", path: "/users", icon: Users },
-  { label: "Teams", path: "/teams", icon: Video },
+  { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
@@ -41,7 +41,7 @@ const managerNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: FileText },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
-  { label: "Teams", path: "/teams", icon: Video },
+  { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "My Leave", path: "/my-leave", icon: Calendar },
@@ -58,7 +58,7 @@ const employeeNav: NavItem[] = [
   { label: "My Assets", path: "/assets", icon: Boxes },
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: FileText },
-  { label: "Teams", path: "/my-teams", icon: Video },
+  { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
   { label: "Notes", path: "/notes", icon: StickyNote },
