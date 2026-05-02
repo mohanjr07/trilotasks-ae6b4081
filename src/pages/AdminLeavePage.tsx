@@ -383,7 +383,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         payload.start_time = startTime;
         payload.end_time = endTime;
       }
-      const { error } = await supabase.from("leave_requests").insert([payload]);
+      const { error } = await supabase.from("leave_requests").insert([payload as any]);
       if (error) throw error;
     },
     onSuccess: () => {
