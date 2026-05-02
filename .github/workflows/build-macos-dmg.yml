@@ -1,30 +1,37 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  build-macos-dmg.yml
-#  Builds the TaskFlow macOS installer (.dmg) on a GitHub-hosted macOS
-#  runner. No paid Apple Developer account / code-signing required —
-#  users will see a "developer cannot be verified" prompt on first launch
-#  and need to right-click → Open OR allow the app in
-#  System Settings → Privacy & Security.
+#  Builds the TaskFlow macOS installer (.dmg) and publishes it to a GitHub
+#  Release so installed Mac copies can detect updates.
+#
+#  Mac auto-update caveat:
+#    Without an Apple Developer ID ($99/yr) we can't sign / notarize the
+#    app, so macOS refuses silent in-place upgrades. The app instead pops
+#    a dialog when it detects a new release and opens the GitHub Releases
+#    page in the user's default browser. The user downloads the new .dmg
+#    and drags TaskFlow into Applications, replacing the old copy.
 #
 #  Triggers:
-#    • Manually from GitHub → Actions tab → "Build macOS .dmg" → Run workflow
-#    • Automatically when a commit is pushed to main that changes
-#      package.json, electron/, src/, vite.config.ts, or index.html
+#    • Manually from GitHub → Actions tab → "Build & Publish macOS"
+#    • Automatically when a commit lands on main that touches code paths
+#      relevant to the desktop app.
 #
-#  Output:
-#    • Artifact named "TaskFlow-macOS-Installer" containing
-#      "TaskFlow-<version>.dmg" (Intel) and "TaskFlow-<version>-arm64.dmg"
-#      (Apple Silicon). Download from the workflow run page.
+#  How a release happens:
+#    1. You bump "version" in package.json and push.
+#    2. This workflow builds .dmg + .zip for both x64 and arm64.
+#    3. electron-builder creates / updates GitHub release "vX.Y.Z" and
+#       uploads all the assets + latest-mac.yml.
+#    4. Installed Macs check the Releases endpoint, see the new version,
+#       prompt the user to download.
 #
-#  Note on macOS runner minutes: GitHub's free tier counts macOS minutes at
-#  10× the rate of Linux minutes (so 2000 free Linux min = 200 macOS min).
-#  For a handful of builds a month this is well within the free quota.
+#  Note on macOS runner minutes: GitHub's free tier counts macOS minutes
+#  at 10× Linux (so 2000 free Linux min ≈ 200 macOS min). For a handful
+#  of releases a month this is well within the free quota.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: Build macOS .dmg
+name: Build & Publish macOS
 
 on:
-  workflow_dispatch:        # manual trigger from the Actions tab
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -35,12 +42,15 @@ on:
       - "vite.config.ts"
       - "index.html"
 
+# electron-builder needs to create / update GitHub Releases.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
     timeout-minutes: 30
     env:
-      # Opt into Node.js 24 for built-in actions (silences deprecation warning).
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
@@ -56,18 +66,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vite bundle + Electron .dmg
-        run: npm run electron:build:mac
+      - name: Build & publish macOS .dmg + .zip to GitHub Releases
+        run: npm run electron:publish:mac
         env:
-          # Skip notarisation / code-signing entirely — we don't have a paid
-          # Apple Developer ID. The .dmg still installs fine, the user just
-          # has to right-click → Open the first time.
+          # Skip notarization / code-signing — no Apple Developer ID.
+          # First-launch users right-click → Open, or allow in
+          # System Settings → Privacy & Security.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
-      - name: Upload installer as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TaskFlow-macOS-Installer
-          path: release/*.dmg
-          if-no-files-found: error
-          retention-days: 30
+          # Token used by electron-builder to talk to the GitHub Releases API.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
