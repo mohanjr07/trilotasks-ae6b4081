@@ -29,7 +29,7 @@ import {
   Monitor, Search, Plus, X, Pencil, Trash2,
   Laptop, Smartphone, Printer, Server, Headphones,
   Package, CheckCircle2, AlertCircle, Clock, Eye,
-  ChevronsUpDown, Check, Cpu, Cog, Code, Armchair,
+  ChevronsUpDown, Check, Cpu, Cog, Code, Armchair, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,30 @@ type Profile = {
   full_name: string;
 };
 
+// ---------------------------------------------------------------------------
+// Helpers to encode/decode multiple holders in the single holder_name column.
+// We store a JSON array when there are multiple holders, plain string otherwise
+// (for backward compat with existing rows).
+// ---------------------------------------------------------------------------
+function encodeHolders(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  return JSON.stringify(names);
+}
+
+function decodeHolders(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as string[];
+  } catch {
+    // plain string — legacy single holder
+  }
+  return [raw];
+}
+
+// ---------------------------------------------------------------------------
+
 const CATEGORY_OPTIONS: AssetCategory[] = ["IT", "Machines", "Softwares", "Furnitures"];
 
 const categoryConfig: Record<AssetCategory, { label: string; icon: any; color: string }> = {
@@ -64,7 +88,6 @@ const categoryConfig: Record<AssetCategory, { label: string; icon: any; color: s
   Furnitures: { label: "Furnitures", icon: Armchair, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
 };
 
-// Default suggested types per category (admin can still type any custom value)
 const DEFAULT_TYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
   IT:         ["Laptop", "Desktop", "Monitor", "Phone", "Tablet", "Printer", "Server", "Headset"],
   Machines:   ["Lathe", "CNC", "3D Printer", "Drill", "Compressor", "Forklift"],
@@ -98,17 +121,171 @@ const emptyForm = {
   asset_category: "IT" as AssetCategory,
   asset_type: "Laptop",
   serial_number: "",
-  holder_name: "",
+  holder_names: [] as string[],   // multi-holder
   status: "available" as Asset["status"],
   notes: "",
 };
 
+// ---------------------------------------------------------------------------
+// Small component: multi-select holder picker
+// ---------------------------------------------------------------------------
+function HolderMultiSelect({
+  profiles,
+  selected,
+  onChange,
+}: {
+  profiles: Profile[];
+  selected: string[];
+  onChange: (names: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const toggle = (name: string) => {
+    if (selected.includes(name)) {
+      onChange(selected.filter((n) => n !== name));
+    } else {
+      onChange([...selected, name]);
+    }
+  };
+
+  const filtered = profiles.filter((p) =>
+    p.full_name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const triggerLabel =
+    selected.length === 0
+      ? "Unassigned"
+      : selected.length === 1
+      ? selected[0]
+      : `${selected.length} members`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          className="w-full justify-between font-normal"
+        >
+          <span className={cn("truncate", selected.length === 0 && "text-ink-muted")}>
+            {triggerLabel}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Search members…"
+            value={query}
+            onValueChange={setQuery}
+          />
+          <CommandList>
+            {/* Unassigned option */}
+            <CommandItem
+              value="__unassigned__"
+              onSelect={() => { onChange([]); setOpen(false); }}
+            >
+              <Check className={cn("mr-2 h-4 w-4", selected.length === 0 ? "opacity-100" : "opacity-0")} />
+              Unassigned
+            </CommandItem>
+            <CommandEmpty>No members found.</CommandEmpty>
+            <CommandGroup heading="Members">
+              {filtered.map((p) => {
+                const isSelected = selected.includes(p.full_name);
+                return (
+                  <CommandItem
+                    key={p.id}
+                    value={p.full_name}
+                    onSelect={() => toggle(p.full_name)}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", isSelected ? "opacity-100" : "opacity-0")} />
+                    <div className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
+                        {p.full_name.charAt(0).toUpperCase()}
+                      </div>
+                      {p.full_name}
+                    </div>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+        {/* Selected chips */}
+        {selected.length > 0 && (
+          <div className="p-2 border-t border-border flex flex-wrap gap-1">
+            {selected.map((name) => (
+              <span
+                key={name}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5 font-medium"
+              >
+                {name}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggle(name); }}
+                  className="hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HolderCell — renders avatars in the table row
+// ---------------------------------------------------------------------------
+function HolderCell({ holderName }: { holderName: string | null }) {
+  const names = decodeHolders(holderName);
+  if (names.length === 0) return <span className="text-ink-muted">—</span>;
+  if (names.length === 1) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+          {names[0].charAt(0).toUpperCase()}
+        </div>
+        <span className="text-ink-primary">{names[0]}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex -space-x-1.5">
+        {names.slice(0, 3).map((name, i) => (
+          <div
+            key={i}
+            title={name}
+            className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary ring-2 ring-card shrink-0"
+          >
+            {name.charAt(0).toUpperCase()}
+          </div>
+        ))}
+        {names.length > 3 && (
+          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-ink-muted ring-2 ring-card">
+            +{names.length - 3}
+          </div>
+        )}
+      </div>
+      <span className="text-xs text-ink-secondary">{names.length} members</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main page
+// ---------------------------------------------------------------------------
 export default function AssetsPage() {
   const { profile } = useAuth();
   const queryClient = useQueryClient();
 
   const isAdmin = profile?.role === "admin";
-  // Non-admins see only assets assigned to them.
   const myAssetsOnly = !isAdmin;
 
   const [search, setSearch] = useState("");
@@ -121,7 +298,6 @@ export default function AssetsPage() {
   const [form, setForm] = useState(emptyForm);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Combobox state for the Type field (typeable + selectable)
   const [typeOpen, setTypeOpen] = useState(false);
   const [typeQuery, setTypeQuery] = useState("");
 
@@ -133,7 +309,6 @@ export default function AssetsPage() {
         .select("*")
         .order("created_at", { ascending: false });
       if (myAssetsOnly && profile) {
-        // Match by holder_id (preferred) or fall back to holder_name for legacy rows.
         query = query.or(
           `holder_id.eq.${profile.id},holder_name.eq.${profile.full_name}`
         );
@@ -159,15 +334,16 @@ export default function AssetsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (values: typeof emptyForm) => {
+      const encoded = encodeHolders(values.holder_names);
       const { error } = await supabase.from("assets").insert({
         asset_name: values.asset_name,
         asset_category: values.asset_category,
         asset_type: values.asset_type,
         serial_number: values.serial_number || null,
-        holder_name: values.holder_name || null,
+        holder_name: encoded || null,
         status: values.status,
         notes: values.notes || null,
-        assigned_at: values.holder_name ? new Date().toISOString() : null,
+        assigned_at: values.holder_names.length > 0 ? new Date().toISOString() : null,
       });
       if (error) throw error;
     },
@@ -181,15 +357,16 @@ export default function AssetsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, values }: { id: string; values: typeof emptyForm }) => {
+      const encoded = encodeHolders(values.holder_names);
       const { error } = await supabase.from("assets").update({
         asset_name: values.asset_name,
         asset_category: values.asset_category,
         asset_type: values.asset_type,
         serial_number: values.serial_number || null,
-        holder_name: values.holder_name || null,
+        holder_name: encoded || null,
         status: values.status,
         notes: values.notes || null,
-        assigned_at: values.holder_name ? new Date().toISOString() : null,
+        assigned_at: values.holder_names.length > 0 ? new Date().toISOString() : null,
       }).eq("id", id);
       if (error) throw error;
     },
@@ -222,7 +399,7 @@ export default function AssetsPage() {
       asset_category: a.asset_category ?? "IT",
       asset_type: a.asset_type,
       serial_number: a.serial_number ?? "",
-      holder_name: a.holder_name ?? "",
+      holder_names: decodeHolders(a.holder_name),
       status: a.status,
       notes: a.notes ?? "",
     });
@@ -243,7 +420,6 @@ export default function AssetsPage() {
     else createMutation.mutate(form);
   };
 
-  // Type suggestions = defaults for the chosen category + any types already used in DB
   const typeSuggestions = useMemo(() => {
     const fromDb = assets
       .filter(a => a.asset_category === form.asset_category)
@@ -252,7 +428,6 @@ export default function AssetsPage() {
     return Array.from(new Set([...defaults, ...fromDb])).sort();
   }, [assets, form.asset_category]);
 
-  // For the filter bar — every type ever used (across categories), deduped
   const allTypesInUse = useMemo(() => {
     const all = new Set<string>();
     Object.values(DEFAULT_TYPES_BY_CATEGORY).forEach(arr => arr.forEach(t => all.add(t)));
@@ -262,8 +437,9 @@ export default function AssetsPage() {
 
   const filtered = assets.filter((a) => {
     const q = search.toLowerCase();
+    const holderNames = decodeHolders(a.holder_name);
     if (q && !a.asset_name.toLowerCase().includes(q) &&
-        !(a.holder_name ?? "").toLowerCase().includes(q) &&
+        !holderNames.some(n => n.toLowerCase().includes(q)) &&
         !(a.serial_number ?? "").toLowerCase().includes(q)) return false;
     if (statusFilter !== "all" && a.status !== statusFilter) return false;
     if (categoryFilter !== "all" && a.asset_category !== categoryFilter) return false;
@@ -395,7 +571,7 @@ export default function AssetsPage() {
                   <th className="text-left px-5 py-3 font-medium">Category</th>
                   <th className="text-left px-5 py-3 font-medium">Type</th>
                   <th className="text-left px-5 py-3 font-medium">Serial No.</th>
-                  <th className="text-left px-5 py-3 font-medium">Holder</th>
+                  <th className="text-left px-5 py-3 font-medium">Holder(s)</th>
                   <th className="text-left px-5 py-3 font-medium">Status</th>
                   <th className="text-left px-5 py-3 font-medium">Notes</th>
                   <th className="px-5 py-3" />
@@ -432,16 +608,7 @@ export default function AssetsPage() {
                         {asset.serial_number || "—"}
                       </td>
                       <td className="px-5 py-3.5">
-                        {asset.holder_name ? (
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
-                              {asset.holder_name.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-ink-primary">{asset.holder_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-ink-muted">—</span>
-                        )}
+                        <HolderCell holderName={asset.holder_name} />
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", sc.color)}>
@@ -634,25 +801,58 @@ export default function AssetsPage() {
                       onChange={(e) => setForm(f => ({ ...f, serial_number: e.target.value }))}
                     />
                   </div>
+
+                  {/* ── Multi-holder selector ── */}
                   <div>
-                    <label className="text-xs font-medium text-ink-muted mb-1.5 block">Holder Name</label>
-                    <Select
-                      value={form.holder_name || "__none__"}
-                      onValueChange={(v) => setForm(f => ({
-                        ...f,
-                        holder_name: v === "__none__" ? "" : v,
-                        status: v === "__none__" ? "available" : "assigned",
-                      }))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">Unassigned</SelectItem>
-                        {profiles.map(p => (
-                          <SelectItem key={p.id} value={p.full_name}>{p.full_name}</SelectItem>
+                    <label className="text-xs font-medium text-ink-muted mb-1.5 block flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5" /> Holder(s)
+                      <span className="text-ink-muted/60 font-normal ml-1">— select one or more</span>
+                    </label>
+                    <HolderMultiSelect
+                      profiles={profiles}
+                      selected={form.holder_names}
+                      onChange={(names) =>
+                        setForm(f => ({
+                          ...f,
+                          holder_names: names,
+                          status: names.length > 0 ? "assigned" : "available",
+                        }))
+                      }
+                    />
+                    {/* Chips below the picker */}
+                    {form.holder_names.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {form.holder_names.map((name) => (
+                          <span
+                            key={name}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium"
+                          >
+                            <div className="h-4 w-4 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold">
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                            {name}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForm(f => {
+                                  const next = f.holder_names.filter(n => n !== name);
+                                  return {
+                                    ...f,
+                                    holder_names: next,
+                                    status: next.length > 0 ? "assigned" : "available",
+                                  };
+                                })
+                              }
+                              className="hover:text-destructive ml-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </div>
+                    )}
                   </div>
+
                   <div>
                     <label className="text-xs font-medium text-ink-muted mb-1.5 block">Notes</label>
                     <Input
@@ -738,16 +938,27 @@ export default function AssetsPage() {
                       );
                     })()}
                   </div>
-                  <div className="flex items-center justify-between py-3">
-                    <span className="text-ink-muted font-medium">Holder</span>
-                    {viewAsset.holder_name ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                          {viewAsset.holder_name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-medium text-ink-primary">{viewAsset.holder_name}</span>
+                  <div className="py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <span className="text-ink-muted font-medium shrink-0">Holder(s)</span>
+                      <div className="flex flex-wrap gap-1.5 justify-end">
+                        {decodeHolders(viewAsset.holder_name).length === 0 ? (
+                          <span className="text-ink-muted">Unassigned</span>
+                        ) : (
+                          decodeHolders(viewAsset.holder_name).map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium"
+                            >
+                              <div className="h-4 w-4 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold">
+                                {name.charAt(0).toUpperCase()}
+                              </div>
+                              {name}
+                            </span>
+                          ))
+                        )}
                       </div>
-                    ) : <span className="text-ink-muted">Unassigned</span>}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between py-3">
                     <span className="text-ink-muted font-medium">Serial No.</span>
