@@ -40,6 +40,11 @@ const {
   Notification,
 } = require("electron");
 const path = require("path");
+const {
+  initAutoUpdater,
+  checkForUpdatesManually,
+  startPeriodicUpdateChecks,
+} = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -61,6 +66,12 @@ if (!gotSingleInstanceLock) {
 let mainWindow = null;
 let tray = null;
 let isQuittingForReal = false;
+
+// Used by the updater module so it can attach modal dialogs to the
+// main window (or fall back to a free dialog if the window is hidden/closed).
+function getMainWindow() {
+  return mainWindow;
+}
 
 function showMainWindow() {
   if (!mainWindow) {
@@ -139,6 +150,15 @@ function createTray() {
     { label: "Open TaskFlow", click: showMainWindow },
     { type: "separator" },
     {
+      label: "Check for Updates…",
+      click: () => checkForUpdatesManually(getMainWindow),
+    },
+    { type: "separator" },
+    {
+      label: `TaskFlow v${app.getVersion()}`,
+      enabled: false,
+    },
+    {
       label: "Quit TaskFlow",
       click: () => {
         isQuittingForReal = true;
@@ -203,6 +223,12 @@ ipcMain.on("notify:show", (event, { title, body, route }) => {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+
+  // Auto-update: initial check ~5s after launch + every 4 hours thereafter.
+  // No-ops in dev. Mac without code-signing falls back to a notify-and-open
+  // -browser flow handled inside updater.cjs.
+  initAutoUpdater(getMainWindow);
+  startPeriodicUpdateChecks(getMainWindow, 4 * 60 * 60 * 1000);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
