@@ -1,4 +1,27 @@
-name: Build Windows .exe
+# ─────────────────────────────────────────────────────────────────────────────
+#  build-windows-exe.yml
+#  Builds the TaskFlow Windows installer (.exe) and publishes it to a
+#  GitHub Release so installed apps can auto-update via electron-updater.
+#
+#  Triggers:
+#    • Manually from GitHub → Actions tab → "Build & Publish Windows"
+#    • Automatically when a commit lands on main that touches code paths
+#      relevant to the desktop app. The job only PUBLISHES if the version
+#      in package.json bumped (electron-builder skips an existing tag).
+#
+#  How a release happens:
+#    1. You bump "version" in package.json (e.g. 1.0.0 → 1.0.1) and push.
+#    2. This workflow builds the .exe.
+#    3. electron-builder creates / updates GitHub release "vX.Y.Z" and
+#       uploads TaskFlow-Setup-X.Y.Z.exe + latest.yml.
+#    4. Every installed TaskFlow checks the Releases endpoint, sees the
+#       new version, prompts the user to download and restart.
+#
+#  Releases do NOT count against your Actions artifact-storage quota,
+#  which is what was failing in the previous workflow.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build & Publish Windows
 
 on:
   workflow_dispatch:
@@ -11,6 +34,10 @@ on:
       - "src/**"
       - "vite.config.ts"
       - "index.html"
+
+# electron-builder needs to create / update GitHub Releases.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -32,15 +59,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Vite bundle + Electron .exe
-        run: npm run electron:build
+      - name: Build & publish Windows .exe to GitHub Releases
+        # `--publish always` makes electron-builder create the release
+        # (or upload to an existing one) using the GH_TOKEN below.
+        # If a release for this version already exists with this asset,
+        # the build still succeeds — it just skips the duplicate upload.
+        run: npm run electron:publish
         env:
+          # Skip code-signing — no Windows signing cert configured.
+          # SmartScreen may warn users on first install; click "More info"
+          # → "Run anyway" to get past it.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
-      - name: Upload installer as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TaskFlow-Windows-Installer
-          path: release/*.exe
-          if-no-files-found: error
-          retention-days: 30
+          # Token used by electron-builder to talk to the GitHub Releases API.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
