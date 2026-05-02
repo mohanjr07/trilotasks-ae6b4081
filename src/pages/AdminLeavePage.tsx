@@ -717,3 +717,86 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
     </AnimatePresence>
   );
 }
+
+function DeleteLeaveModal({
+  request,
+  onClose,
+  onConfirm,
+  isPending,
+}: {
+  request: any;
+  onClose: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <AnimatePresence>
+      {request && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-ink-primary/40"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-[440px] rounded-modal bg-card p-6 shadow-modal mx-4"
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive-light">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-bold text-ink-primary">
+                  Delete leave permanently?
+                </h2>
+                <p className="mt-1 text-sm text-ink-muted">
+                  This will permanently remove the rejected leave request for{" "}
+                  <span className="font-medium text-ink-primary">
+                    {request.employee?.full_name}
+                  </span>
+                  . This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-muted/50 p-3 mb-5 text-xs text-ink-secondary space-y-1">
+              <div>
+                <span className="text-ink-muted">Type: </span>
+                {request.leave_category === "casual_leave"
+                  ? "Casual Leave"
+                  : request.leave_category === "permission" || request.type === "permission"
+                  ? "Permission"
+                  : request.leave_category ?? request.type}
+              </div>
+              <div>
+                <span className="text-ink-muted">Date: </span>
+                {request.start_date && format(new Date(request.start_date), "MMM d, yyyy")}
+                {request.end_date && request.end_date !== request.start_date &&
+                  ` – ${format(new Date(request.end_date), "MMM d, yyyy")}`}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={onClose} className="flex-1" disabled={isPending}>
+                Cancel
+              </Button>
+              <Button
+                onClick={onConfirm}
+                disabled={isPending}
+                className="flex-1 bg-destructive hover:bg-destructive/90 text-white gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isPending ? "Deleting..." : "Delete permanently"}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
