@@ -144,9 +144,14 @@ export default function NotesPage() {
     <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-160px)]">
       {/* Sidebar – note list */}
       <div className="w-full md:w-72 shrink-0 flex flex-col gap-2">
-        <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} className="gap-2 w-full">
-          <Plus className="h-4 w-4" /> New Note
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button onClick={() => createMutation.mutate("text")} disabled={createMutation.isPending} className="gap-1.5 w-full">
+            <Plus className="h-4 w-4" /> Note
+          </Button>
+          <Button onClick={() => createMutation.mutate("drawing")} disabled={createMutation.isPending} variant="outline" className="gap-1.5 w-full">
+            <Pencil className="h-4 w-4" /> Drawing
+          </Button>
+        </div>
 
         <div className="flex-1 overflow-y-auto space-y-1 pr-1">
           {notes.length === 0 && (
@@ -163,22 +168,31 @@ export default function NotesPage() {
                   : "hover:bg-muted text-ink-secondary"
               )}
             >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium truncate flex-1">
-                  {note.title || "Untitled Note"}
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {isDrawing(note.content || "") ? (
+                    <Pencil className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+                  ) : (
+                    <StickyNote className="h-3.5 w-3.5 shrink-0 text-ink-muted" />
+                  )}
+                  <p className="text-sm font-medium truncate">
+                    {note.title || "Untitled Note"}
+                  </p>
+                </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteMutation.mutate(note.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-destructive transition-all ml-2"
+                  className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-destructive transition-all"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
               <p className="text-xs text-ink-muted truncate mt-0.5">
-                {note.content?.slice(0, 60) || "Empty note"}
+                {isDrawing(note.content || "")
+                  ? "Drawing canvas"
+                  : note.content?.slice(0, 60) || "Empty note"}
               </p>
             </button>
           ))}
@@ -202,12 +216,19 @@ export default function NotesPage() {
               </span>
             </div>
             <CardContent className="flex-1 p-0 min-h-0">
-              <Textarea
-                value={selectedNote.content}
-                onChange={(e) => handleFieldChange("content", e.target.value)}
-                placeholder="Start typing your note…"
-                className="h-full w-full resize-none border-0 shadow-none rounded-none focus-visible:ring-0 p-5 text-sm leading-relaxed"
-              />
+              {isDrawing(selectedNote.content || "") ? (
+                <DrawingCanvas
+                  value={parseDrawing(selectedNote.content || "")}
+                  onChange={(strokes) => handleFieldChange("content", serializeDrawing(strokes))}
+                />
+              ) : (
+                <Textarea
+                  value={selectedNote.content}
+                  onChange={(e) => handleFieldChange("content", e.target.value)}
+                  placeholder="Start typing your note…"
+                  className="h-full w-full resize-none border-0 shadow-none rounded-none focus-visible:ring-0 p-5 text-sm leading-relaxed"
+                />
+              )}
             </CardContent>
           </>
         ) : (
@@ -217,7 +238,7 @@ export default function NotesPage() {
               title="Select or create a note"
               description="Your private notes are only visible to you."
               actionLabel="New Note"
-              onAction={() => createMutation.mutate()}
+              onAction={() => createMutation.mutate("text")}
             />
           </div>
         )}
