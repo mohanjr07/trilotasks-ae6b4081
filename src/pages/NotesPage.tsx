@@ -6,10 +6,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, StickyNote, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2, StickyNote, Check, Loader2, Pencil } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import DrawingCanvas, { type Stroke } from "@/components/DrawingCanvas";
+
+const DRAWING_PREFIX = "__drawing__:";
+const isDrawing = (content: string) => content?.startsWith(DRAWING_PREFIX);
+const parseDrawing = (content: string): Stroke[] => {
+  try {
+    return JSON.parse(content.slice(DRAWING_PREFIX.length)) as Stroke[];
+  } catch {
+    return [];
+  }
+};
+const serializeDrawing = (strokes: Stroke[]) => DRAWING_PREFIX + JSON.stringify(strokes);
 
 type Note = {
   id: string;
@@ -45,10 +57,12 @@ export default function NotesPage() {
   const selectedNote = notes.find((n) => n.id === selectedId) ?? null;
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (kind: "text" | "drawing" = "text") => {
+      const initialContent = kind === "drawing" ? serializeDrawing([]) : "";
+      const initialTitle = kind === "drawing" ? "Untitled Drawing" : "Untitled Note";
       const { data, error } = await supabase
         .from("user_notes")
-        .insert({ user_id: user!.id, title: "Untitled Note", content: "" })
+        .insert({ user_id: user!.id, title: initialTitle, content: initialContent })
         .select()
         .single();
       if (error) throw error;
