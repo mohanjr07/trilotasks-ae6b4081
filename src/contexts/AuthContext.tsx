@@ -6,7 +6,8 @@ type Profile = {
   id: string;
   full_name: string;
   email: string;
-  role: "admin" | "manager" | "employee" | "intern";
+  role: "admin" | "manager" | "employee" | "intern" | "super_admin";
+  manager_id: string | null;
   department: string | null;
   position: string | null;
   avatar_url: string | null;

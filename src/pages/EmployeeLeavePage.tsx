@@ -152,6 +152,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
 
+  // Strip seconds ("14:30:00" -> "14:30") for display
+  const fmtTime = (t?: string | null) => (t ? t.slice(0, 5) : "");
+
   // Check how many casual leave days were approved this month (half-day = 0.5)
   const { data: approvedCasualDays = 0 } = useQuery({
     queryKey: ["casual-leave-usage", user?.id],
