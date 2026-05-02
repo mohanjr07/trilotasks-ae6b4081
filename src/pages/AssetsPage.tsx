@@ -29,12 +29,12 @@ import {
   Monitor, Search, Plus, X, Pencil, Trash2,
   Laptop, Smartphone, Printer, Server, Headphones,
   Package, CheckCircle2, AlertCircle, Clock, Eye,
-  ChevronsUpDown, Check, Cpu, Cog, Code,
+  ChevronsUpDown, Check, Cpu, Cog, Code, Armchair,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type AssetCategory = "IT" | "Machines" | "Softwares";
+type AssetCategory = "IT" | "Machines" | "Softwares" | "Furnitures";
 
 type Asset = {
   id: string;
@@ -55,19 +55,21 @@ type Profile = {
   full_name: string;
 };
 
-const CATEGORY_OPTIONS: AssetCategory[] = ["IT", "Machines", "Softwares"];
+const CATEGORY_OPTIONS: AssetCategory[] = ["IT", "Machines", "Softwares", "Furnitures"];
 
 const categoryConfig: Record<AssetCategory, { label: string; icon: any; color: string }> = {
-  IT:        { label: "IT",        icon: Cpu,  color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  Machines:  { label: "Machines",  icon: Cog,  color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
-  Softwares: { label: "Softwares", icon: Code, color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  IT:         { label: "IT",         icon: Cpu,      color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  Machines:   { label: "Machines",   icon: Cog,      color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  Softwares:  { label: "Softwares",  icon: Code,     color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  Furnitures: { label: "Furnitures", icon: Armchair, color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
 };
 
 // Default suggested types per category (admin can still type any custom value)
 const DEFAULT_TYPES_BY_CATEGORY: Record<AssetCategory, string[]> = {
-  IT:        ["Laptop", "Desktop", "Monitor", "Phone", "Tablet", "Printer", "Server", "Headset"],
-  Machines:  ["Lathe", "CNC", "3D Printer", "Drill", "Compressor", "Forklift"],
-  Softwares: ["License", "Subscription", "OS", "Productivity", "Design", "Development"],
+  IT:         ["Laptop", "Desktop", "Monitor", "Phone", "Tablet", "Printer", "Server", "Headset"],
+  Machines:   ["Lathe", "CNC", "3D Printer", "Drill", "Compressor", "Forklift"],
+  Softwares:  ["License", "Subscription", "OS", "Productivity", "Design", "Development"],
+  Furnitures: ["Chair", "Desk", "Table", "Cabinet", "Sofa", "Shelf", "Whiteboard"],
 };
 
 const STATUS_OPTIONS = ["available", "assigned", "maintenance", "retired"] as const;
