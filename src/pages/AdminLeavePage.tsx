@@ -235,6 +235,17 @@ export default function AdminLeavePage() {
                 Revert
               </Button>
             )}
+            {isStrictAdmin && req.status === "rejected" && !isReverted && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-9 w-9 text-destructive border-destructive/30 hover:bg-destructive-light"
+                onClick={() => setDeleteReq(req)}
+                title="Delete this rejected leave permanently"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </motion.div>
           );
         })}
@@ -242,6 +253,12 @@ export default function AdminLeavePage() {
       </motion.div>
 
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
+      <DeleteLeaveModal
+        request={deleteReq}
+        onClose={() => setDeleteReq(null)}
+        onConfirm={() => deleteReq && deleteRequest.mutate(deleteReq.id)}
+        isPending={deleteRequest.isPending}
+      />
       {isStrictAdmin && <AssignLeaveModal open={showAssignLeave} onClose={() => setShowAssignLeave(false)} />}
       {isStrictAdmin && <ExportLeaveModal open={showExport} onClose={() => setShowExport(false)} />}
     </AnimatedPage>
