@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      assets: {
+        Row: {
+          asset_category: string
+          asset_name: string
+          asset_type: string
+          assigned_at: string | null
+          created_at: string
+          holder_id: string | null
+          holder_name: string | null
+          id: string
+          notes: string | null
+          serial_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asset_category?: string
+          asset_name: string
+          asset_type?: string
+          assigned_at?: string | null
+          created_at?: string
+          holder_id?: string | null
+          holder_name?: string | null
+          id?: string
+          notes?: string | null
+          serial_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_category?: string
+          asset_name?: string
+          asset_type?: string
+          assigned_at?: string | null
+          created_at?: string
+          holder_id?: string | null
+          holder_name?: string | null
+          id?: string
+          notes?: string | null
+          serial_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_holder_id_fkey"
+            columns: ["holder_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holidays: {
         Row: {
           created_at: string | null
@@ -47,6 +100,114 @@ export type Database = {
         }
         Relationships: []
       }
+      kra_kpi: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cycle_year: number
+          final_feedback: string | null
+          final_rating: number | null
+          focus_area: string
+          goal: string
+          id: string
+          kpi: string | null
+          q1_admin_feedback: string | null
+          q1_manager_feedback: string | null
+          q1_progress: string | null
+          q1_rating: number | null
+          q2_admin_feedback: string | null
+          q2_manager_feedback: string | null
+          q2_progress: string | null
+          q2_rating: number | null
+          q3_admin_feedback: string | null
+          q3_manager_feedback: string | null
+          q3_progress: string | null
+          q3_rating: number | null
+          q4_admin_feedback: string | null
+          q4_manager_feedback: string | null
+          q4_progress: string | null
+          q4_rating: number | null
+          updated_at: string
+          user_id: string
+          weightage: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cycle_year?: number
+          final_feedback?: string | null
+          final_rating?: number | null
+          focus_area: string
+          goal: string
+          id?: string
+          kpi?: string | null
+          q1_admin_feedback?: string | null
+          q1_manager_feedback?: string | null
+          q1_progress?: string | null
+          q1_rating?: number | null
+          q2_admin_feedback?: string | null
+          q2_manager_feedback?: string | null
+          q2_progress?: string | null
+          q2_rating?: number | null
+          q3_admin_feedback?: string | null
+          q3_manager_feedback?: string | null
+          q3_progress?: string | null
+          q3_rating?: number | null
+          q4_admin_feedback?: string | null
+          q4_manager_feedback?: string | null
+          q4_progress?: string | null
+          q4_rating?: number | null
+          updated_at?: string
+          user_id: string
+          weightage?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cycle_year?: number
+          final_feedback?: string | null
+          final_rating?: number | null
+          focus_area?: string
+          goal?: string
+          id?: string
+          kpi?: string | null
+          q1_admin_feedback?: string | null
+          q1_manager_feedback?: string | null
+          q1_progress?: string | null
+          q1_rating?: number | null
+          q2_admin_feedback?: string | null
+          q2_manager_feedback?: string | null
+          q2_progress?: string | null
+          q2_rating?: number | null
+          q3_admin_feedback?: string | null
+          q3_manager_feedback?: string | null
+          q3_progress?: string | null
+          q3_rating?: number | null
+          q4_admin_feedback?: string | null
+          q4_manager_feedback?: string | null
+          q4_progress?: string | null
+          q4_rating?: number | null
+          updated_at?: string
+          user_id?: string
+          weightage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kra_kpi_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kra_kpi_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_policy: {
         Row: {
           allowed_days: number | null
@@ -78,9 +239,13 @@ export type Database = {
           employee_id: string
           end_date: string | null
           end_time: string | null
+          half_day_period: string | null
           id: string
+          is_half_day: boolean
           leave_category: string | null
           reason: string
+          reverted_at: string | null
+          reverted_by: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           start_date: string
@@ -94,9 +259,13 @@ export type Database = {
           employee_id: string
           end_date?: string | null
           end_time?: string | null
+          half_day_period?: string | null
           id?: string
+          is_half_day?: boolean
           leave_category?: string | null
           reason: string
+          reverted_at?: string | null
+          reverted_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           start_date: string
@@ -110,9 +279,13 @@ export type Database = {
           employee_id?: string
           end_date?: string | null
           end_time?: string | null
+          half_day_period?: string | null
           id?: string
+          is_half_day?: boolean
           leave_category?: string | null
           reason?: string
+          reverted_at?: string | null
+          reverted_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           start_date?: string
@@ -124,6 +297,13 @@ export type Database = {
           {
             foreignKeyName: "leave_requests_employee_id_fkey"
             columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_reverted_by_fkey"
+            columns: ["reverted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -213,16 +393,60 @@ export type Database = {
           },
         ]
       }
+      organisation_flow_nodes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          parent_id: string | null
+          position: number
+          subtitle: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          parent_id?: string | null
+          position?: number
+          subtitle?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          parent_id?: string | null
+          position?: number
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_flow_nodes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "organisation_flow_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string | null
           created_by: string | null
+          date_of_birth: string | null
           department: string | null
           email: string
           full_name: string
           id: string
           is_active: boolean | null
+          joined_at: string | null
+          manager_id: string | null
           phone: string | null
           position: string | null
           role: string | null
@@ -231,11 +455,14 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by?: string | null
+          date_of_birth?: string | null
           department?: string | null
           email: string
           full_name: string
           id: string
           is_active?: boolean | null
+          joined_at?: string | null
+          manager_id?: string | null
           phone?: string | null
           position?: string | null
           role?: string | null
@@ -244,11 +471,14 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by?: string | null
+          date_of_birth?: string | null
           department?: string | null
           email?: string
           full_name?: string
           id?: string
           is_active?: boolean | null
+          joined_at?: string | null
+          manager_id?: string | null
           phone?: string | null
           position?: string | null
           role?: string | null
@@ -256,6 +486,128 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          project_id: string
+          role: string | null
+          sort_order: number | null
+          team_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          project_id: string
+          role?: string | null
+          sort_order?: number | null
+          team_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          project_id?: string
+          role?: string | null
+          sort_order?: number | null
+          team_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "project_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_teams: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_teams_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -347,6 +699,50 @@ export type Database = {
           },
         ]
       }
+      task_columns: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_default: boolean
+          key: string
+          label: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          key: string
+          label: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_default?: boolean
+          key?: string
+          label?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_columns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_comments: {
         Row: {
           body: string
@@ -374,6 +770,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "task_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "task_comments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "task_comments_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
@@ -400,6 +803,8 @@ export type Database = {
           id: string
           priority: string | null
           progress: number | null
+          project_id: string | null
+          project_team_id: string | null
           status: string | null
           title: string
           updated_at: string | null
@@ -414,6 +819,8 @@ export type Database = {
           id?: string
           priority?: string | null
           progress?: number | null
+          project_id?: string | null
+          project_team_id?: string | null
           status?: string | null
           title: string
           updated_at?: string | null
@@ -428,6 +835,8 @@ export type Database = {
           id?: string
           priority?: string | null
           progress?: number | null
+          project_id?: string | null
+          project_team_id?: string | null
           status?: string | null
           title?: string
           updated_at?: string | null
@@ -445,6 +854,20 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_project_team_id_fkey"
+            columns: ["project_team_id"]
+            isOneToOne: false
+            referencedRelation: "project_teams"
             referencedColumns: ["id"]
           },
         ]
@@ -517,6 +940,57 @@ export type Database = {
         }
         Relationships: []
       }
+      user_documents: {
+        Row: {
+          category: string | null
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          name: string
+          uploaded_at: string
+          uploaded_by: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          name?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_notes: {
         Row: {
           content: string
@@ -544,100 +1018,34 @@ export type Database = {
         }
         Relationships: []
       }
-      kra_kpi: {
+      user_task_column_prefs: {
         Row: {
-          id: string
-          user_id: string
-          created_by: string | null
-          cycle_year: number
-          focus_area: string
-          goal: string
-          kpi: string | null
-          weightage: number | null
-          q1_progress: string | null
-          q1_manager_feedback: string | null
-          q1_admin_feedback: string | null
-          q1_rating: number | null
-          q2_progress: string | null
-          q2_manager_feedback: string | null
-          q2_admin_feedback: string | null
-          q2_rating: number | null
-          q3_progress: string | null
-          q3_manager_feedback: string | null
-          q3_admin_feedback: string | null
-          q3_rating: number | null
-          q4_progress: string | null
-          q4_manager_feedback: string | null
-          q4_admin_feedback: string | null
-          q4_rating: number | null
-          final_rating: number | null
-          final_feedback: string | null
+          column_key: string
           created_at: string
+          custom_label: string
+          id: string
           updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          created_by?: string | null
-          cycle_year?: number
-          focus_area: string
-          goal: string
-          kpi?: string | null
-          weightage?: number | null
-          q1_progress?: string | null
-          q1_manager_feedback?: string | null
-          q1_admin_feedback?: string | null
-          q1_rating?: number | null
-          q2_progress?: string | null
-          q2_manager_feedback?: string | null
-          q2_admin_feedback?: string | null
-          q2_rating?: number | null
-          q3_progress?: string | null
-          q3_manager_feedback?: string | null
-          q3_admin_feedback?: string | null
-          q3_rating?: number | null
-          q4_progress?: string | null
-          q4_manager_feedback?: string | null
-          q4_admin_feedback?: string | null
-          q4_rating?: number | null
-          final_rating?: number | null
-          final_feedback?: string | null
+          column_key: string
           created_at?: string
+          custom_label: string
+          id?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          created_by?: string | null
-          cycle_year?: number
-          focus_area?: string
-          goal?: string
-          kpi?: string | null
-          weightage?: number | null
-          q1_progress?: string | null
-          q1_manager_feedback?: string | null
-          q1_admin_feedback?: string | null
-          q1_rating?: number | null
-          q2_progress?: string | null
-          q2_manager_feedback?: string | null
-          q2_admin_feedback?: string | null
-          q2_rating?: number | null
-          q3_progress?: string | null
-          q3_manager_feedback?: string | null
-          q3_admin_feedback?: string | null
-          q3_rating?: number | null
-          q4_progress?: string | null
-          q4_manager_feedback?: string | null
-          q4_admin_feedback?: string | null
-          q4_rating?: number | null
-          final_rating?: number | null
-          final_feedback?: string | null
+          column_key?: string
           created_at?: string
+          custom_label?: string
+          id?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "kra_kpi_user_id_fkey"
+            foreignKeyName: "user_task_column_prefs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -645,43 +1053,40 @@ export type Database = {
           },
         ]
       }
-      user_documents: {
+      user_task_columns: {
         Row: {
+          color: string
+          created_at: string
           id: string
+          key: string
+          label: string
+          position: number
+          updated_at: string
           user_id: string
-          uploaded_by: string | null
-          name: string
-          category: string | null
-          file_path: string
-          file_size: number | null
-          mime_type: string | null
-          uploaded_at: string
         }
         Insert: {
+          color?: string
+          created_at?: string
           id?: string
+          key: string
+          label: string
+          position?: number
+          updated_at?: string
           user_id: string
-          uploaded_by?: string | null
-          name: string
-          category?: string | null
-          file_path: string
-          file_size?: number | null
-          mime_type?: string | null
-          uploaded_at?: string
         }
         Update: {
+          color?: string
+          created_at?: string
           id?: string
+          key?: string
+          label?: string
+          position?: number
+          updated_at?: string
           user_id?: string
-          uploaded_by?: string | null
-          name?: string
-          category?: string | null
-          file_path?: string
-          file_size?: number | null
-          mime_type?: string | null
-          uploaded_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "user_documents_user_id_fkey"
+            foreignKeyName: "user_task_columns_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -694,6 +1099,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_active_profiles: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+          role: string
+        }[]
+      }
+      get_task_comment_recipients: {
+        Args: { p_commenter_id: string; p_task_id: string }
+        Returns: {
+          email: string
+          full_name: string
+          user_id: string
+        }[]
+      }
       get_user_role: { Args: { uid: string }; Returns: string }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_strict_admin: { Args: { uid: string }; Returns: boolean }
