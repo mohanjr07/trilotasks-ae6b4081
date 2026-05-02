@@ -39,6 +39,20 @@ export default function AdminLeavePage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const deleteRequest = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leave_requests").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
+      queryClient.invalidateQueries({ queryKey: ["my-leave"] });
+      toast.success("Leave deleted permanently");
+      setDeleteReq(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Revert an already-approved leave so it no longer counts as leave.
   // Primary strategy: set reverted_at + reverted_by and drop status back to "pending"
   //   (this way the quota calculator will skip the row because reverted_at is set).
