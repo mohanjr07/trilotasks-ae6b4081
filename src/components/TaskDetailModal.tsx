@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle } from "lucide-react";
+import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle, Eye } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -1166,8 +1166,18 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                             href={att.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80"
+                            title="View"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </a>
+                          <a
+                            href={att.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             download
                             className="text-primary hover:text-primary/80"
+                            title="Download"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </a>
