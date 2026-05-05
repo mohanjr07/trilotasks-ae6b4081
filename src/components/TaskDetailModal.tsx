@@ -1166,8 +1166,18 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                             href={att.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80"
+                            title="View"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </a>
+                          <a
+                            href={att.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             download
                             className="text-primary hover:text-primary/80"
+                            title="Download"
                           >
                             <Download className="h-3.5 w-3.5" />
                           </a>
