@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle } from "lucide-react";
+import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle, Eye } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, differenceInDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
