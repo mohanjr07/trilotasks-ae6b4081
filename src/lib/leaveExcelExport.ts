@@ -77,14 +77,16 @@ function isHalfDayAfternoon(req: LeaveExportRequest): boolean {
   return p === "PM" || p === "SECOND HALF" || p === "SECOND" || p === "A";
 }
 
-/** Should this request count as a leave on the attendance sheet? */
-function countsAsLeave(req: LeaveExportRequest): boolean {
-  if (req.reverted_at) return false;
-  if (req.status && req.status !== "approved") return false;
+/** Returns the mark for this request: "L" for leave, "W" for WFH, or null to skip */
+function markFor(req: LeaveExportRequest): "L" | "W" | null {
+  if (req.reverted_at) return null;
+  if (req.status && req.status !== "approved") return null;
   // on_duty and permission keep the employee marked present
-  if (req.type === "on_duty" || req.leave_category === "on_duty") return false;
-  if (req.type === "permission" || req.leave_category === "permission") return false;
-  return true;
+  if (req.type === "on_duty" || req.leave_category === "on_duty") return null;
+  if (req.type === "permission" || req.leave_category === "permission") return null;
+  // WFH is present-but-remote — mark distinctly so it isn't read as a leave
+  if (req.leave_category === "work_from_home") return "W";
+  return "L";
 }
 
 /** Iterate every day inclusively between start_date and end_date for a request */
@@ -114,33 +116,30 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   });
   const workingDays = totalDays - dayMeta.filter((m) => m.isSunday).length;
 
-  // ── Build the leave grid: per employee, per day → { f: bool, a: bool } ─────
-  // f = mark "L" in fore-noon, a = mark "L" in after-noon.
-  const grid: Record<string, Array<{ f: boolean; a: boolean }>> = {};
+  // ── Build the leave grid: per employee, per day → { f, a } where each is "L" | "W" | null
+  type Mark = "L" | "W" | null;
+  const grid: Record<string, Array<{ f: Mark; a: Mark }>> = {};
   for (const emp of employees) {
-    grid[emp.id] = Array.from({ length: totalDays }, () => ({ f: false, a: false }));
+    grid[emp.id] = Array.from({ length: totalDays }, () => ({ f: null as Mark, a: null as Mark }));
   }
 
   for (const req of leaveRequests) {
-    if (!countsAsLeave(req)) continue;
+    const mark = markFor(req);
+    if (!mark) continue;
     const emp = grid[req.employee_id];
-    if (!emp) continue; // employee not in the active list (e.g. terminated)
+    if (!emp) continue;
 
     for (const d of eachLeaveDay(req)) {
       if (d.getFullYear() !== year || d.getMonth() !== month - 1) continue;
       const dayIdx = d.getDate() - 1;
 
       if (req.is_half_day) {
-        // Half-day applies only to the start_date day for these requests
-        if (isHalfDayMorning(req)) emp[dayIdx].f = true;
-        else if (isHalfDayAfternoon(req)) emp[dayIdx].a = true;
-        else {
-          // Unknown half-day period — be conservative and mark forenoon
-          emp[dayIdx].f = true;
-        }
+        if (isHalfDayMorning(req)) emp[dayIdx].f = mark;
+        else if (isHalfDayAfternoon(req)) emp[dayIdx].a = mark;
+        else emp[dayIdx].f = mark;
       } else {
-        emp[dayIdx].f = true;
-        emp[dayIdx].a = true;
+        emp[dayIdx].f = mark;
+        emp[dayIdx].a = mark;
       }
     }
   }
@@ -170,7 +169,7 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   // ── Row 2: Working days subtitle ──────────────────────────────────────────
   ws.mergeCells(2, 1, 2, totalCols);
   const subCell = ws.getCell(2, 1);
-  subCell.value = `No.of Working Day - ${workingDays} Days`;
+  subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   blank = Present)`;
   subCell.alignment = { horizontal: "center", vertical: "middle" };
   subCell.font = { bold: true, size: 11 };
   ws.getRow(2).height = 18;
@@ -228,6 +227,11 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
     pattern: "solid",
     fgColor: { argb: "FFEF9A9A" },
   };
+  const wfhFill: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFBBDEFB" }, // soft blue — clearly distinct from leave/Sunday
+  };
 
   // Tint the Sunday column headers (rows 3-5) red so the day number stands out
   for (const m of dayMeta) {
@@ -257,11 +261,14 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
       const slot = grid[emp.id][dayIdx];
       const fCell = row.getCell(startCol);
       const aCell = row.getCell(endCol);
-      if (slot.f) fCell.value = "L";
-      if (slot.a) aCell.value = "L";
+      if (slot.f) fCell.value = slot.f;
+      if (slot.a) aCell.value = slot.a;
       fCell.alignment = { horizontal: "center", vertical: "middle" };
       aCell.alignment = { horizontal: "center", vertical: "middle" };
+      if (slot.f === "W") fCell.fill = wfhFill;
+      if (slot.a === "W") aCell.fill = wfhFill;
       if (m.isSunday) {
+        // Sunday shading takes priority so the rest day is unmistakable
         fCell.fill = sundayFill;
         aCell.fill = sundayFill;
       }
