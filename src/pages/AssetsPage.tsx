@@ -574,7 +574,6 @@ export default function AssetsPage() {
                   <th className="text-left px-5 py-3 font-medium">Holder(s)</th>
                   <th className="text-left px-5 py-3 font-medium">Status</th>
                   <th className="text-left px-5 py-3 font-medium">Notes</th>
-                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -587,7 +586,8 @@ export default function AssetsPage() {
                   return (
                     <tr
                       key={asset.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                      onClick={() => setViewAsset(asset)}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -618,32 +618,6 @@ export default function AssetsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-ink-muted max-w-[180px] truncate">
                         {asset.notes || "—"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => setViewAsset(asset)}
-                            className="p-1.5 rounded-lg hover:bg-muted text-ink-muted hover:text-ink-primary transition-colors"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button
-                                onClick={() => openEdit(asset)}
-                                className="p-1.5 rounded-lg hover:bg-muted text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteId(asset.id)}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-ink-muted hover:text-destructive transition-colors"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   );
@@ -972,9 +946,18 @@ export default function AssetsPage() {
                 <div className="flex gap-3 pt-1">
                   <Button variant="outline" className="flex-1" onClick={() => setViewAsset(null)}>Close</Button>
                   {isAdmin && (
-                    <Button className="flex-1" onClick={() => { setViewAsset(null); openEdit(viewAsset); }}>
-                      <Pencil className="h-4 w-4 mr-1.5" /> Edit
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex-1 text-destructive hover:text-destructive"
+                        onClick={() => { const id = viewAsset.id; setViewAsset(null); setDeleteId(id); }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+                      </Button>
+                      <Button className="flex-1" onClick={() => { openEdit(viewAsset); setViewAsset(null); }}>
+                        <Pencil className="h-4 w-4 mr-1.5" /> Edit
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
