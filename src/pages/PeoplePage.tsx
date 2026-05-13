@@ -357,10 +357,12 @@ export default function PeoplePage() {
   };
 
   const leaveCounts = useMemo(() => {
-    const approved = leaves.filter(l => l.status === "approved").length;
-    const pending  = leaves.filter(l => l.status === "pending").length;
-    const rejected = leaves.filter(l => l.status === "rejected").length;
-    return { approved, pending, rejected, total: leaves.length };
+    // Exclude reverted leaves — they are stored as status="pending" with reverted_at set
+    const activeLeaves = leaves.filter(l => !l.reverted_at);
+    const approved = activeLeaves.filter(l => l.status === "approved").length;
+    const pending  = activeLeaves.filter(l => l.status === "pending").length;
+    const rejected = activeLeaves.filter(l => l.status === "rejected").length;
+    return { approved, pending, rejected, total: activeLeaves.length };
   }, [leaves]);
 
   return (
@@ -733,7 +735,10 @@ export default function PeoplePage() {
                   ) : (
                     <ul className="space-y-2">
                       {leaves.map((l) => {
-                        const sc = leaveStatusConfig[l.status];
+                        const isReverted = !!l.reverted_at;
+                        const sc = isReverted
+                          ? { label: "Reverted", color: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400", icon: leaveStatusConfig["rejected"].icon }
+                          : leaveStatusConfig[l.status];
                         const SIcon = sc.icon;
                         return (
                           <li key={l.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
