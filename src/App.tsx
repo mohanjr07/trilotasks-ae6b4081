@@ -49,7 +49,40 @@ const queryClient = new QueryClient({
 
 function RootRedirect() {
   const { profile, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative flex items-center justify-center">
+          <span
+            className="absolute inline-block rounded-full border-2 border-primary border-t-transparent animate-spin"
+            style={{ width: 88, height: 88 }}
+          />
+          <span
+            className="absolute inline-block rounded-full border border-primary/30 animate-ping"
+            style={{ width: 72, height: 72, animationDuration: "1.4s" }}
+          />
+          <div className="relative z-10 flex items-center justify-center rounded-full bg-background shadow-md"
+               style={{ width: 64, height: 64 }}>
+            <img
+              src="/logo.png"
+              alt="Trilo"
+              className="block dark:hidden"
+              style={{ width: 44, height: 44, objectFit: "contain" }}
+            />
+            <img
+              src="/logo-dark.png"
+              alt="Trilo"
+              className="hidden dark:block"
+              style={{ width: 44, height: 44, objectFit: "contain" }}
+            />
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground tracking-widest uppercase animate-pulse select-none">
+          Loading…
+        </p>
+      </div>
+    </div>
+  );
   if (!profile) return <Navigate to="/login" replace />;
   if (profile.role === "employee") return <Navigate to="/my-dashboard" replace />;
   if (profile.role === "intern") return <Navigate to="/intern-dashboard" replace />;
