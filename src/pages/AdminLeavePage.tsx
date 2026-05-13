@@ -255,6 +255,7 @@ export default function AdminLeavePage() {
         {filtered.length === 0 && <div className="py-16 text-center text-sm text-ink-muted">No requests found</div>}
       </motion.div>
 
+      <ViewLeaveModal request={viewReq} onClose={() => setViewReq(null)} />
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
       <DeleteLeaveModal
         request={deleteReq}
