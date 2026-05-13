@@ -261,11 +261,14 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
       const slot = grid[emp.id][dayIdx];
       const fCell = row.getCell(startCol);
       const aCell = row.getCell(endCol);
-      if (slot.f) fCell.value = "L";
-      if (slot.a) aCell.value = "L";
+      if (slot.f) fCell.value = slot.f;
+      if (slot.a) aCell.value = slot.a;
       fCell.alignment = { horizontal: "center", vertical: "middle" };
       aCell.alignment = { horizontal: "center", vertical: "middle" };
+      if (slot.f === "W") fCell.fill = wfhFill;
+      if (slot.a === "W") aCell.fill = wfhFill;
       if (m.isSunday) {
+        // Sunday shading takes priority so the rest day is unmistakable
         fCell.fill = sundayFill;
         aCell.fill = sundayFill;
       }
