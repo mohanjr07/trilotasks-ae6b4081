@@ -946,9 +946,18 @@ export default function AssetsPage() {
                 <div className="flex gap-3 pt-1">
                   <Button variant="outline" className="flex-1" onClick={() => setViewAsset(null)}>Close</Button>
                   {isAdmin && (
-                    <Button className="flex-1" onClick={() => { setViewAsset(null); openEdit(viewAsset); }}>
-                      <Pencil className="h-4 w-4 mr-1.5" /> Edit
-                    </Button>
+                    <>
+                      <Button
+                        variant="outline"
+                        className="flex-1 text-destructive hover:text-destructive"
+                        onClick={() => { const id = viewAsset.id; setViewAsset(null); setDeleteId(id); }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+                      </Button>
+                      <Button className="flex-1" onClick={() => { openEdit(viewAsset); setViewAsset(null); }}>
+                        <Pencil className="h-4 w-4 mr-1.5" /> Edit
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
