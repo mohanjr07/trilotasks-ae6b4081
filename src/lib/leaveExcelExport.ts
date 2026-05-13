@@ -227,6 +227,11 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
     pattern: "solid",
     fgColor: { argb: "FFEF9A9A" },
   };
+  const wfhFill: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFBBDEFB" }, // soft blue — clearly distinct from leave/Sunday
+  };
 
   // Tint the Sunday column headers (rows 3-5) red so the day number stands out
   for (const m of dayMeta) {
