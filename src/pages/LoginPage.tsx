@@ -121,11 +121,11 @@ export default function LoginPage() {
           transition={{ duration: 0.5, ease: "easeOut" }}
           className="w-full max-w-md"
         >
-          <div className="mb-8">
+          <div className="mb-8 text-center">
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Trilo Automation"
-              className="h-44 object-contain mb-4"
+              className="h-44 object-contain mb-4 mx-auto"
             />
             <p className="text-gray-500 text-base mb-1">Welcome to</p>
             <h1 className="text-3xl font-extrabold text-[#5c5fef]">TaskFlow</h1>
