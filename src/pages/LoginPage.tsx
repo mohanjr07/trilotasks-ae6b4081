@@ -125,7 +125,7 @@ export default function LoginPage() {
             <img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Trilo Automation"
-              className="h-44 object-contain mb-4 mx-auto"
+              className="h-60 object-contain mb-4 mx-auto"
             />
             <p className="text-gray-500 text-base mb-1">Welcome to</p>
             <h1 className="text-3xl font-extrabold text-[#5c5fef]">TaskFlow</h1>
