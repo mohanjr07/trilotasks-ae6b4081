@@ -269,6 +269,107 @@ export default function AdminLeavePage() {
   );
 }
 
+function ViewLeaveModal({ request, onClose }: { request: any; onClose: () => void }) {
+  if (!request) return null;
+  const isReverted = !!request.reverted_at;
+  const displayStatus = isReverted ? "reverted" : (request.status ?? "pending");
+  const fmtTime = (t?: string | null) => (t ? String(t).slice(0, 5) : "");
+  const categoryLabel =
+    request.leave_category === "casual_leave" ? "Casual Leave" :
+    request.leave_category === "on_duty" ? "On Duty" :
+    request.leave_category === "work_from_home" ? "Work From Home" :
+    request.leave_category === "unauthorised_leave" ? "Unauthorised Leave" :
+    request.leave_category === "late" ? "Late" :
+    request.leave_category === "permission" || request.type === "permission" ? "Permission" :
+    request.leave_category ?? request.type;
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+          className="relative w-full max-w-[480px] rounded-modal bg-card p-6 shadow-modal mx-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-heading text-lg font-bold text-ink-primary">Leave Details</h2>
+            <button onClick={onClose} className="text-ink-muted"><X className="h-5 w-5" /></button>
+          </div>
+
+          <div className="flex items-center gap-3 mb-4 pb-4 border-b border-border">
+            <UserAvatar name={request.employee?.full_name ?? "?"} avatarUrl={request.employee?.avatar_url} size="md" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-ink-primary truncate">{request.employee?.full_name}</p>
+              {request.employee?.department && (
+                <p className="text-xs text-ink-muted truncate">{request.employee.department}</p>
+              )}
+            </div>
+            <StatusBadge status={displayStatus} />
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-muted">Type</span>
+              <span className="text-ink-primary font-medium text-right">
+                {categoryLabel}
+                {request.is_half_day && (
+                  <span className="ml-2 text-[10px] font-semibold bg-purple-light text-purple px-1.5 py-0.5 rounded-pill align-middle">
+                    Half Day{request.half_day_period ? ` · ${request.half_day_period}` : ""}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-ink-muted">Period</span>
+              <span className="text-ink-primary text-right">
+                {request.start_date && format(new Date(request.start_date), "MMM d, yyyy")}
+                {request.end_date && request.end_date !== request.start_date && ` — ${format(new Date(request.end_date), "MMM d, yyyy")}`}
+              </span>
+            </div>
+            {request.start_time && (
+              <div className="flex justify-between gap-3">
+                <span className="text-ink-muted">Time</span>
+                <span className="text-ink-primary">{fmtTime(request.start_time)}–{fmtTime(request.end_time)}</span>
+              </div>
+            )}
+            {request.created_at && (
+              <div className="flex justify-between gap-3">
+                <span className="text-ink-muted">Requested</span>
+                <span className="text-ink-primary">{format(new Date(request.created_at), "MMM d, yyyy h:mm a")}</span>
+              </div>
+            )}
+            {request.reviewed_at && (
+              <div className="flex justify-between gap-3">
+                <span className="text-ink-muted">Reviewed</span>
+                <span className="text-ink-primary">{format(new Date(request.reviewed_at), "MMM d, yyyy h:mm a")}</span>
+              </div>
+            )}
+            {request.reverted_at && (
+              <div className="flex justify-between gap-3">
+                <span className="text-ink-muted">Reverted</span>
+                <span className="text-ink-primary">{format(new Date(request.reverted_at), "MMM d, yyyy h:mm a")}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-ink-muted">Reason</span>
+              <p className="mt-1 text-ink-primary whitespace-pre-wrap">{request.reason || "—"}</p>
+            </div>
+            {request.admin_note && (
+              <div>
+                <span className="text-ink-muted">Admin Note</span>
+                <p className="mt-1 text-ink-primary whitespace-pre-wrap">{request.admin_note}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 flex justify-end">
+            <Button variant="outline" onClick={onClose}>Close</Button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
 function ReviewModal({ request, onClose }: { request: any; onClose: () => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
