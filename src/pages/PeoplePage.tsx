@@ -79,6 +79,9 @@ function workingDaysSoFar(monthStart: Date, monthEnd: Date): Date[] {
 // counted within [monthStart, cappedEnd].
 function leaveDaysInMonth(l: LeaveRow, monthStart: Date, cappedEnd: Date): number {
   if (l.status !== "approved" || l.reverted_at) return 0;
+  // WFH is considered present — does not reduce attendance
+  if (l.leave_category?.toLowerCase().includes("work_from_home") ||
+      l.leave_category?.toLowerCase() === "wfh") return 0;
   if (l.type === "permission") {
     // Permissions are partial-day — count as 0.25 day if the date falls in window.
     const d = parseISO(l.start_date);
