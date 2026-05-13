@@ -26,6 +26,7 @@ export default function AdminLeavePage() {
   const [showAssignLeave, setShowAssignLeave] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [deleteReq, setDeleteReq] = useState<any>(null);
+  const [selectedLeave, setSelectedLeave] = useState<any>(null);
 
   const clearRequest = useMutation({
     mutationFn: async (id: string) => {
@@ -193,7 +194,8 @@ export default function AdminLeavePage() {
           const displayStatus = isReverted ? "reverted" : (req.status ?? "pending");
           return (
           <motion.div key={req.id} variants={staggerItem}
-            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow ${isReverted ? "opacity-70" : ""}`}>
+            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer ${isReverted ? "opacity-70" : ""}`}
+            onClick={(e) => { if ((e.target as HTMLElement).closest("button")) return; setSelectedLeave(req); }}>
             <UserAvatar name={req.employee?.full_name ?? "?"} avatarUrl={req.employee?.avatar_url} size="md" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ink-primary">
@@ -256,6 +258,7 @@ export default function AdminLeavePage() {
       </motion.div>
 
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
+      <LeaveDetailModal request={selectedLeave} onClose={() => setSelectedLeave(null)} />
       <DeleteLeaveModal
         request={deleteReq}
         onClose={() => setDeleteReq(null)}
@@ -265,6 +268,117 @@ export default function AdminLeavePage() {
       {isStrictAdmin && <AssignLeaveModal open={showAssignLeave} onClose={() => setShowAssignLeave(false)} />}
       {isStrictAdmin && <ExportLeaveModal open={showExport} onClose={() => setShowExport(false)} />}
     </AnimatedPage>
+  );
+}
+
+function LeaveDetailModal({ request, onClose }: { request: any; onClose: () => void }) {
+  if (!request) return null;
+  const isReverted = !!request.reverted_at;
+  const displayStatus = isReverted ? "reverted" : (request.status ?? "pending");
+
+  const leaveTypeLabel =
+    request.leave_category === "casual_leave" ? "Casual Leave"
+    : request.leave_category === "on_duty" ? "On Duty"
+    : request.leave_category === "work_from_home" ? "Work From Home"
+    : request.leave_category === "unauthorised_leave" ? "Unauthorised Leave"
+    : request.leave_category === "late" ? "Late"
+    : request.leave_category === "permission" || request.type === "permission" ? "Permission"
+    : request.leave_category ?? request.type ?? "—";
+
+  return (
+    <AnimatePresence>
+      {request && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-ink-primary/30"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+            className="relative w-full max-w-[480px] rounded-modal bg-card p-6 shadow-modal mx-4"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <UserAvatar name={request.employee?.full_name ?? "?"} avatarUrl={request.employee?.avatar_url} size="md" />
+                <div>
+                  <h2 className="font-heading text-lg font-bold text-ink-primary leading-tight">
+                    {request.employee?.full_name}
+                  </h2>
+                  {request.employee?.department && (
+                    <p className="text-xs text-ink-muted">{request.employee.department}</p>
+                  )}
+                </div>
+              </div>
+              <button onClick={onClose} className="text-ink-muted hover:text-ink-primary">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Status badge */}
+            <div className="flex items-center gap-2 mb-5">
+              <StatusBadge status={displayStatus} />
+              {request.is_half_day && (
+                <span className="text-[10px] font-semibold bg-purple-light text-purple px-1.5 py-0.5 rounded-pill">
+                  Half Day{request.half_day_period ? ` · ${request.half_day_period}` : ""}
+                </span>
+              )}
+            </div>
+
+            {/* Details grid */}
+            <div className="rounded-lg bg-muted/40 divide-y divide-border text-sm mb-5">
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-ink-muted">Leave Type</span>
+                <span className="text-ink-primary font-medium">{leaveTypeLabel}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-ink-muted">Period</span>
+                <span className="text-ink-primary font-medium">
+                  {request.start_date && format(new Date(request.start_date), "MMM d, yyyy")}
+                  {request.end_date && request.end_date !== request.start_date
+                    ? ` – ${format(new Date(request.end_date), "MMM d, yyyy")}`
+                    : ""}
+                  {request.start_time && ` · ${String(request.start_time).slice(0, 5)} – ${String(request.end_time).slice(0, 5)}`}
+                </span>
+              </div>
+              {request.reason && (
+                <div className="px-4 py-3">
+                  <span className="text-ink-muted block mb-1">Reason</span>
+                  <span className="text-ink-primary">{request.reason}</span>
+                </div>
+              )}
+              {request.admin_note && (
+                <div className="px-4 py-3">
+                  <span className="text-ink-muted block mb-1">Admin Note</span>
+                  <span className="text-ink-primary">{request.admin_note}</span>
+                </div>
+              )}
+              {request.created_at && (
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-ink-muted">Applied On</span>
+                  <span className="text-ink-primary">{format(new Date(request.created_at), "MMM d, yyyy · h:mm a")}</span>
+                </div>
+              )}
+              {request.reviewed_at && (
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-ink-muted">Reviewed On</span>
+                  <span className="text-ink-primary">{format(new Date(request.reviewed_at), "MMM d, yyyy · h:mm a")}</span>
+                </div>
+              )}
+              {isReverted && request.reverted_at && (
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-ink-muted">Reverted On</span>
+                  <span className="text-ink-primary">{format(new Date(request.reverted_at), "MMM d, yyyy · h:mm a")}</span>
+                </div>
+              )}
+            </div>
+
+            <Button variant="outline" onClick={onClose} className="w-full">Close</Button>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 
