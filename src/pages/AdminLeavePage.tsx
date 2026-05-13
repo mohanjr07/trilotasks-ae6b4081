@@ -26,6 +26,7 @@ export default function AdminLeavePage() {
   const [showAssignLeave, setShowAssignLeave] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [deleteReq, setDeleteReq] = useState<any>(null);
+  const [viewReq, setViewReq] = useState<any>(null);
 
   const clearRequest = useMutation({
     mutationFn: async (id: string) => {
