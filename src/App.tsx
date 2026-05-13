@@ -47,6 +47,21 @@ const queryClient = new QueryClient({
   },
 });
 
+const TriloEmblem = () => (
+  <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" width="72" height="72" aria-label="Trilo">
+    <defs>
+      <linearGradient id="triloGradApp" x1="0%" y1="0%" x2="60%" y2="100%">
+        <stop offset="0%" stopColor="#60a5fa" />
+        <stop offset="45%" stopColor="#818cf8" />
+        <stop offset="100%" stopColor="#f97316" />
+      </linearGradient>
+    </defs>
+    <path d="M100 95 L30 30 Q18 18 28 10 Q38 2 48 14 L108 78" fill="none" stroke="url(#triloGradApp)" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M100 95 L170 30 Q182 18 172 10 Q162 2 152 14 L92 78" fill="none" stroke="url(#triloGradApp)" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M100 95 L100 200" fill="none" stroke="url(#triloGradApp)" strokeWidth="18" strokeLinecap="round" />
+  </svg>
+);
+
 function RootRedirect() {
   const { profile, loading } = useAuth();
   if (loading) return (
@@ -54,27 +69,15 @@ function RootRedirect() {
       <div className="flex flex-col items-center gap-6">
         <div className="relative flex items-center justify-center">
           <span
-            className="absolute inline-block rounded-full border-2 border-primary border-t-transparent animate-spin"
-            style={{ width: 88, height: 88 }}
+            className="absolute rounded-full border-2 border-t-transparent animate-spin"
+            style={{ width: 120, height: 120, borderColor: "#818cf8 transparent transparent transparent" }}
           />
           <span
-            className="absolute inline-block rounded-full border border-primary/30 animate-ping"
-            style={{ width: 72, height: 72, animationDuration: "1.4s" }}
+            className="absolute rounded-full animate-ping"
+            style={{ width: 100, height: 100, border: "1px solid #818cf840", animationDuration: "1.5s" }}
           />
-          <div className="relative z-10 flex items-center justify-center rounded-full bg-background shadow-md"
-               style={{ width: 64, height: 64 }}>
-            <img
-              src="/logo.png"
-              alt="Trilo"
-              className="block dark:hidden"
-              style={{ width: 44, height: 44, objectFit: "contain" }}
-            />
-            <img
-              src="/logo-dark.png"
-              alt="Trilo"
-              className="hidden dark:block"
-              style={{ width: 44, height: 44, objectFit: "contain" }}
-            />
+          <div className="relative z-10 flex items-center justify-center rounded-full bg-background" style={{ width: 88, height: 88 }}>
+            <TriloEmblem />
           </div>
         </div>
         <p className="text-sm text-muted-foreground tracking-widest uppercase animate-pulse select-none">
