@@ -574,7 +574,6 @@ export default function AssetsPage() {
                   <th className="text-left px-5 py-3 font-medium">Holder(s)</th>
                   <th className="text-left px-5 py-3 font-medium">Status</th>
                   <th className="text-left px-5 py-3 font-medium">Notes</th>
-                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody>
