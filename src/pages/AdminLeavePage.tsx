@@ -213,7 +213,7 @@ export default function AdminLeavePage() {
             </div>
             <StatusBadge status={displayStatus} />
             {isStrictAdmin && req.status === "pending" && !isReverted && (
-              <div className="flex gap-2">
+              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <Button size="sm" variant="outline" className="text-success border-success/30 hover:bg-success-light"
                   onClick={() => setReviewReq({ ...req, action: "approved" })}>✓</Button>
                 <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive-light"
@@ -225,7 +225,8 @@ export default function AdminLeavePage() {
                 size="sm"
                 variant="outline"
                 className="text-ink-muted border-border hover:bg-muted gap-1.5"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (window.confirm(`Revert approved leave for ${req.employee?.full_name}? It will no longer count as leave.`)) {
                     revertRequest.mutate(req);
                   }
@@ -242,7 +243,7 @@ export default function AdminLeavePage() {
                 size="icon"
                 variant="outline"
                 className="h-9 w-9 text-destructive border-destructive/30 hover:bg-destructive-light"
-                onClick={() => setDeleteReq(req)}
+                onClick={(e) => { e.stopPropagation(); setDeleteReq(req); }}
                 title="Delete this rejected leave permanently"
               >
                 <Trash2 className="h-4 w-4" />
