@@ -586,7 +586,8 @@ export default function AssetsPage() {
                   return (
                     <tr
                       key={asset.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                      onClick={() => setViewAsset(asset)}
+                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -617,32 +618,6 @@ export default function AssetsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-ink-muted max-w-[180px] truncate">
                         {asset.notes || "—"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1 justify-end">
-                          <button
-                            onClick={() => setViewAsset(asset)}
-                            className="p-1.5 rounded-lg hover:bg-muted text-ink-muted hover:text-ink-primary transition-colors"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button
-                                onClick={() => openEdit(asset)}
-                                className="p-1.5 rounded-lg hover:bg-muted text-ink-muted hover:text-ink-primary transition-colors"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteId(asset.id)}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 text-ink-muted hover:text-destructive transition-colors"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   );
