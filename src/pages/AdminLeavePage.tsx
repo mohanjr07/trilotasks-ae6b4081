@@ -191,7 +191,8 @@ export default function AdminLeavePage() {
           const displayStatus = isReverted ? "reverted" : (req.status ?? "pending");
           return (
           <motion.div key={req.id} variants={staggerItem}
-            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow ${isReverted ? "opacity-70" : ""}`}>
+            onClick={() => setViewReq(req)}
+            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer ${isReverted ? "opacity-70" : ""}`}>
             <UserAvatar name={req.employee?.full_name ?? "?"} avatarUrl={req.employee?.avatar_url} size="md" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-ink-primary">
