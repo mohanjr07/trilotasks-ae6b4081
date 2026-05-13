@@ -169,7 +169,7 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   // ── Row 2: Working days subtitle ──────────────────────────────────────────
   ws.mergeCells(2, 1, 2, totalCols);
   const subCell = ws.getCell(2, 1);
-  subCell.value = `No.of Working Day - ${workingDays} Days`;
+  subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   blank = Present)`;
   subCell.alignment = { horizontal: "center", vertical: "middle" };
   subCell.font = { bold: true, size: 11 };
   ws.getRow(2).height = 18;
