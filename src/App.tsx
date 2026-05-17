@@ -76,9 +76,6 @@ function RootRedirect() {
             className="absolute rounded-full animate-ping"
             style={{ width: 100, height: 100, border: "1px solid #818cf840", animationDuration: "1.5s" }}
           />
-          <div className="relative z-10 flex items-center justify-center rounded-full bg-background" style={{ width: 88, height: 88 }}>
-            <TriloEmblem />
-          </div>
         </div>
         <p className="text-sm text-muted-foreground tracking-widest uppercase animate-pulse select-none">
           Loading…

@@ -29,13 +29,6 @@ const LoadingScreen = () => (
             animationDuration: "1.5s",
           }}
         />
-        {/* Emblem — sized to fill the ring */}
-        <div
-          className="relative z-10 flex items-center justify-center rounded-full bg-background"
-          style={{ width: 110, height: 110 }}
-        >
-          <img src="/logo-emblem.png" alt="Trilo" width={110} height={110} style={{ objectFit: "contain" }} />
-        </div>
       </div>
       <p className="text-sm text-muted-foreground tracking-widest uppercase animate-pulse select-none">
         Loading…
