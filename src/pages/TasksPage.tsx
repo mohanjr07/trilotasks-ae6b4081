@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Plus, Search, X as XIcon, CheckSquare, LayoutGrid, List,
-  Pencil, Trash2, Check,
+  Pencil, Trash2, Check, CheckCircle2,
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage, { staggerContainer, staggerItem } from "@/components/AnimatedPage";
@@ -307,12 +307,20 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   };
   const cancelRename = () => setEditingColKey(null);
 
+  // Tasks completed more than 7 days ago are archived to the Completed Tasks page
+  // and removed from the main board so the Completed column doesn't pile up.
+  const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
   const filteredTasks = tasks.filter((t: any) => {
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
     if (assigneeFilter !== "all") {
       const assignees = t.task_assignees?.map((a: any) => a.user_id) ?? [];
       if (!assignees.includes(assigneeFilter)) return false;
+    }
+    if (t.status === "completed" && t.updated_at) {
+      const ts = new Date(t.updated_at).getTime();
+      if (ts > 0 && ts < sevenDaysAgoMs) return false;
     }
     return true;
   });
@@ -394,6 +402,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
               <List className="h-3.5 w-3.5" /> List
             </button>
           </div>
+          <Link
+            to="/completed-tasks"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-ink-secondary hover:bg-muted transition-colors"
+          >
+            <CheckCircle2 className="h-4 w-4 text-success" /> Completed Tasks
+          </Link>
           {canCreateTasks && (
             <Button onClick={handleOpenCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Create Task
