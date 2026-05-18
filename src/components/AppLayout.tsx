@@ -16,6 +16,7 @@ type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
 const adminNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
+  { label: "Completed Tasks", path: "/completed-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Boxes },
@@ -34,6 +35,7 @@ const adminNav: NavItem[] = [
 const managerNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
+  { label: "Completed Tasks", path: "/completed-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "My Assets", path: "/assets", icon: Boxes },
@@ -54,6 +56,7 @@ const employeeNav: NavItem[] = [
   { label: "Dashboard", path: "/my-dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
+  { label: "Completed Tasks", path: "/completed-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "My Assets", path: "/assets", icon: Boxes },
@@ -69,6 +72,7 @@ const employeeNav: NavItem[] = [
 const internNav: NavItem[] = [
   { label: "Dashboard", path: "/intern-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
+  { label: "Completed Tasks", path: "/completed-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "My Assets", path: "/assets", icon: Boxes },
