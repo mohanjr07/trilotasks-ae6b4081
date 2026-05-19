@@ -52,7 +52,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen bg-[#f0f0f0]">
       {/* Left illustration panel */}
-      <div className="hidden lg:flex lg:w-1/2 items-center justify-center bg-[#f0f0f0] p-12">
+      <div className="hidden lg:flex lg:w-1/2 items-center justify-center bg-[#f0f0f0] p-12 relative overflow-hidden">
         <motion.div
           initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
@@ -102,6 +102,56 @@ export default function LoginPage() {
             animate={{ y: [0, -22, 0], x: [0, -6, 0], scale: [1, 1.2, 1] }}
             transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
           />
+          <motion.div
+            className="absolute top-60 left-5 w-2 h-2 rounded-full bg-pink-300 opacity-30"
+            animate={{ y: [0, -15, 0], x: [0, 8, 0], scale: [1, 1.4, 1] }}
+            transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
+          />
+          <motion.div
+            className="absolute bottom-40 left-40 w-3 h-3 rounded-full bg-purple-300 opacity-35"
+            animate={{ y: [0, -28, 0], x: [0, -10, 0], opacity: [0.2, 0.6, 0.2] }}
+            transition={{ duration: 5.2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+          />
+
+          {/* Sparkle/star shapes */}
+          <motion.svg
+            className="absolute top-24 right-20 w-5 h-5 text-amber-400"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            animate={{ scale: [0.8, 1.2, 0.8], rotate: [0, 180, 360], opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+          </motion.svg>
+          <motion.svg
+            className="absolute bottom-40 right-32 w-4 h-4 text-pink-400"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            animate={{ scale: [1, 1.3, 1], rotate: [0, -180, -360], opacity: [0.3, 0.9, 0.3] }}
+            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          >
+            <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+          </motion.svg>
+          <motion.svg
+            className="absolute top-16 left-1/2 w-3 h-3 text-blue-400"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            animate={{ scale: [0.9, 1.4, 0.9], opacity: [0.3, 0.8, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+          >
+            <path d="M12 0L14.5 9.5L24 12L14.5 14.5L12 24L9.5 14.5L0 12L9.5 9.5L12 0Z" />
+          </motion.svg>
+
+          {/* Small floating check icon */}
+          <motion.div
+            className="absolute bottom-60 right-8 text-green-400 opacity-50"
+            animate={{ y: [0, -10, 0], scale: [1, 1.2, 1], opacity: [0.3, 0.7, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </motion.div>
 
           {/* Phone mockup illustration */}
           <div className="relative flex items-end justify-center gap-4">
@@ -186,29 +236,105 @@ export default function LoginPage() {
       </div>
 
       {/* Right form panel */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-white">
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12 bg-white relative overflow-hidden">
+        {/* Animated floating shapes in form background */}
+        <motion.div
+          className="absolute top-12 right-12 w-6 h-6 rounded-full border-2 border-[#5c5fef] opacity-20"
+          animate={{ rotate: [0, 360], y: [0, -15, 0], scale: [1, 1.2, 1] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-20 left-10 w-4 h-4 rounded-sm bg-[#5c5fef] opacity-15 rotate-45"
+          animate={{ y: [0, -20, 0], rotate: [45, 135, 45], scale: [1, 1.3, 1] }}
+          transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute top-1/3 left-4 w-3 h-3 rounded-full bg-pink-400 opacity-20"
+          animate={{ y: [0, -25, 0], x: [0, 10, 0], opacity: [0.1, 0.4, 0.1] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute bottom-1/3 right-6 w-5 h-5 border-2 border-purple-400 rounded-full opacity-15"
+          animate={{ scale: [1, 1.4, 1], opacity: [0.1, 0.3, 0.1] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        />
+        <motion.div
+          className="absolute top-24 left-1/4 w-2 h-2 rounded-full bg-indigo-300 opacity-20"
+          animate={{ y: [0, -18, 0], x: [0, -8, 0], scale: [1, 1.5, 1] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+        />
+        <motion.div
+          className="absolute bottom-36 right-16 w-3 h-3 rounded-full bg-amber-300 opacity-15"
+          animate={{ y: [0, -22, 0], x: [0, 6, 0], opacity: [0.1, 0.5, 0.1] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+        />
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full max-w-md"
+          className="w-full max-w-md relative z-10"
         >
-          <div className="mb-8 text-center">
-            <img
+          <div className="mb-8 text-center relative">
+            {/* Animated ring around logo */}
+            <motion.div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px] h-[220px] rounded-full border-2 border-dashed border-[#5c5fef] opacity-20"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+            />
+            <motion.div
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[260px] h-[260px] rounded-full border border-[#5c5fef] opacity-10"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+            />
+            <motion.img
               src={`${import.meta.env.BASE_URL}logo.png`}
               alt="Trilo Automation"
               className="h-60 object-contain mb-4 mx-auto"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
             />
-            <p className="text-gray-500 text-base mb-1">Welcome to</p>
-            <h1 className="text-3xl font-extrabold text-[#5c5fef]">TaskFlow</h1>
+            <motion.p
+              className="text-gray-500 text-base mb-1"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              Welcome to
+            </motion.p>
+            <motion.h1
+              className="text-3xl font-extrabold text-[#5c5fef]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
+            >
+              TaskFlow
+            </motion.h1>
           </div>
 
           {/* Email/password form */}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+          <motion.form
+            onSubmit={handleSubmit(onSubmit)}
+            className="space-y-3"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+          >
             {/* Email field */}
-            <div className="relative">
+            <motion.div
+              className="relative"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.8 }}
+            >
               <div className="flex items-center h-14 bg-gray-100 rounded-xl px-4 gap-3 focus-within:ring-2 focus-within:ring-[#5c5fef] transition-all">
-                <Mail className="w-5 h-5 text-gray-500 shrink-0" />
+                <motion.div
+                  animate={{ rotate: [0, 10, -10, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+                >
+                  <Mail className="w-5 h-5 text-gray-500 shrink-0" />
+                </motion.div>
                 <div className="flex flex-col flex-1 min-w-0">
                   <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Email</label>
                   <input
@@ -220,12 +346,22 @@ export default function LoginPage() {
                 </div>
               </div>
               {errors.email && <p className="mt-1 text-xs text-red-500 pl-1">{errors.email.message}</p>}
-            </div>
+            </motion.div>
 
             {/* Password field */}
-            <div className="relative">
+            <motion.div
+              className="relative"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.4, delay: 0.9 }}
+            >
               <div className="flex items-center h-14 bg-gray-100 rounded-xl px-4 gap-3 focus-within:ring-2 focus-within:ring-[#5c5fef] transition-all">
-                <KeyRound className="w-5 h-5 text-gray-500 shrink-0" />
+                <motion.div
+                  animate={{ rotate: [0, -10, 10, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 2.5 }}
+                >
+                  <KeyRound className="w-5 h-5 text-gray-500 shrink-0" />
+                </motion.div>
                 <div className="flex flex-col flex-1 min-w-0">
                   <label className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Password</label>
                   <input
@@ -244,10 +380,15 @@ export default function LoginPage() {
                 </button>
               </div>
               {errors.password && <p className="mt-1 text-xs text-red-500 pl-1">{errors.password.message}</p>}
-            </div>
+            </motion.div>
 
             {/* Remember me + Forgot password */}
-            <div className="flex items-center justify-between pt-1">
+            <motion.div
+              className="flex items-center justify-between pt-1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 1.0 }}
+            >
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -260,17 +401,35 @@ export default function LoginPage() {
               <a href="/forgot-password" className="text-sm text-[#5c5fef] hover:underline font-medium">
                 Forgot Password?
               </a>
-            </div>
+            </motion.div>
 
             {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-12 bg-[#5c5fef] hover:bg-[#4a4de0] disabled:opacity-60 text-white font-semibold rounded-xl transition-colors mt-2 text-sm tracking-wide"
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 1.1 }}
             >
-              {loading ? "Signing in..." : "Login"}
-            </button>
-          </form>
+              <motion.button
+                type="submit"
+                disabled={loading}
+                className="w-full h-12 bg-[#5c5fef] hover:bg-[#4a4de0] disabled:opacity-60 text-white font-semibold rounded-xl transition-colors mt-2 text-sm tracking-wide relative overflow-hidden"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {loading ? (
+                  <motion.span
+                    className="flex items-center justify-center gap-2"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    Signing in...
+                  </motion.span>
+                ) : (
+                  "Login"
+                )}
+              </motion.button>
+            </motion.div>
+          </motion.form>
 
 
         </motion.div>
