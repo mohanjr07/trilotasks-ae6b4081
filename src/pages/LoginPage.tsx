@@ -70,6 +70,38 @@ export default function LoginPage() {
             animate={{ scale: [1, 1.3, 1], x: [0, -15, 0], y: [0, -10, 0] }}
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           />
+          <motion.div
+            className="absolute top-1/3 right-10 w-24 h-24 rounded-full bg-blue-200 opacity-30 blur-2xl"
+            animate={{ scale: [1, 1.5, 1], y: [0, 15, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          {/* Floating decorative particles */}
+          <motion.div
+            className="absolute top-20 left-20 w-3 h-3 rounded-full bg-pink-400 opacity-60"
+            animate={{ y: [0, -30, 0], x: [0, 10, 0], opacity: [0.3, 0.8, 0.3] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            className="absolute bottom-32 right-10 w-2 h-2 rounded-full bg-purple-400 opacity-50"
+            animate={{ y: [0, -20, 0], x: [0, -8, 0], opacity: [0.2, 0.7, 0.2] }}
+            transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+          />
+          <motion.div
+            className="absolute top-40 right-32 w-4 h-4 rounded-full bg-blue-300 opacity-40"
+            animate={{ y: [0, -25, 0], x: [0, -12, 0], scale: [1, 1.3, 1] }}
+            transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          />
+          <motion.div
+            className="absolute bottom-20 left-10 w-2.5 h-2.5 rounded-full bg-amber-300 opacity-50"
+            animate={{ y: [0, -18, 0], x: [0, 15, 0], opacity: [0.3, 0.9, 0.3] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
+          />
+          <motion.div
+            className="absolute top-10 right-1/3 w-3 h-3 rounded-full bg-indigo-300 opacity-40"
+            animate={{ y: [0, -22, 0], x: [0, -6, 0], scale: [1, 1.2, 1] }}
+            transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+          />
 
           {/* Phone mockup illustration */}
           <div className="relative flex items-end justify-center gap-4">
