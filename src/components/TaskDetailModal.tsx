@@ -1092,7 +1092,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       <p className="text-sm text-ink-primary">
                         {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "None"}
                       </p>
-                      {daysLeft !== null && (
+                      {daysLeft !== null && task.status !== "Completed" && (
                         <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
                           {daysLeft < 0
                             ? `Overdue by ${Math.abs(daysLeft)} days`
