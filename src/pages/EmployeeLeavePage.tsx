@@ -25,7 +25,7 @@ export default function EmployeeLeavePage() {
   const { data: requests = [] } = useQuery({
     queryKey: ["my-leave", user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("leave_requests").select("*").eq("employee_id", user!.id).order("created_at", { ascending: false });
+      const { data } = await supabase.from("leave_requests").select("*, reviewer:profiles!leave_requests_reviewed_by_fkey(full_name, avatar_url)").eq("employee_id", user!.id).order("created_at", { ascending: false });
       return data ?? [];
     },
     enabled: !!user,
@@ -119,6 +119,11 @@ export default function EmployeeLeavePage() {
                   {req.start_time && ` · ${fmtTime(req.start_time)}–${fmtTime(req.end_time)}`}
                 </p>
                 <p className="text-xs text-ink-muted mt-1">{req.reason}</p>
+                {req.reviewer?.full_name && (req.status === "approved" || req.status === "rejected") && (
+                  <p className="text-xs text-ink-muted mt-1">
+                    {req.status === "approved" ? "Approved" : "Rejected"} by <span className="font-medium text-ink-secondary">{req.reviewer.full_name}</span>
+                  </p>
+                )}
                 {req.admin_note && req.status === "rejected" && (
                   <div className="mt-2 rounded-lg bg-destructive-light px-3 py-2 text-xs text-destructive">{req.admin_note}</div>
                 )}
