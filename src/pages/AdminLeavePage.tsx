@@ -116,7 +116,7 @@ export default function AdminLeavePage() {
     queryKey: ["admin-leave"],
     queryFn: async () => {
       const { data } = await supabase.from("leave_requests")
-        .select("*, employee:profiles!leave_requests_employee_id_fkey(full_name, avatar_url, department)")
+        .select("*, employee:profiles!leave_requests_employee_id_fkey(full_name, avatar_url, department), reviewer:profiles!leave_requests_reviewed_by_fkey(full_name, avatar_url)")
         .order("created_at", { ascending: false });
       return data ?? [];
     },
@@ -358,6 +358,17 @@ function LeaveDetailModal({ request, onClose }: { request: any; onClose: () => v
                 <div className="flex justify-between px-4 py-3">
                   <span className="text-ink-muted">Applied On</span>
                   <span className="text-ink-primary">{format(new Date(request.created_at), "MMM d, yyyy · h:mm a")}</span>
+                </div>
+              )}
+              {request.reviewed_at && request.reviewer?.full_name && (
+                <div className="flex justify-between px-4 py-3">
+                  <span className="text-ink-muted">
+                    {request.status === "approved" ? "Approved By" : request.status === "rejected" ? "Rejected By" : "Reviewed By"}
+                  </span>
+                  <span className="flex items-center gap-2 text-ink-primary font-medium">
+                    <UserAvatar name={request.reviewer.full_name} avatarUrl={request.reviewer.avatar_url} size="sm" />
+                    {request.reviewer.full_name}
+                  </span>
                 </div>
               )}
               {request.reviewed_at && (
