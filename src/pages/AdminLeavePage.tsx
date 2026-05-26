@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw, FileSpreadsheet, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -468,16 +468,21 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
-  // "Late" sub-options — only used when leaveCategory === "late"
-  const [lateDuration, setLateDuration] = useState<"full" | "half">("half");
-  const [lateHalfPeriod, setLateHalfPeriod] = useState<"AM" | "PM">("AM");
+  // Half-day toggle — available for every category except Permission
+  // (which uses an explicit time range instead).
+  // For "Late" the default is half-day to match the previous behaviour;
+  // for every other category the default is full-day.
+  const [duration, setDuration] = useState<"full" | "half">("full");
+  const [halfDayPeriod, setHalfDayPeriod] = useState<"AM" | "PM">("AM");
   // "Permission" time range — only used when leaveCategory === "permission"
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
 
-  const isLate = leaveCategory === "late";
-  const isLateHalfDay = isLate && lateDuration === "half";
   const isPermission = leaveCategory === "permission";
+  // Half-day is allowed for everything that isn't a Permission (which is
+  // already a partial-day construct of its own).
+  const supportsHalfDay = !isPermission;
+  const isHalfDay = supportsHalfDay && duration === "half";
 
   const resetForm = () => {
     setEmployeeId("");
@@ -485,11 +490,17 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
     setStartDate("");
     setEndDate("");
     setReason("");
-    setLateDuration("half");
-    setLateHalfPeriod("AM");
+    setDuration("full");
+    setHalfDayPeriod("AM");
     setStartTime("");
     setEndTime("");
   };
+
+  // When the user switches to "Late", auto-default to half-day (its old behaviour).
+  // Switching away from Late doesn't auto-reset — the admin's explicit choice wins.
+  useEffect(() => {
+    if (leaveCategory === "late") setDuration("half");
+  }, [leaveCategory]);
 
   const { data: employees = [] } = useQuery({
     queryKey: ["all-employees"],
@@ -529,15 +540,15 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         leave_category: leaveCategory,
         start_date: startDate,
         // Half-day and Permission both collapse to a single date
-        end_date: isLateHalfDay || isPermission ? startDate : endDate || startDate,
+        end_date: isHalfDay || isPermission ? startDate : endDate || startDate,
         reason: reason.trim(),
         status: "approved",
         reviewed_by: user!.id,
         reviewed_at: new Date().toISOString(),
       };
-      if (isLateHalfDay) {
+      if (isHalfDay) {
         payload.is_half_day = true;
-        payload.half_day_period = lateHalfPeriod; // AM = First Half, PM = Second Half
+        payload.half_day_period = halfDayPeriod; // AM = First Half, PM = Second Half
       }
       if (isPermission) {
         payload.start_time = startTime;
@@ -604,16 +615,16 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                 )}
               </div>
 
-              {isLate && (
+              {supportsHalfDay && (
                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
                   <div>
-                    <label className="mb-1.5 block text-xs font-medium text-ink-secondary">Late Duration *</label>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-secondary">Duration *</label>
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setLateDuration("full")}
+                        onClick={() => setDuration("full")}
                         className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                          lateDuration === "full"
+                          duration === "full"
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-card text-ink-secondary hover:bg-muted"
                         }`}
@@ -622,9 +633,9 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLateDuration("half")}
+                        onClick={() => setDuration("half")}
                         className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                          lateDuration === "half"
+                          duration === "half"
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-card text-ink-secondary hover:bg-muted"
                         }`}
@@ -634,15 +645,15 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                     </div>
                   </div>
 
-                  {lateDuration === "half" && (
+                  {isHalfDay && (
                     <div>
                       <label className="mb-1.5 block text-xs font-medium text-ink-secondary">Half Day Period *</label>
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => setLateHalfPeriod("AM")}
+                          onClick={() => setHalfDayPeriod("AM")}
                           className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                            lateHalfPeriod === "AM"
+                            halfDayPeriod === "AM"
                               ? "border-primary bg-accent-light text-primary"
                               : "border-border bg-card text-ink-secondary hover:bg-muted"
                           }`}
@@ -651,9 +662,9 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                         </button>
                         <button
                           type="button"
-                          onClick={() => setLateHalfPeriod("PM")}
+                          onClick={() => setHalfDayPeriod("PM")}
                           className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                            lateHalfPeriod === "PM"
+                            halfDayPeriod === "PM"
                               ? "border-primary bg-accent-light text-primary"
                               : "border-border bg-card text-ink-secondary hover:bg-muted"
                           }`}
@@ -662,7 +673,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                         </button>
                       </div>
                       <p className="mt-1.5 text-[11px] text-ink-muted">
-                        Employee will be marked as half-day leave for the {lateHalfPeriod === "AM" ? "first" : "second"} half of the day.
+                        Employee will be marked as half-day for the {halfDayPeriod === "AM" ? "first" : "second"} half of the day.
                       </p>
                     </div>
                   )}
@@ -690,7 +701,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">
-                      {isLateHalfDay ? "Date *" : "Start Date *"}
+                      {isHalfDay ? "Date *" : "Start Date *"}
                     </label>
                     <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
                   </div>
@@ -698,10 +709,10 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
                     <Input
                       type="date"
-                      value={isLateHalfDay ? "" : endDate}
+                      value={isHalfDay ? "" : endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      disabled={isLateHalfDay}
-                      placeholder={isLateHalfDay ? "Not used for half-day" : undefined}
+                      disabled={isHalfDay}
+                      placeholder={isHalfDay ? "Not used for half-day" : undefined}
                     />
                   </div>
                 </div>
