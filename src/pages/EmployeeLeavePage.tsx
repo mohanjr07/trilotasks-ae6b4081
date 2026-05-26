@@ -160,13 +160,30 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   // Strip seconds ("14:30:00" -> "14:30") for display
   const fmtTime = (t?: string | null) => (t ? t.slice(0, 5) : "");
 
-  // Check how many casual leave days were approved this month (half-day = 0.5)
+  // The month we count usage against is the month of the *selected* start date,
+  // not today's month. If no date is picked yet, fall back to today's month so
+  // the hint text still shows something sensible when the modal first opens.
+  // (Bug fix: previously the limit never reset when applying for a future month
+  // before that month started — e.g. mid-June with quota used up, applying for
+  // a July date still counted June's usage and blocked the request.)
+  const targetMonth = (() => {
+    const ref = startDate ? new Date(startDate + "T00:00:00") : new Date();
+    return { year: ref.getFullYear(), month: ref.getMonth() };
+  })();
+  const isFutureMonth = (() => {
+    const today = new Date();
+    return (
+      targetMonth.year > today.getFullYear() ||
+      (targetMonth.year === today.getFullYear() && targetMonth.month > today.getMonth())
+    );
+  })();
+
+  // Check how many casual leave days were approved in the *target* month (half-day = 0.5)
   const { data: approvedCasualDays = 0 } = useQuery({
-    queryKey: ["casual-leave-usage", user?.id],
+    queryKey: ["casual-leave-usage", user?.id, targetMonth.year, targetMonth.month],
     queryFn: async () => {
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      const monthStart = new Date(targetMonth.year, targetMonth.month, 1).toISOString().slice(0, 10);
+      const monthEnd = new Date(targetMonth.year, targetMonth.month + 1, 0).toISOString().slice(0, 10);
       // Select with the new columns; if the schema hasn't been migrated yet,
       // fall back to the old column set (is_half_day / reverted_at absent).
       let rows: any[] | null = null;
@@ -301,14 +318,18 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
     },
   });
 
+  const monthLabel = isFutureMonth
+    ? new Date(targetMonth.year, targetMonth.month, 1).toLocaleString(undefined, { month: "long" })
+    : "this month";
+
   const categories = [
     {
       value: "casual_leave",
       label: "Casual Leave",
       disabled: casualDisabled,
       hint: casualDisabled
-        ? `Limit reached (${approvedCasualDays}/${MONTHLY_QUOTA} days this month)`
-        : `${remainingDays} day${remainingDays !== 1 ? "s" : ""} remaining (or ${remainingHalfDays} half-day${remainingHalfDays !== 1 ? "s" : ""}) this month`,
+        ? `Limit reached (${approvedCasualDays}/${MONTHLY_QUOTA} days in ${monthLabel})`
+        : `${remainingDays} day${remainingDays !== 1 ? "s" : ""} remaining (or ${remainingHalfDays} half-day${remainingHalfDays !== 1 ? "s" : ""}) ${isFutureMonth ? `in ${monthLabel}` : "this month"}`,
     },
     { value: "on_duty", label: "On Duty", disabled: false },
     { value: "work_from_home", label: "Work From Home", disabled: false, hint: "Request to work remotely from home." },
