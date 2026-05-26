@@ -531,7 +531,7 @@ export default function NotesPage() {
                 value={selectedNote.title}
                 onChange={(e) => handleFieldChange("title", e.target.value)}
                 placeholder="Note title…"
-                className="border-0 shadow-none text-lg font-semibold px-0 focus-visible:ring-0"
+                className="border-0 shadow-none text-lg font-semibold px-0 focus-visible:ring-0 min-w-0 flex-1"
               />
               <input
                 ref={fileInputRef}
@@ -546,13 +546,13 @@ export default function NotesPage() {
                 size="sm"
                 onClick={handleAttachClick}
                 disabled={uploading}
-                className="gap-1.5 text-ink-secondary"
+                className="gap-1.5 text-ink-secondary shrink-0"
                 title="Attach image"
               >
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 <span className="hidden sm:inline">{uploading ? "Uploading…" : "Image"}</span>
               </Button>
-              <span className="text-xs text-ink-muted whitespace-nowrap flex items-center gap-1">
+              <span className="text-xs text-ink-muted whitespace-nowrap flex items-center gap-1 shrink-0">
                 {status === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /> Saving…</>}
                 {status === "saved" && <><Check className="h-3 w-3 text-primary" /> Saved</>}
               </span>
