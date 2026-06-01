@@ -101,7 +101,10 @@ function extractImagePaths(content: string): string[] {
 }
 
 function stripImages(content: string): string {
-  return content.replace(IMAGE_TOKEN_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+  // NOTE: do NOT trim or collapse whitespace here — this value is fed back
+  // into the textarea on every render, so trimming would eat spaces, tabs
+  // and blank lines as the user types them.
+  return content.replace(IMAGE_TOKEN_RE, "");
 }
 
 export default function NotesPage() {
