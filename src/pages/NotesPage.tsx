@@ -606,8 +606,21 @@ export default function NotesPage() {
                   <Textarea
                     value={textOnly}
                     onChange={(e) => handleTextChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Tab") {
+                        e.preventDefault();
+                        const ta = e.currentTarget;
+                        const start = ta.selectionStart;
+                        const end = ta.selectionEnd;
+                        const next = textOnly.slice(0, start) + "\t" + textOnly.slice(end);
+                        handleTextChange(next);
+                        requestAnimationFrame(() => {
+                          ta.selectionStart = ta.selectionEnd = start + 1;
+                        });
+                      }
+                    }}
                     placeholder="Start typing your note…"
-                    className="min-h-[160px] w-full resize-y border-0 shadow-none focus-visible:ring-0 p-0 text-sm leading-relaxed bg-transparent"
+                    className="min-h-[160px] w-full resize-y border-0 shadow-none focus-visible:ring-0 p-0 text-sm leading-relaxed bg-transparent whitespace-pre-wrap"
                   />
                   {imageBlocks.length > 0 && (
                     <div className="space-y-3 pt-2">
