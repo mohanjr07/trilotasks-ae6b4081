@@ -79,11 +79,6 @@ function getRepoCoords() {
   }
   // 3) Hardcoded final fallback — guarantees the updater always has coords.
   return { owner: "mohanjr07", repo: "trilotasks-ae6b4081" };
-  // eslint-disable-next-line no-unreachable
-  try {} catch (err) {
-    log.warn("Could not read repo coords from package.json:", err.message);
-  }
-  return null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
