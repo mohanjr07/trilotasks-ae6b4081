@@ -53,11 +53,26 @@ function getRepoCoords() {
   try {
     // eslint-disable-next-line global-require
     const pkg = require("../package.json");
+
+    // 1) Preferred: build.publish (present in dev, stripped by electron-builder in packaged apps)
     const publish = Array.isArray(pkg.build?.publish)
       ? pkg.build.publish[0]
       : pkg.build?.publish;
     if (publish?.owner && publish?.repo) {
       return { owner: publish.owner, repo: publish.repo };
+    }
+
+    // 2) Fallback: parse repository.url (preserved by electron-builder)
+    const repoUrl =
+      typeof pkg.repository === "string"
+        ? pkg.repository
+        : pkg.repository?.url;
+    if (repoUrl) {
+      // Matches https://github.com/owner/repo(.git), git@github.com:owner/repo.git, github:owner/repo, etc.
+      const m = String(repoUrl).match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?(?:\/|$)/i);
+      if (m) {
+        return { owner: m[1], repo: m[2] };
+      }
     }
   } catch (err) {
     log.warn("Could not read repo coords from package.json:", err.message);
