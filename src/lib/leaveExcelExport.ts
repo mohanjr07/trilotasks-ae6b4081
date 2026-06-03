@@ -48,11 +48,18 @@ export interface LeaveExportRequest {
   half_day_period?: string | null; // 'AM' | 'PM' | 'First Half' | 'Second Half'
 }
 
+export interface LeaveExportGroup {
+  title: string; // shown as the section header (e.g. "Month of May 2026" or "MAPL - Month of May 2026")
+  employees: LeaveExportEmployee[];
+}
+
 export interface LeaveExportArgs {
   year: number;
   month: number; // 1-12
   employees: LeaveExportEmployee[];
   leaveRequests: LeaveExportRequest[];
+  /** Optional additional employee tables rendered below the main table with their own headers. */
+  additionalGroups?: LeaveExportGroup[];
 }
 
 const MONTH_NAMES = [
