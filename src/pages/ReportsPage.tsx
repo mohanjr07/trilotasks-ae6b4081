@@ -51,7 +51,11 @@ export default function ReportsPage() {
   const { data: profiles = [] } = useQuery({
     queryKey: ["report-profiles"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true);
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, role")
+        .eq("is_active", true)
+        .not("role", "in", "(admin,manager,super_admin)");
       return data ?? [];
     },
   });
