@@ -765,9 +765,20 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         .order("full_name");
       if (empRes.error) throw empRes.error;
       const adminRoles = new Set(["admin", "manager", "super_admin"]);
-      const employees = (empRes.data ?? [])
+      // Employees that belong to the separate MAPL table (case-insensitive name match)
+      const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh"]);
+      const allEmployees = (empRes.data ?? [])
         .filter((e: any) => !adminRoles.has(e.role))
         .map(({ id, full_name }: any) => ({ id, full_name })) as Array<{ id: string; full_name: string }>;
+      const employees = allEmployees.filter(
+        (e) => !MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
+      );
+      const maplEmployees = allEmployees.filter(
+        (e) => MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
+      );
+      const additionalGroups = maplEmployees.length
+        ? [{ title: "MAPL", employees: maplEmployees }]
+        : [];
 
       // Bound the leave query to the chosen month so we don't ship the whole table
       const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
@@ -787,12 +798,12 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
             .lte("start_date", monthEnd)
             .gte("end_date", monthStart);
           if (fallback.error) throw fallback.error;
-          await exportLeavesToExcel({ year, month, employees, leaveRequests: fallback.data ?? [] });
+          await exportLeavesToExcel({ year, month, employees, leaveRequests: fallback.data ?? [], additionalGroups });
         } else {
           throw reqRes.error;
         }
       } else {
-        await exportLeavesToExcel({ year, month, employees, leaveRequests: reqRes.data ?? [] });
+        await exportLeavesToExcel({ year, month, employees, leaveRequests: reqRes.data ?? [], additionalGroups });
       }
       toast.success("Excel file ready — check your downloads");
       onClose();
