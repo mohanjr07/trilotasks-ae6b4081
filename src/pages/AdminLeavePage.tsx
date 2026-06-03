@@ -757,14 +757,17 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const handleExport = async () => {
     setExporting(true);
     try {
-      // Active employees in alphabetical order (mirrors the paper sheet's S.No layout)
+      // Active non-admin employees in alphabetical order (mirrors the paper sheet's S.No layout)
       const empRes = await supabase
         .from("profiles")
-        .select("id, full_name")
+        .select("id, full_name, role")
         .eq("is_active", true)
         .order("full_name");
       if (empRes.error) throw empRes.error;
-      const employees = (empRes.data ?? []) as Array<{ id: string; full_name: string }>;
+      const adminRoles = new Set(["admin", "manager", "super_admin"]);
+      const employees = (empRes.data ?? [])
+        .filter((e: any) => !adminRoles.has(e.role))
+        .map(({ id, full_name }: any) => ({ id, full_name })) as Array<{ id: string; full_name: string }>;
 
       // Bound the leave query to the chosen month so we don't ship the whole table
       const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
