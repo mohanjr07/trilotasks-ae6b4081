@@ -48,11 +48,18 @@ export interface LeaveExportRequest {
   half_day_period?: string | null; // 'AM' | 'PM' | 'First Half' | 'Second Half'
 }
 
+export interface LeaveExportGroup {
+  title: string; // shown as the section header (e.g. "Month of May 2026" or "MAPL - Month of May 2026")
+  employees: LeaveExportEmployee[];
+}
+
 export interface LeaveExportArgs {
   year: number;
   month: number; // 1-12
   employees: LeaveExportEmployee[];
   leaveRequests: LeaveExportRequest[];
+  /** Optional additional employee tables rendered below the main table with their own headers. */
+  additionalGroups?: LeaveExportGroup[];
 }
 
 const MONTH_NAMES = [
@@ -101,7 +108,7 @@ function* eachLeaveDay(req: LeaveExportRequest): Generator<Date> {
 }
 
 export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> {
-  const { year, month, employees, leaveRequests } = args;
+  const { year, month, employees, leaveRequests, additionalGroups = [] } = args;
   const monthName = MONTH_NAMES[month - 1];
   const totalDays = daysInMonth(year, month);
 
@@ -116,32 +123,32 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   });
   const workingDays = totalDays - dayMeta.filter((m) => m.isSunday).length;
 
-  // ── Build the leave grid: per employee, per day → { f, a } where each is "L" | "W" | null
   type Mark = "L" | "W" | null;
-  const grid: Record<string, Array<{ f: Mark; a: Mark }>> = {};
-  for (const emp of employees) {
-    grid[emp.id] = Array.from({ length: totalDays }, () => ({ f: null as Mark, a: null as Mark }));
-  }
 
-  for (const req of leaveRequests) {
-    const mark = markFor(req);
-    if (!mark) continue;
-    const emp = grid[req.employee_id];
-    if (!emp) continue;
-
-    for (const d of eachLeaveDay(req)) {
-      if (d.getFullYear() !== year || d.getMonth() !== month - 1) continue;
-      const dayIdx = d.getDate() - 1;
-
-      if (req.is_half_day) {
-        if (isHalfDayMorning(req)) emp[dayIdx].f = mark;
-        else if (isHalfDayAfternoon(req)) emp[dayIdx].a = mark;
-        else emp[dayIdx].f = mark;
-      } else {
-        emp[dayIdx].f = mark;
-        emp[dayIdx].a = mark;
+  function buildGrid(emps: LeaveExportEmployee[]) {
+    const grid: Record<string, Array<{ f: Mark; a: Mark }>> = {};
+    for (const emp of emps) {
+      grid[emp.id] = Array.from({ length: totalDays }, () => ({ f: null as Mark, a: null as Mark }));
+    }
+    for (const req of leaveRequests) {
+      const mark = markFor(req);
+      if (!mark) continue;
+      const emp = grid[req.employee_id];
+      if (!emp) continue;
+      for (const d of eachLeaveDay(req)) {
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1) continue;
+        const dayIdx = d.getDate() - 1;
+        if (req.is_half_day) {
+          if (isHalfDayMorning(req)) emp[dayIdx].f = mark;
+          else if (isHalfDayAfternoon(req)) emp[dayIdx].a = mark;
+          else emp[dayIdx].f = mark;
+        } else {
+          emp[dayIdx].f = mark;
+          emp[dayIdx].a = mark;
+        }
       }
     }
+    return grid;
   }
 
   // ── Build the workbook ─────────────────────────────────────────────────────
@@ -158,69 +165,10 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   ws.getColumn(2).width = 22;  // Name
   for (let i = 3; i <= totalCols; i++) ws.getColumn(i).width = 3.2;
 
-  // ── Row 1: Month title ─────────────────────────────────────────────────────
-  ws.mergeCells(1, 1, 1, totalCols);
-  const titleCell = ws.getCell(1, 1);
-  titleCell.value = `Month of ${monthName} ${year}`;
-  titleCell.alignment = { horizontal: "center", vertical: "middle" };
-  titleCell.font = { bold: true, size: 14 };
-  ws.getRow(1).height = 22;
-
-  // ── Row 2: Working days subtitle ──────────────────────────────────────────
-  ws.mergeCells(2, 1, 2, totalCols);
-  const subCell = ws.getCell(2, 1);
-  subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   blank = Present)`;
-  subCell.alignment = { horizontal: "center", vertical: "middle" };
-  subCell.font = { bold: true, size: 11 };
-  ws.getRow(2).height = 18;
-
-  // ── Row 3: Day numbers (each day spans 2 columns) ─────────────────────────
-  // ── Row 4: Weekday letters
-  // ── Row 5: F / A
-  // S.No header spans rows 3-5 col 1; Name header spans rows 3-5 col 2.
-  ws.mergeCells(3, 1, 5, 1);
-  ws.getCell(3, 1).value = "S.No";
-  ws.mergeCells(3, 2, 5, 2);
-  ws.getCell(3, 2).value = "Name";
-
-  for (const m of dayMeta) {
-    const startCol = 2 + (m.day - 1) * 2 + 1;
-    const endCol = startCol + 1;
-
-    // Row 3: day number, merged across F+A
-    ws.mergeCells(3, startCol, 3, endCol);
-    ws.getCell(3, startCol).value = m.day;
-
-    // Row 4: weekday letter, merged across F+A
-    ws.mergeCells(4, startCol, 4, endCol);
-    ws.getCell(4, startCol).value = m.weekdayLetter;
-
-    // Row 5: F | A
-    ws.getCell(5, startCol).value = "F";
-    ws.getCell(5, endCol).value = "A";
-  }
-
-  // Style header rows 3-5
-  for (let r = 3; r <= 5; r++) {
-    const row = ws.getRow(r);
-    row.height = 16;
-    row.eachCell({ includeEmpty: false }, (cell) => {
-      cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.font = { bold: true, size: 10 };
-      cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" },
-      };
-    });
-  }
-
-  // ── Body rows: one per employee ───────────────────────────────────────────
   const sundayFill: ExcelJS.Fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FFE57373" }, // soft red so "L" stays readable
+    fgColor: { argb: "FFE57373" },
   };
   const sundayHeaderFill: ExcelJS.Fill = {
     type: "pattern",
@@ -230,68 +178,143 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   const wfhFill: ExcelJS.Fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FFBBDEFB" }, // soft blue — clearly distinct from leave/Sunday
+    fgColor: { argb: "FFBBDEFB" },
   };
 
-  // Tint the Sunday column headers (rows 3-5) red so the day number stands out
-  for (const m of dayMeta) {
-    if (!m.isSunday) continue;
-    const startCol = 2 + (m.day - 1) * 2 + 1;
-    const endCol = startCol + 1;
-    for (let r = 3; r <= 5; r++) {
-      for (let c = startCol; c <= endCol; c++) {
-        ws.getCell(r, c).fill = sundayHeaderFill;
-      }
-    }
-  }
+  /**
+   * Render one full table (title + subtitle + day headers + body) starting at the given row.
+   * Returns the next free row after the table.
+   */
+  function renderTable(startRow: number, title: string, emps: LeaveExportEmployee[]): number {
+    const grid = buildGrid(emps);
 
-  let bodyRowIdx = 6;
-  employees.forEach((emp, i) => {
-    const row = ws.getRow(bodyRowIdx);
-    row.height = 18;
-    row.getCell(1).value = i + 1;
-    row.getCell(2).value = emp.full_name;
-    row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-    row.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
+    // Title
+    ws.mergeCells(startRow, 1, startRow, totalCols);
+    const titleCell = ws.getCell(startRow, 1);
+    titleCell.value = title;
+    titleCell.alignment = { horizontal: "center", vertical: "middle" };
+    titleCell.font = { bold: true, size: 14 };
+    ws.getRow(startRow).height = 22;
+
+    // Subtitle
+    const subRow = startRow + 1;
+    ws.mergeCells(subRow, 1, subRow, totalCols);
+    const subCell = ws.getCell(subRow, 1);
+    subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   blank = Present)`;
+    subCell.alignment = { horizontal: "center", vertical: "middle" };
+    subCell.font = { bold: true, size: 11 };
+    ws.getRow(subRow).height = 18;
+
+    // Header rows: day number / weekday / F-A
+    const hdr1 = startRow + 2;
+    const hdr2 = startRow + 3;
+    const hdr3 = startRow + 4;
+
+    ws.mergeCells(hdr1, 1, hdr3, 1);
+    ws.getCell(hdr1, 1).value = "S.No";
+    ws.mergeCells(hdr1, 2, hdr3, 2);
+    ws.getCell(hdr1, 2).value = "Name";
 
     for (const m of dayMeta) {
-      const dayIdx = m.day - 1;
-      const startCol = 2 + dayIdx * 2 + 1;
+      const startCol = 2 + (m.day - 1) * 2 + 1;
       const endCol = startCol + 1;
-      const slot = grid[emp.id][dayIdx];
-      const fCell = row.getCell(startCol);
-      const aCell = row.getCell(endCol);
-      fCell.alignment = { horizontal: "center", vertical: "middle" };
-      aCell.alignment = { horizontal: "center", vertical: "middle" };
 
-      if (m.isSunday) {
-        // Sunday is a holiday — never count as leave or WFH
-        fCell.fill = sundayFill;
-        aCell.fill = sundayFill;
-      } else {
-        if (slot.f) fCell.value = slot.f;
-        if (slot.a) aCell.value = slot.a;
-        if (slot.f === "W") fCell.fill = wfhFill;
-        if (slot.a === "W") aCell.fill = wfhFill;
+      ws.mergeCells(hdr1, startCol, hdr1, endCol);
+      ws.getCell(hdr1, startCol).value = m.day;
+
+      ws.mergeCells(hdr2, startCol, hdr2, endCol);
+      ws.getCell(hdr2, startCol).value = m.weekdayLetter;
+
+      ws.getCell(hdr3, startCol).value = "F";
+      ws.getCell(hdr3, endCol).value = "A";
+    }
+
+    for (let r = hdr1; r <= hdr3; r++) {
+      const row = ws.getRow(r);
+      row.height = 16;
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        cell.alignment = { horizontal: "center", vertical: "middle" };
+        cell.font = { bold: true, size: 10 };
+        cell.border = {
+          top: { style: "thin" },
+          bottom: { style: "thin" },
+          left: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
+    }
+
+    // Sunday column header tint
+    for (const m of dayMeta) {
+      if (!m.isSunday) continue;
+      const startCol = 2 + (m.day - 1) * 2 + 1;
+      const endCol = startCol + 1;
+      for (let r = hdr1; r <= hdr3; r++) {
+        for (let c = startCol; c <= endCol; c++) {
+          ws.getCell(r, c).fill = sundayHeaderFill;
+        }
       }
     }
 
-    // Borders on every cell in the body row
-    for (let c = 1; c <= totalCols; c++) {
-      row.getCell(c).border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" },
-      };
-    }
-    bodyRowIdx++;
-  });
+    // Body
+    let bodyRowIdx = hdr3 + 1;
+    emps.forEach((emp, i) => {
+      const row = ws.getRow(bodyRowIdx);
+      row.height = 18;
+      row.getCell(1).value = i + 1;
+      row.getCell(2).value = emp.full_name;
+      row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+      row.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
 
-  // ── Freeze the header so it sticks while scrolling employees / days ───────
+      for (const m of dayMeta) {
+        const dayIdx = m.day - 1;
+        const startCol = 2 + dayIdx * 2 + 1;
+        const endCol = startCol + 1;
+        const slot = grid[emp.id][dayIdx];
+        const fCell = row.getCell(startCol);
+        const aCell = row.getCell(endCol);
+        fCell.alignment = { horizontal: "center", vertical: "middle" };
+        aCell.alignment = { horizontal: "center", vertical: "middle" };
+
+        if (m.isSunday) {
+          fCell.fill = sundayFill;
+          aCell.fill = sundayFill;
+        } else {
+          if (slot.f) fCell.value = slot.f;
+          if (slot.a) aCell.value = slot.a;
+          if (slot.f === "W") fCell.fill = wfhFill;
+          if (slot.a === "W") aCell.fill = wfhFill;
+        }
+      }
+
+      for (let c = 1; c <= totalCols; c++) {
+        row.getCell(c).border = {
+          top: { style: "thin" },
+          bottom: { style: "thin" },
+          left: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+      bodyRowIdx++;
+    });
+
+    return bodyRowIdx;
+  }
+
+  // Main table
+  let nextRow = renderTable(1, `Month of ${monthName} ${year}`, employees);
+
+  // Additional groups (e.g. MAPL), each separated by a blank row
+  for (const g of additionalGroups) {
+    if (!g.employees.length) continue;
+    nextRow += 2; // blank gap
+    nextRow = renderTable(nextRow, `${g.title} - Month of ${monthName} ${year}`, g.employees);
+  }
+
+  // Freeze the main header
   ws.views = [{ state: "frozen", xSplit: 2, ySplit: 5 }];
 
-  // ── Save & trigger download ───────────────────────────────────────────────
+  // Save & trigger download
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -305,3 +328,4 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
