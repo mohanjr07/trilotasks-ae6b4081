@@ -757,14 +757,15 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const handleExport = async () => {
     setExporting(true);
     try {
-      // Active non-admin employees in alphabetical order (mirrors the paper sheet's S.No layout)
+      // Active employees (including managers) in alphabetical order — admins excluded.
+      // Mirrors the paper sheet's S.No layout.
       const empRes = await supabase
         .from("profiles")
         .select("id, full_name, role")
         .eq("is_active", true)
         .order("full_name");
       if (empRes.error) throw empRes.error;
-      const adminRoles = new Set(["admin", "manager", "super_admin"]);
+      const adminRoles = new Set(["admin", "super_admin"]);
       // Employees that belong to the separate MAPL table (case-insensitive name match)
       const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh"]);
       const allEmployees = (empRes.data ?? [])
