@@ -213,6 +213,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [moveProjectId, setMoveProjectId] = useState<string>(task?.project_id ?? "");
   const [moveTeamId, setMoveTeamId] = useState<string>(task?.project_team_id ?? "");
 
+  // Edit-mode project/team state
+  const [editProjectId, setEditProjectId] = useState<string>(task?.project_id ?? "");
+  const [editTeamId, setEditTeamId] = useState<string>(task?.project_team_id ?? "");
+
   // Sync edit fields whenever the task prop changes (e.g. opening a different task)
   useEffect(() => {
     if (!task) return;
@@ -232,6 +236,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     setEditMode(false);
     setMoveProjectId(task.project_id ?? "");
     setMoveTeamId(task.project_team_id ?? "");
+    setEditProjectId(task.project_id ?? "");
+    setEditTeamId(task.project_team_id ?? "");
   }, [task?.id]);
 
   useEffect(() => {
@@ -315,7 +321,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       const { data } = await supabase.from("projects").select("id, name, color").order("name");
       return data ?? [];
     },
-    enabled: moveOpen && isAdmin,
+    enabled: (moveOpen || editMode) && isAdmin,
   });
 
   const { data: allProjectTeams = [] } = useQuery({
@@ -324,7 +330,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       const { data } = await supabase.from("project_teams").select("id, project_id, name").order("name");
       return data ?? [];
     },
-    enabled: moveOpen && isAdmin,
+    enabled: (moveOpen || editMode) && isAdmin,
   });
 
   // Look up the task's current project (for display even outside the move popover)
@@ -397,6 +403,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
           deadline: editDeadline || null,
           category: editCategory.trim() || null,
           assigned_to: editAssignees[0],
+          project_id: editProjectId || null,
+          project_team_id: editProjectId ? (editTeamId || null) : null,
         })
         .eq("id", task.id);
       if (taskError) throw taskError;
@@ -415,7 +423,14 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
       // Notifications are handled by the DB trigger — no manual insert needed.
     },
-    onSuccess: () => { invalidateTasks(); setEditMode(false); toast.success("Task saved successfully"); },
+    onSuccess: () => {
+      invalidateTasks();
+      queryClient.invalidateQueries({ queryKey: ["my-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["project-of-task"] });
+      setEditMode(false);
+      toast.success("Task saved successfully");
+    },
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
   });
 
@@ -539,6 +554,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     setEditCategory(task?.category ?? "");
     setEditAssignees(task?.task_assignees?.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => a.user_id) ?? []);
     setEditCoOwners(task?.task_assignees?.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => a.user_id) ?? []);
+    setEditProjectId(task?.project_id ?? "");
+    setEditTeamId(task?.project_team_id ?? "");
     setAssigneeDropdownOpen(false);
     setCoOwnerDropdownOpen(false);
     setAssigneeSearch("");
@@ -759,6 +776,65 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                   </div>
                 </div>
               )}
+
+              {editMode && isAdmin && (
+                <div>
+                  <label className="text-sm font-medium text-ink-primary mb-1.5 block flex items-center gap-1.5">
+                    <FolderKanban className="h-4 w-4 text-primary" />
+                    Project
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select
+                      value={editProjectId || "none"}
+                      onValueChange={(v) => {
+                        setEditProjectId(v === "none" ? "" : v);
+                        setEditTeamId("");
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="No project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {allProjects.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: p.color }}
+                              />
+                              {p.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {editProjectId &&
+                      allProjectTeams.filter((t: any) => t.project_id === editProjectId).length > 0 && (
+                        <Select
+                          value={editTeamId || "none"}
+                          onValueChange={(v) => setEditTeamId(v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="No team" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No team</SelectItem>
+                            {allProjectTeams
+                              .filter((t: any) => t.project_id === editProjectId)
+                              .map((t: any) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                  </div>
+                </div>
+              )}
+
+
 
               {/* Progress & Status */}
               <div>
