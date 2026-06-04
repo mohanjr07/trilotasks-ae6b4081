@@ -403,6 +403,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
           deadline: editDeadline || null,
           category: editCategory.trim() || null,
           assigned_to: editAssignees[0],
+          project_id: editProjectId || null,
+          project_team_id: editProjectId ? (editTeamId || null) : null,
         })
         .eq("id", task.id);
       if (taskError) throw taskError;
