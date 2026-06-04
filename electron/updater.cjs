@@ -196,6 +196,10 @@ function checkLatestReleaseFromGitHub(coords) {
         data += chunk;
       });
       res.on("end", () => {
+        // 404 = no releases published yet — resolve empty rather than throw
+        if (res.statusCode === 404) {
+          return resolve({ version: "", htmlUrl: "", name: "", body: "" });
+        }
         if (res.statusCode !== 200) {
           return reject(new Error(`GitHub API ${res.statusCode}: ${data}`));
         }
@@ -219,18 +223,15 @@ function checkLatestReleaseFromGitHub(coords) {
 }
 
 async function checkMacUpdate(getMainWindow, { silent } = { silent: true }) {
-  const coords = getRepoCoords();
-  if (!coords) {
-    log.warn("No repo coords — skipping mac update check.");
-    if (!silent) {
-      dialog.showMessageBox({
-        type: "warning",
-        message: "Updater not configured.",
-        detail: "Repository information is missing from package.json.",
-      });
-    }
+  // Never run in dev — app.getVersion() reads package.json "current" version,
+  // which would always equal (or exceed) any release, making the check useless.
+  if (!app.isPackaged) {
+    log.info("Dev mode — mac update check skipped.");
     return;
   }
+
+  const coords = getRepoCoords();
+  log.info(`mac update check using coords: ${coords.owner}/${coords.repo}`);
 
   try {
     const latest = await checkLatestReleaseFromGitHub(coords);
@@ -238,6 +239,7 @@ async function checkMacUpdate(getMainWindow, { silent } = { silent: true }) {
     log.info(`mac update check: current=${current} latest=${latest.version}`);
 
     if (!latest.version) {
+      // No published release yet — only show dialog if user manually triggered
       if (!silent) {
         dialog.showMessageBox({
           type: "info",
