@@ -101,12 +101,9 @@ function extractImagePaths(content: string): string[] {
 }
 
 function stripImages(content: string): string {
-  // Strip image markers AND the newlines we inject around them. Without this,
-  // every keystroke after an image is attached would re-append "\n\n" before
-  // the marker and the textarea would accumulate blank lines (making typing
-  // appear on new lines and backspace look like Enter). Non-newline whitespace
-  // (spaces, tabs) is preserved so user formatting is kept intact.
-  return content.replace(/\n*\[\[image:[^\]]+\]\]\n*/g, "");
+  // Only remove the markers themselves — never touch surrounding whitespace,
+  // otherwise the user's own newlines (Enter key) get eaten on every keystroke.
+  return content.replace(IMAGE_TOKEN_RE, "");
 }
 
 export default function NotesPage() {
