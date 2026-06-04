@@ -236,6 +236,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     setEditMode(false);
     setMoveProjectId(task.project_id ?? "");
     setMoveTeamId(task.project_team_id ?? "");
+    setEditProjectId(task.project_id ?? "");
+    setEditTeamId(task.project_team_id ?? "");
   }, [task?.id]);
 
   useEffect(() => {
