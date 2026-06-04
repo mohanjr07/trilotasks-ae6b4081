@@ -213,6 +213,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const [moveProjectId, setMoveProjectId] = useState<string>(task?.project_id ?? "");
   const [moveTeamId, setMoveTeamId] = useState<string>(task?.project_team_id ?? "");
 
+  // Edit-mode project/team state
+  const [editProjectId, setEditProjectId] = useState<string>(task?.project_id ?? "");
+  const [editTeamId, setEditTeamId] = useState<string>(task?.project_team_id ?? "");
+
   // Sync edit fields whenever the task prop changes (e.g. opening a different task)
   useEffect(() => {
     if (!task) return;
