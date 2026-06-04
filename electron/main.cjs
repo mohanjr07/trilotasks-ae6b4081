@@ -4,7 +4,7 @@
 //
 //  • In dev mode (npm run electron:dev):
 //      Loads http://localhost:8080 (the Vite dev server) so HMR works.
-//  • In production (the .exe built by electron-builder):
+//  • In production (the .exe / .dmg built by electron-builder):
 //      Loads the compiled dist/index.html via file://. Because the React
 //      app uses HashRouter when window.IS_ELECTRON is true, deep links and
 //      reloads work correctly even from a file:// origin.
@@ -40,11 +40,6 @@ const {
   Notification,
 } = require("electron");
 const path = require("path");
-const {
-  initAutoUpdater,
-  checkForUpdatesManually,
-  startPeriodicUpdateChecks,
-} = require("./updater.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -66,12 +61,6 @@ if (!gotSingleInstanceLock) {
 let mainWindow = null;
 let tray = null;
 let isQuittingForReal = false;
-
-// Used by the updater module so it can attach modal dialogs to the
-// main window (or fall back to a free dialog if the window is hidden/closed).
-function getMainWindow() {
-  return mainWindow;
-}
 
 function showMainWindow() {
   if (!mainWindow) {
@@ -150,11 +139,6 @@ function createTray() {
     { label: "Open TaskFlow", click: showMainWindow },
     { type: "separator" },
     {
-      label: "Check for Updates…",
-      click: () => checkForUpdatesManually(getMainWindow),
-    },
-    { type: "separator" },
-    {
       label: `TaskFlow v${app.getVersion()}`,
       enabled: false,
     },
@@ -172,7 +156,7 @@ function createTray() {
   tray.on("double-click", showMainWindow);
 }
 
-// ─── IPC: focus window (legacy path kept for compatibility) ───────────────
+// ─── IPC: focus window ────────────────────────────────────────────────────
 ipcMain.on("taskflow:focus-window", () => {
   showMainWindow();
 });
@@ -189,7 +173,6 @@ ipcMain.on("taskflow:focus-window", () => {
 ipcMain.on("notify:show", (event, { title, body, route }) => {
   if (!Notification.isSupported()) return;
 
-  // Resolve the app icon for the notification badge.
   const iconPath = isDev
     ? path.join(__dirname, "..", "public", "favicon.png")
     : path.join(__dirname, "..", "dist", "favicon.png");
@@ -200,18 +183,12 @@ ipcMain.on("notify:show", (event, { title, body, route }) => {
     title: title ?? "TaskFlow",
     body: body ?? "",
     icon: icon.isEmpty() ? undefined : icon,
-    // urgency only applies on Linux but is harmless on other platforms.
     urgency: "normal",
-    // timeoutType "default" lets the OS decide how long to show the toast
-    // (5 s on Windows, slide-in on macOS). "never" keeps it until dismissed.
     timeoutType: "default",
-    // toastXml is Windows-only — we omit it so the default Teams-style
-    // layout (icon + title + body) is used automatically.
   });
 
   notification.on("click", () => {
     showMainWindow();
-    // Tell the renderer to navigate to the relevant page.
     if (mainWindow) {
       mainWindow.webContents.send("notify:clicked", { route: route ?? "/notifications" });
     }
@@ -223,12 +200,6 @@ ipcMain.on("notify:show", (event, { title, body, route }) => {
 app.whenReady().then(() => {
   createWindow();
   createTray();
-
-  // Auto-update: initial check ~5s after launch + every 4 hours thereafter.
-  // No-ops in dev. Mac without code-signing falls back to a notify-and-open
-  // -browser flow handled inside updater.cjs.
-  initAutoUpdater(getMainWindow);
-  startPeriodicUpdateChecks(getMainWindow, 4 * 60 * 60 * 1000);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
