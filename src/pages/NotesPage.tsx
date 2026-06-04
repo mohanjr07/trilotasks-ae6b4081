@@ -299,8 +299,7 @@ export default function NotesPage() {
         .getQueryData<Note[]>(["user_notes"])
         ?.find((n) => n.id === selectedNote.id);
       const current = latest?.content ?? selectedNote.content ?? "";
-      const sep = current.length > 0 && !current.endsWith("\n") ? "\n\n" : "";
-      const next = `${current}${sep}[[image:${path}]]\n`;
+      const next = `${current}[[image:${path}]]`;
       handleFieldChange("content", next);
 
       // Pre-cache the signed URL so the image appears immediately.
