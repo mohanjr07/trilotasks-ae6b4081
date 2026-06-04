@@ -3,20 +3,12 @@
 #  Builds the TaskFlow macOS installer (.dmg) and uploads it as a
 #  downloadable workflow artifact (no GitHub Release, no storage bloat).
 #
-#  Triggers:
-#    • Manually from GitHub → Actions tab → "Build macOS"
-#    • Automatically when a commit lands on main that touches app code.
-#
 #  How to get the build:
 #    1. Go to Actions → "Build macOS" → click the latest run.
 #    2. Scroll to "Artifacts" at the bottom → download TaskFlow-macOS.
 #    3. Unzip → open the .dmg → drag TaskFlow into Applications.
 #
 #  Artifact retention: 7 days (saves Actions storage quota).
-#
-#  Note on macOS runner minutes: GitHub's free tier counts macOS minutes
-#  at 10× Linux (2000 free Linux min ≈ 200 macOS min). Trigger manually
-#  when you need a distribution build rather than on every push.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Build macOS
