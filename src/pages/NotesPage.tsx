@@ -254,8 +254,11 @@ export default function NotesPage() {
     // (Images stay attached to the note; they render below typed text. If you
     // want true interleaving with the typed text, see the inline rendering
     // below — the markers stay in `content` order.)
+    // Concatenate markers directly with no extra whitespace — rendering uses
+    // parseBlocks so the marker still renders as its own block, and avoiding
+    // injected newlines keeps stripImages(content) === user's typed text.
     const next =
-      newText + (imageBlocks.length ? "\n\n" + imageBlocks.map((b) => `[[image:${b.path}]]`).join("\n") : "");
+      newText + imageBlocks.map((b) => `[[image:${b.path}]]`).join("");
     handleFieldChange("content", next);
   };
 
