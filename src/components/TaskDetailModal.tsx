@@ -554,6 +554,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
     setEditCategory(task?.category ?? "");
     setEditAssignees(task?.task_assignees?.filter((a: any) => a.assignee_role !== "co_owner").map((a: any) => a.user_id) ?? []);
     setEditCoOwners(task?.task_assignees?.filter((a: any) => a.assignee_role === "co_owner").map((a: any) => a.user_id) ?? []);
+    setEditProjectId(task?.project_id ?? "");
+    setEditTeamId(task?.project_team_id ?? "");
     setAssigneeDropdownOpen(false);
     setCoOwnerDropdownOpen(false);
     setAssigneeSearch("");
