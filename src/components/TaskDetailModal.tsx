@@ -321,7 +321,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       const { data } = await supabase.from("projects").select("id, name, color").order("name");
       return data ?? [];
     },
-    enabled: moveOpen && isAdmin,
+    enabled: (moveOpen || editMode) && isAdmin,
   });
 
   const { data: allProjectTeams = [] } = useQuery({
@@ -330,7 +330,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       const { data } = await supabase.from("project_teams").select("id, project_id, name").order("name");
       return data ?? [];
     },
-    enabled: moveOpen && isAdmin,
+    enabled: (moveOpen || editMode) && isAdmin,
   });
 
   // Look up the task's current project (for display even outside the move popover)
