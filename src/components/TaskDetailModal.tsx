@@ -777,6 +777,65 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                 </div>
               )}
 
+              {editMode && isAdmin && (
+                <div>
+                  <label className="text-sm font-medium text-ink-primary mb-1.5 block flex items-center gap-1.5">
+                    <FolderKanban className="h-4 w-4 text-primary" />
+                    Project
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select
+                      value={editProjectId || "none"}
+                      onValueChange={(v) => {
+                        setEditProjectId(v === "none" ? "" : v);
+                        setEditTeamId("");
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="No project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {allProjects.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: p.color }}
+                              />
+                              {p.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {editProjectId &&
+                      allProjectTeams.filter((t: any) => t.project_id === editProjectId).length > 0 && (
+                        <Select
+                          value={editTeamId || "none"}
+                          onValueChange={(v) => setEditTeamId(v === "none" ? "" : v)}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="No team" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No team</SelectItem>
+                            {allProjectTeams
+                              .filter((t: any) => t.project_id === editProjectId)
+                              .map((t: any) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                  </div>
+                </div>
+              )}
+
+
+
               {/* Progress & Status */}
               <div>
                 <label className="text-sm font-medium text-ink-primary mb-2 block">
