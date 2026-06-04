@@ -101,12 +101,9 @@ function extractImagePaths(content: string): string[] {
 }
 
 function stripImages(content: string): string {
-  // Strip image markers AND the newlines we inject around them. Without this,
-  // every keystroke after an image is attached would re-append "\n\n" before
-  // the marker and the textarea would accumulate blank lines (making typing
-  // appear on new lines and backspace look like Enter). Non-newline whitespace
-  // (spaces, tabs) is preserved so user formatting is kept intact.
-  return content.replace(/\n*\[\[image:[^\]]+\]\]\n*/g, "");
+  // Only remove the markers themselves — never touch surrounding whitespace,
+  // otherwise the user's own newlines (Enter key) get eaten on every keystroke.
+  return content.replace(IMAGE_TOKEN_RE, "");
 }
 
 export default function NotesPage() {
@@ -257,8 +254,11 @@ export default function NotesPage() {
     // (Images stay attached to the note; they render below typed text. If you
     // want true interleaving with the typed text, see the inline rendering
     // below — the markers stay in `content` order.)
+    // Concatenate markers directly with no extra whitespace — rendering uses
+    // parseBlocks so the marker still renders as its own block, and avoiding
+    // injected newlines keeps stripImages(content) === user's typed text.
     const next =
-      newText + (imageBlocks.length ? "\n\n" + imageBlocks.map((b) => `[[image:${b.path}]]`).join("\n") : "");
+      newText + imageBlocks.map((b) => `[[image:${b.path}]]`).join("");
     handleFieldChange("content", next);
   };
 
@@ -299,8 +299,7 @@ export default function NotesPage() {
         .getQueryData<Note[]>(["user_notes"])
         ?.find((n) => n.id === selectedNote.id);
       const current = latest?.content ?? selectedNote.content ?? "";
-      const sep = current.length > 0 && !current.endsWith("\n") ? "\n\n" : "";
-      const next = `${current}${sep}[[image:${path}]]\n`;
+      const next = `${current}[[image:${path}]]`;
       handleFieldChange("content", next);
 
       // Pre-cache the signed URL so the image appears immediately.
