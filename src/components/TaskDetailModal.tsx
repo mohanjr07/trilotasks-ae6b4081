@@ -423,7 +423,14 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
       // Notifications are handled by the DB trigger — no manual insert needed.
     },
-    onSuccess: () => { invalidateTasks(); setEditMode(false); toast.success("Task saved successfully"); },
+    onSuccess: () => {
+      invalidateTasks();
+      queryClient.invalidateQueries({ queryKey: ["my-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-team-tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["project-of-task"] });
+      setEditMode(false);
+      toast.success("Task saved successfully");
+    },
     onError: (e: any) => toast.error(e.message ?? "Failed to save task"),
   });
 
