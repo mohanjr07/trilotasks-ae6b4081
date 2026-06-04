@@ -4,28 +4,16 @@
 #  Release so installed Mac copies can detect updates.
 #
 #  Mac auto-update caveat:
-#    Without an Apple Developer ID ($99/yr) we can't sign / notarize the
-#    app, so macOS refuses silent in-place upgrades. The app instead pops
-#    a dialog when it detects a new release and opens the GitHub Releases
-#    page in the user's default browser. The user downloads the new .dmg
-#    and drags TaskFlow into Applications, replacing the old copy.
-#
-#  Triggers:
-#    • Manually from GitHub → Actions tab → "Build & Publish macOS"
-#    • Automatically when a commit lands on main that touches code paths
-#      relevant to the desktop app.
+#    Without an Apple Developer ID we can't sign/notarize, so electron-updater
+#    can't apply updates silently. The app detects a new release and opens the
+#    GitHub Releases page in the user's browser to download the new .dmg.
 #
 #  How a release happens:
-#    1. You bump "version" in package.json and push.
-#    2. This workflow builds .dmg + .zip for both x64 and arm64.
-#    3. electron-builder creates / updates GitHub release "vX.Y.Z" and
-#       uploads all the assets + latest-mac.yml.
-#    4. Installed Macs check the Releases endpoint, see the new version,
-#       prompt the user to download.
-#
-#  Note on macOS runner minutes: GitHub's free tier counts macOS minutes
-#  at 10× Linux (so 2000 free Linux min ≈ 200 macOS min). For a handful
-#  of releases a month this is well within the free quota.
+#    1. Bump "version" in package.json and push to main.
+#    2. This workflow creates the vX.Y.Z tag (if missing), builds .dmg + .zip
+#       for x64 and arm64, uploads them + latest-mac.yml to the Release.
+#    3. Installed Macs check the Releases endpoint, see the new version,
+#       and prompt the user to download.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Build & Publish macOS
@@ -42,7 +30,6 @@ on:
       - "vite.config.ts"
       - "index.html"
 
-# electron-builder needs to create / update GitHub Releases.
 permissions:
   contents: write
 
@@ -56,6 +43,27 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history for tag creation
+
+      - name: Read version from package.json
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Create & push version tag (if missing)
+        run: |
+          TAG="v${{ steps.pkg.outputs.version }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping."
+          else
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name  "github-actions[bot]"
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Created tag $TAG"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,9 +77,5 @@ jobs:
       - name: Build & publish macOS .dmg + .zip to GitHub Releases
         run: npm run electron:publish:mac
         env:
-          # Skip notarization / code-signing — no Apple Developer ID.
-          # First-launch users right-click → Open, or allow in
-          # System Settings → Privacy & Security.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # Token used by electron-builder to talk to the GitHub Releases API.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
