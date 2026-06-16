@@ -267,7 +267,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       if (!col.id) return; // hardcoded defaults have no id — nothing to delete
       // Move any tasks in this column back to the first surviving column
       const fallback = columns.find((c) => c.key !== col.key) ?? DEFAULT_TASK_COLUMNS[0];
-      await supabase.from("tasks").update({ status: fallback.key }).eq("status", col.key);
+      const fallbackCompletedAt = fallback.key === "completed" ? new Date().toISOString() : null;
+      await supabase.from("tasks").update({ status: fallback.key, completed_at: fallbackCompletedAt }).eq("status", col.key);
 
       if (col.is_personal) {
         if (!user?.id) throw new Error("You must be signed in");
@@ -318,9 +319,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       const assignees = t.task_assignees?.map((a: any) => a.user_id) ?? [];
       if (!assignees.includes(assigneeFilter)) return false;
     }
-    if (t.status === "completed" && t.updated_at) {
-      const ts = new Date(t.updated_at).getTime();
-      if (ts > 0 && ts < sevenDaysAgoMs) return false;
+    if (t.status === "completed") {
+      const tsRaw = t.completed_at ?? t.updated_at;
+      if (tsRaw) {
+        const ts = new Date(tsRaw).getTime();
+        if (ts > 0 && ts < sevenDaysAgoMs) return false;
+      }
     }
     return true;
   });
@@ -368,7 +372,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       (old: any[]) => old.map((t: any) => t.id === draggedTaskId ? { ...t, status: targetStatus } : t)
     );
     setDraggedTaskId(null);
-    const { error } = await supabase.from("tasks").update({ status: targetStatus }).eq("id", draggedTaskId);
+    const completedAt = targetStatus === "completed" ? new Date().toISOString() : null;
+    const { error } = await supabase.from("tasks").update({ status: targetStatus, completed_at: completedAt }).eq("id", draggedTaskId);
     if (error) {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.error("Failed to update task status");

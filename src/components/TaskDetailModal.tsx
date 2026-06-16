@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Download, Trash2, Paperclip, Pencil, Check, ChevronDown, CornerDownRight, FolderKanban, ArrowRightCircle, Eye } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, isAfter } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import StatusBadge from "@/components/StatusBadge";
@@ -383,7 +383,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
   const updateProgressStatus = useMutation({
     mutationFn: async () => {
-      await supabase.from("tasks").update({ progress, status }).eq("id", task.id);
+      const completedAt = status?.toLowerCase() === "completed" ? new Date().toISOString() : null;
+      await supabase.from("tasks").update({ progress, status, completed_at: completedAt }).eq("id", task.id);
     },
     onSuccess: () => { invalidateTasks(); toast.success("Task updated"); },
     onError: () => toast.error("Failed to update task"),
@@ -1168,14 +1169,22 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       <p className="text-sm text-ink-primary">
                         {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "None"}
                       </p>
-                      {daysLeft !== null && task.status?.toLowerCase() !== "completed" && (
-                        <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
-                          {daysLeft < 0
-                            ? `Overdue by ${Math.abs(daysLeft)} days`
-                            : daysLeft === 0
-                            ? "Due today"
-                            : `${daysLeft} days remaining`}
-                        </p>
+                      {daysLeft !== null && (
+                        task.status?.toLowerCase() !== "completed" ? (
+                          <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
+                            {daysLeft < 0
+                              ? `Overdue by ${Math.abs(daysLeft)} days`
+                              : daysLeft === 0
+                              ? "Due today"
+                              : `${daysLeft} days remaining`}
+                          </p>
+                        ) : (
+                          task.completed_at && isAfter(new Date(task.completed_at), new Date(task.deadline)) && (
+                            <p className="text-xs text-destructive">
+                              {`Overdue by ${differenceInDays(new Date(task.completed_at), new Date(task.deadline))} days`}
+                            </p>
+                          )
+                        )
                       )}
                     </>
                   )}
