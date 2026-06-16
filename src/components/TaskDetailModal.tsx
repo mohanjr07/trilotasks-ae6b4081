@@ -383,7 +383,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
 
   const updateProgressStatus = useMutation({
     mutationFn: async () => {
-      await supabase.from("tasks").update({ progress, status }).eq("id", task.id);
+      const completedAt = status?.toLowerCase() === "completed" ? new Date().toISOString() : null;
+      await supabase.from("tasks").update({ progress, status, completed_at: completedAt }).eq("id", task.id);
     },
     onSuccess: () => { invalidateTasks(); toast.success("Task updated"); },
     onError: () => toast.error("Failed to update task"),
