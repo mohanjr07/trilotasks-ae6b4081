@@ -267,7 +267,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       if (!col.id) return; // hardcoded defaults have no id — nothing to delete
       // Move any tasks in this column back to the first surviving column
       const fallback = columns.find((c) => c.key !== col.key) ?? DEFAULT_TASK_COLUMNS[0];
-      await supabase.from("tasks").update({ status: fallback.key }).eq("status", col.key);
+      const fallbackCompletedAt = fallback.key === "completed" ? new Date().toISOString() : null;
+      await supabase.from("tasks").update({ status: fallback.key, completed_at: fallbackCompletedAt }).eq("status", col.key);
 
       if (col.is_personal) {
         if (!user?.id) throw new Error("You must be signed in");
