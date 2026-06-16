@@ -319,9 +319,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       const assignees = t.task_assignees?.map((a: any) => a.user_id) ?? [];
       if (!assignees.includes(assigneeFilter)) return false;
     }
-    if (t.status === "completed" && t.updated_at) {
-      const ts = new Date(t.updated_at).getTime();
-      if (ts > 0 && ts < sevenDaysAgoMs) return false;
+    if (t.status === "completed") {
+      const tsRaw = t.completed_at ?? t.updated_at;
+      if (tsRaw) {
+        const ts = new Date(tsRaw).getTime();
+        if (ts > 0 && ts < sevenDaysAgoMs) return false;
+      }
     }
     return true;
   });
