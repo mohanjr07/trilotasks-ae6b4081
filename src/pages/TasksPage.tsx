@@ -369,7 +369,8 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
       (old: any[]) => old.map((t: any) => t.id === draggedTaskId ? { ...t, status: targetStatus } : t)
     );
     setDraggedTaskId(null);
-    const { error } = await supabase.from("tasks").update({ status: targetStatus }).eq("id", draggedTaskId);
+    const completedAt = targetStatus === "completed" ? new Date().toISOString() : null;
+    const { error } = await supabase.from("tasks").update({ status: targetStatus, completed_at: completedAt }).eq("id", draggedTaskId);
     if (error) {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.error("Failed to update task status");
