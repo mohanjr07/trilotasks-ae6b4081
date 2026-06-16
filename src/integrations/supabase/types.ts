@@ -797,6 +797,7 @@ export type Database = {
           assigned_by: string
           assigned_to: string
           category: string | null
+          completed_at: string | null
           created_at: string | null
           deadline: string | null
           description: string | null
@@ -813,6 +814,7 @@ export type Database = {
           assigned_by: string
           assigned_to: string
           category?: string | null
+          completed_at?: string | null
           created_at?: string | null
           deadline?: string | null
           description?: string | null
@@ -829,6 +831,7 @@ export type Database = {
           assigned_by?: string
           assigned_to?: string
           category?: string | null
+          completed_at?: string | null
           created_at?: string | null
           deadline?: string | null
           description?: string | null
