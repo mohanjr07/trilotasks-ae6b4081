@@ -1169,14 +1169,22 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
                       <p className="text-sm text-ink-primary">
                         {task.deadline ? format(new Date(task.deadline), "MMM d, yyyy") : "None"}
                       </p>
-                      {daysLeft !== null && task.status?.toLowerCase() !== "completed" && (
-                        <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
-                          {daysLeft < 0
-                            ? `Overdue by ${Math.abs(daysLeft)} days`
-                            : daysLeft === 0
-                            ? "Due today"
-                            : `${daysLeft} days remaining`}
-                        </p>
+                      {daysLeft !== null && (
+                        task.status?.toLowerCase() !== "completed" ? (
+                          <p className={`text-xs ${daysLeft < 0 ? "text-destructive" : "text-ink-muted"}`}>
+                            {daysLeft < 0
+                              ? `Overdue by ${Math.abs(daysLeft)} days`
+                              : daysLeft === 0
+                              ? "Due today"
+                              : `${daysLeft} days remaining`}
+                          </p>
+                        ) : (
+                          task.completed_at && isAfter(new Date(task.completed_at), new Date(task.deadline)) && (
+                            <p className="text-xs text-destructive">
+                              {`Overdue by ${differenceInDays(new Date(task.completed_at), new Date(task.deadline))} days`}
+                            </p>
+                          )
+                        )
                       )}
                     </>
                   )}
