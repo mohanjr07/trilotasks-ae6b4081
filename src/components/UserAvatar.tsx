@@ -26,7 +26,7 @@ function getInitials(name: string) {
 type Props = {
   name: string;
   avatarUrl?: string | null;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
 };
 
