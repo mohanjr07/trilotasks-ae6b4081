@@ -139,35 +139,35 @@ export default function BirthdaysPage() {
               Today
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             {todays.map((p) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="relative overflow-hidden rounded-3xl p-6 bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-orange-500/10 border border-rose-500/20"
+                className="relative overflow-hidden rounded-3xl p-8 md:p-10 bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-orange-500/10 border border-rose-500/20"
               >
-                <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-rose-500/10 blur-2xl" />
-                <div className="absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-orange-500/10 blur-2xl" />
-                <div className="relative flex items-center gap-4">
+                <div className="absolute -top-10 -right-10 h-48 w-48 rounded-full bg-rose-500/10 blur-3xl" />
+                <div className="absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-orange-500/10 blur-3xl" />
+                <div className="relative flex items-center gap-6">
                   <div className="relative">
-                    <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="xl" className="ring-4 ring-rose-400/40" />
-                    <span className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shadow">
-                      <Cake className="h-3.5 w-3.5 text-white" />
+                    <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="2xl" className="ring-[6px] ring-rose-400/40" />
+                    <span className="absolute -bottom-1.5 -right-1.5 h-9 w-9 rounded-full bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shadow-lg">
+                      <Cake className="h-4.5 w-4.5 text-white" />
                     </span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-lg font-semibold truncate">{p.full_name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
+                    <p className="text-2xl md:text-3xl font-bold truncate">{p.full_name}</p>
+                    <p className="text-sm text-muted-foreground truncate mt-1">
                       {p.position || p.role} {p.department ? `• ${p.department}` : ""}
                     </p>
-                    <p className="mt-1.5 text-sm font-medium bg-gradient-to-r from-rose-500 to-orange-500 bg-clip-text text-transparent">
+                    <p className="mt-3 text-base md:text-lg font-semibold bg-gradient-to-r from-rose-500 to-orange-500 bg-clip-text text-transparent">
                       🎉 Happy Birthday — turning {turningAge(p.date_of_birth!)}!
                     </p>
                   </div>
                   {isAdmin && (
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(p)}>
-                      <Pencil className="h-4 w-4" />
+                    <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => openEdit(p)}>
+                      <Pencil className="h-5 w-5" />
                     </Button>
                   )}
                 </div>
