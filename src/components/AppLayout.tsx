@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes, UsersRound, Target, FileText, Workflow,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Boxes, UsersRound, Target, FileText, Workflow, Cake,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -29,6 +29,7 @@ const adminNav: NavItem[] = [
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
   { label: "Notes", path: "/notes", icon: StickyNote },
+  { label: "Birthdays", path: "/birthdays", icon: Cake },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -49,6 +50,7 @@ const managerNav: NavItem[] = [
   { label: "My Leave", path: "/my-leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
   { label: "Notes", path: "/notes", icon: StickyNote },
+  { label: "Birthdays", path: "/birthdays", icon: Cake },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -66,6 +68,7 @@ const employeeNav: NavItem[] = [
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
   { label: "Notes", path: "/notes", icon: StickyNote },
+  { label: "Birthdays", path: "/birthdays", icon: Cake },
   { label: "Profile", path: "/profile", icon: User },
 ];
 
@@ -79,6 +82,7 @@ const internNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: FileText },
   { label: "Notes", path: "/notes", icon: StickyNote },
+  { label: "Birthdays", path: "/birthdays", icon: Cake },
   { label: "Profile", path: "/profile", icon: User },
 ];
 

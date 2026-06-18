@@ -37,6 +37,7 @@ import PeoplePage from "@/pages/PeoplePage";
 import KraKpiPage from "@/pages/KraKpiPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import CompletedTasksPage from "@/pages/CompletedTasksPage";
+import BirthdaysPage from "@/pages/BirthdaysPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -138,6 +139,7 @@ const App = () => (
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/birthdays" element={<BirthdaysPage />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />
