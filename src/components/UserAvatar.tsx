@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-const sizeMap = { sm: "h-6 w-6 text-[10px]", md: "h-9 w-9 text-xs", lg: "h-12 w-12 text-sm", xl: "h-16 w-16 text-lg" };
+const sizeMap = { sm: "h-6 w-6 text-[10px]", md: "h-9 w-9 text-xs", lg: "h-12 w-12 text-sm", xl: "h-16 w-16 text-lg", "2xl": "h-24 w-24 text-xl" };
 
 const colors = [
   "bg-primary/10 text-primary",
