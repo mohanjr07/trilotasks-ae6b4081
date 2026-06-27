@@ -75,6 +75,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     if (editingColKey) editInputRef.current?.focus();
   }, [editingColKey]);
 
+  // Keep the open task detail in sync with the latest tasks data so that
+  // edits (e.g. assigning a project) reflect immediately in the modal.
+  useEffect(() => {
+    if (!selectedTask) return;
+    const fresh = (tasks as any[])?.find((t) => t.id === selectedTask.id);
+    if (fresh && fresh !== selectedTask) setSelectedTask(fresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
   const canCreateTasks = !myTasksOnly && (profile?.role === "admin" || profile?.role === "manager" || profile?.role === "employee" || profile?.role === "intern");
   // Renaming is PER-USER (stored in user_task_column_prefs) so every signed-in
   // user — employee, intern, manager, admin — can rename their own view on
