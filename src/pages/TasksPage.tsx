@@ -163,6 +163,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
     enabled: !!user,
   });
 
+  // Keep the open task detail in sync with the latest tasks data so that
+  // edits (e.g. assigning a project) reflect immediately in the modal.
+  useEffect(() => {
+    if (!selectedTask) return;
+    const fresh = (tasks as any[])?.find((t) => t.id === selectedTask.id);
+    if (fresh && fresh !== selectedTask) setSelectedTask(fresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
   const { data: columns = DEFAULT_TASK_COLUMNS } = useTaskColumns();
 
   const { data: members = [] } = useQuery({
