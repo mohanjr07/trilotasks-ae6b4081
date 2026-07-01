@@ -248,9 +248,38 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   const isPermission = category === "permission";
   const isWFH = effectiveCategory === "work_from_home";
 
+  // Validate that a YYYY-MM-DD string is a real calendar date.
+  // JS's Date constructor silently rolls invalid days (e.g. "2026-06-31" → Jul 1),
+  // so we compare each field after parsing to catch impossible dates.
+  const isValidDate = (s: string) => {
+    if (!s) return false;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return false;
+    const [, y, mo, d] = m;
+    const dt = new Date(`${s}T00:00:00`);
+    return (
+      dt.getFullYear() === Number(y) &&
+      dt.getMonth() + 1 === Number(mo) &&
+      dt.getDate() === Number(d)
+    );
+  };
+
   const submit = useMutation({
     mutationFn: async () => {
       const useHalfDay = effectiveCategory === "casual_leave" && isHalfDay;
+
+      if (!isValidDate(startDate)) {
+        toast.error("Please enter a valid date (that month may not have that day)");
+        throw new Error("bad date");
+      }
+      if (!isPermission && !useHalfDay && endDate && !isValidDate(endDate)) {
+        toast.error("Please enter a valid end date");
+        throw new Error("bad date");
+      }
+      if (!isPermission && !useHalfDay && endDate && endDate < startDate) {
+        toast.error("End date cannot be before start date");
+        throw new Error("bad date");
+      }
 
       // Permission-specific validation: time range required and start < end
       if (isPermission) {
@@ -313,7 +342,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       onClose();
     },
     onError: (e: any) => {
-      if (e?.message === "missing time" || e?.message === "bad time range") return;
+      if (e?.message === "missing time" || e?.message === "bad time range" || e?.message === "bad date") return;
       toast.error(e.message);
     },
   });
