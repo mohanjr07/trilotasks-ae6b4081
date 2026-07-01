@@ -463,6 +463,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date</label>
                     <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
+                    {startDate && !isValidDate(startDate) && (
+                      <p className="mt-1 text-xs text-destructive">That month doesn't have this date.</p>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -477,7 +480,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                   {startTime && endTime && startTime < endTime && (
                     <p className="text-[11px] text-ink-muted -mt-2">
                       You're requesting permission from {fmtTime(startTime)} to {fmtTime(endTime)}
-                      {startDate && ` on ${format(new Date(startDate), "MMM d, yyyy")}`}.
+                      {startDate && isValidDate(startDate) && ` on ${format(new Date(startDate), "MMM d, yyyy")}`}.
                     </p>
                   )}
                 </>
@@ -488,11 +491,17 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                       {isHalfDay ? "Date" : "Start Date"}
                     </label>
                     <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
+                    {startDate && !isValidDate(startDate) && (
+                      <p className="mt-1 text-xs text-destructive">That month doesn't have this date.</p>
+                    )}
                   </div>
                   {!isHalfDay && (
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
                       <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
+                      {endDate && !isValidDate(endDate) && (
+                        <p className="mt-1 text-xs text-destructive">That month doesn't have this date.</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -507,6 +516,8 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                 disabled={
                   submit.isPending ||
                   !startDate ||
+                  !isValidDate(startDate) ||
+                  (!!endDate && !isValidDate(endDate)) ||
                   !reason ||
                   (isPermission && (!startTime || !endTime))
                 }
@@ -514,6 +525,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
               >
                 {submit.isPending ? "Submitting..." : isPermission ? "Request Permission" : isWFH ? "Request WFH" : "Submit Request"}
               </Button>
+
             </div>
           </motion.div>
         </div>
