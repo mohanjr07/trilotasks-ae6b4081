@@ -342,7 +342,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       onClose();
     },
     onError: (e: any) => {
-      if (e?.message === "missing time" || e?.message === "bad time range") return;
+      if (e?.message === "missing time" || e?.message === "bad time range" || e?.message === "bad date") return;
       toast.error(e.message);
     },
   });
