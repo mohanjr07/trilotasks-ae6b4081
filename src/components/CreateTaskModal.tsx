@@ -24,13 +24,21 @@ const schema = z.object({
   assigned_to: z.array(z.string()).min(1, "At least one assignee is required"),
   priority: z.enum(["low", "medium", "high"]),
   status: z.enum(["todo", "in_progress", "on_hold", "completed"]),
-  deadline: z.string().min(1, "Deadline is required").refine(
-    (d) => d >= today(),
-    "Deadline must be today or a future date"
-  ),
+  deadline: z.string().optional(),
   category: z.string().max(50).optional(),
   project_id: z.string().optional(),
   project_team_id: z.string().optional(),
+}).superRefine((val, ctx) => {
+  const isSales = (val.category ?? "").trim().toLowerCase() === "sales";
+  if (!isSales) {
+    if (!val.deadline) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline is required" });
+    } else if (val.deadline < today()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
+    }
+  } else if (val.deadline && val.deadline < today()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
+  }
 });
 type FormData = z.infer<typeof schema>;
 
@@ -205,7 +213,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
         assigned_to: data.assigned_to[0],
         priority: data.priority,
         status: data.status,
-        deadline: data.deadline,
+        deadline: data.deadline || null,
         category: data.category || null,
         assigned_by: user!.id,
         project_id: data.project_id || null,
@@ -425,7 +433,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                   </Select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline *</label>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline {(draft.category ?? "").trim().toLowerCase() === "sales" ? <span className="text-ink-muted font-normal">(optional)</span> : "*"}</label>
                   <Input {...register("deadline")} type="date" min={today()} className="h-10" />
                   {errors.deadline && <p className="mt-1 text-xs text-destructive">{errors.deadline.message}</p>}
                 </div>
