@@ -24,13 +24,21 @@ const schema = z.object({
   assigned_to: z.array(z.string()).min(1, "At least one assignee is required"),
   priority: z.enum(["low", "medium", "high"]),
   status: z.enum(["todo", "in_progress", "on_hold", "completed"]),
-  deadline: z.string().min(1, "Deadline is required").refine(
-    (d) => d >= today(),
-    "Deadline must be today or a future date"
-  ),
+  deadline: z.string().optional(),
   category: z.string().max(50).optional(),
   project_id: z.string().optional(),
   project_team_id: z.string().optional(),
+}).superRefine((val, ctx) => {
+  const isSales = (val.category ?? "").trim().toLowerCase() === "sales";
+  if (!isSales) {
+    if (!val.deadline) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline is required" });
+    } else if (val.deadline < today()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
+    }
+  } else if (val.deadline && val.deadline < today()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
+  }
 });
 type FormData = z.infer<typeof schema>;
 
