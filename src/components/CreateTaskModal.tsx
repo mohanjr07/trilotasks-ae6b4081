@@ -433,7 +433,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                   </Select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline *</label>
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline {(draft.category ?? "").trim().toLowerCase() === "sales" ? <span className="text-ink-muted font-normal">(optional)</span> : "*"}</label>
                   <Input {...register("deadline")} type="date" min={today()} className="h-10" />
                   {errors.deadline && <p className="mt-1 text-xs text-destructive">{errors.deadline.message}</p>}
                 </div>
