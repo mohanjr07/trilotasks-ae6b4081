@@ -213,7 +213,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
         assigned_to: data.assigned_to[0],
         priority: data.priority,
         status: data.status,
-        deadline: data.deadline,
+        deadline: data.deadline || null,
         category: data.category || null,
         assigned_by: user!.id,
         project_id: data.project_id || null,
