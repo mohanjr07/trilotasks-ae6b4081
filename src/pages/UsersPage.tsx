@@ -547,6 +547,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
   onEdit: (u: any) => void; onCreateTask: (uid: string) => void;
 }) {
   const [tab, setTab] = useState<"tasks" | "leave">("tasks");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: userTasks = [] } = useQuery({
     queryKey: ["user-tasks", selectedUser?.id],
@@ -585,7 +586,14 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
 
           <div className="p-5">
             <div className="flex items-center gap-4 mb-4">
-              <UserAvatar name={selectedUser.full_name} avatarUrl={selectedUser.avatar_url} size="xl" />
+              <button
+                type="button"
+                onClick={() => selectedUser.avatar_url && setPreviewOpen(true)}
+                className={`rounded-full transition ${selectedUser.avatar_url ? "cursor-zoom-in hover:ring-2 hover:ring-primary/40" : "cursor-default"}`}
+                title={selectedUser.avatar_url ? "View photo" : ""}
+              >
+                <UserAvatar name={selectedUser.full_name} avatarUrl={selectedUser.avatar_url} size="xl" />
+              </button>
               <div>
                 <p className="font-heading text-xl font-bold text-ink-primary">{selectedUser.full_name}</p>
                 <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
@@ -597,6 +605,30 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
                 </div>
               </div>
             </div>
+
+            <AnimatePresence>
+              {previewOpen && selectedUser.avatar_url && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6"
+                  onClick={() => setPreviewOpen(false)}
+                >
+                  <motion.img
+                    initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
+                    src={selectedUser.avatar_url}
+                    alt={selectedUser.full_name}
+                    className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <button
+                    onClick={() => setPreviewOpen(false)}
+                    className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="space-y-3 mb-5 text-sm">
               <div className="flex items-center justify-between">
