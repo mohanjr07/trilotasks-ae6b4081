@@ -240,13 +240,13 @@ export default function AdminLeavePage() {
                 Revert
               </Button>
             )}
-            {isStrictAdmin && req.status === "rejected" && !isReverted && (
+            {isStrictAdmin && (req.status === "rejected" || isReverted) && (
               <Button
                 size="icon"
                 variant="outline"
                 className="h-9 w-9 text-destructive border-destructive/30 hover:bg-destructive-light"
-                onClick={() => setDeleteReq(req)}
-                title="Delete this rejected leave permanently"
+                onClick={(e) => { e.stopPropagation(); setDeleteReq(req); }}
+                title={isReverted ? "Delete this reverted leave permanently" : "Delete this rejected leave permanently"}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
