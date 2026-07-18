@@ -547,6 +547,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
   onEdit: (u: any) => void; onCreateTask: (uid: string) => void;
 }) {
   const [tab, setTab] = useState<"tasks" | "leave">("tasks");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const { data: userTasks = [] } = useQuery({
     queryKey: ["user-tasks", selectedUser?.id],
