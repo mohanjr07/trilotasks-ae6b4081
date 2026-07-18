@@ -909,7 +909,7 @@ function DeleteLeaveModal({
                   Delete leave permanently?
                 </h2>
                 <p className="mt-1 text-sm text-ink-muted">
-                  This will permanently remove the rejected leave request for{" "}
+                  This will permanently remove the leave request for{" "}
                   <span className="font-medium text-ink-primary">
                     {request.employee?.full_name}
                   </span>
