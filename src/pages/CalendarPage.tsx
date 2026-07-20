@@ -146,6 +146,8 @@ export default function CalendarPage() {
         const start = parseISO(l.start_date);
         const end = l.end_date ? parseISO(l.end_date) : start;
         eachDayOfInterval({ start, end }).forEach((d) => {
+          // Skip Sundays — they are weekly off and shouldn't count as leave
+          if (d.getDay() === 0) return;
           ensure(format(d, "yyyy-MM-dd")).leaves.push(l);
         });
       });
