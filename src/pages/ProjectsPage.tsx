@@ -53,7 +53,7 @@ export default function ProjectsPage() {
     queryKey: ["projects"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("projects").select("*").order("created_at", { ascending: false });
+        .from("projects").select("*").order("name", { ascending: true });
       if (error) throw error;
       return data ?? [];
     },
