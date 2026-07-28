@@ -1,27 +1,20 @@
+// Validates the incoming notification against the database before sending
+// any email. The trigger authenticates with the anon key (publicly known),
+// so we cannot trust the request payload — we look the notification up
+// server-side using the service role and refuse to send anything that isn't
+// a real, un-emailed row.
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { z } from "npm:zod@3.25.76";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
-
-const UpdateUserSchema = z.object({
-  userId: z.string().uuid(),
-  full_name: z.string().trim().min(1).max(100),
-  role: z.enum(["admin", "manager", "employee"]),
-  department: z.string().trim().max(100).nullable().optional(),
-  position: z.string().trim().max(100).nullable().optional(),
-  phone: z.string().trim().max(20).nullable().optional(),
-});
 
 const json = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
 Deno.serve(async (req) => {
@@ -31,70 +24,71 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const publishableKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const authHeader = req.headers.get("Authorization");
-
-    if (!supabaseUrl || !publishableKey || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       return json({ error: "Missing backend configuration" }, 500);
     }
 
-    if (!authHeader?.startsWith("Bearer ")) {
-      return json({ error: "Unauthorized" }, 401);
+    const payload = await req.json().catch(() => ({}));
+    const recordId = payload?.record?.id;
+    if (!recordId || typeof recordId !== "string") {
+      return json({ error: "Missing notification id" }, 400);
     }
 
-    const userClient = createClient(supabaseUrl, publishableKey, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
-    const callerId = claimsData?.claims?.sub;
-
-    if (claimsError || !callerId) {
-      return json({ error: "Unauthorized" }, 401);
-    }
-
-    const { data: callerProfile, error: callerError } = await adminClient
-      .from("profiles")
-      .select("role")
-      .eq("id", callerId)
+    // Verify the notification actually exists in the DB and hasn't been sent.
+    // This is what stops the anon key from being abused as a spam relay:
+    // the request payload is ignored, only the real DB row is used.
+    const { data: notif, error: fetchError } = await admin
+      .from("notifications")
+      .select("id, user_id, title, body, email_sent")
+      .eq("id", recordId)
       .maybeSingle();
 
-    if (callerError || !callerProfile || !["admin", "super_admin"].includes(callerProfile.role ?? "")) {
-      return json({ error: "Only admins can update users" }, 403);
-    }
+    if (fetchError) return json({ error: fetchError.message }, 500);
+    if (!notif) return json({ ok: true, skipped: "not_found" });
+    if (notif.email_sent) return json({ ok: true, skipped: "already_sent" });
 
-    const parsedBody = UpdateUserSchema.safeParse(await req.json());
-    if (!parsedBody.success) {
-      return json({ error: parsedBody.error.flatten().fieldErrors }, 400);
-    }
+    // Atomically claim the send so concurrent invocations can't double-email.
+    const { data: claimed } = await admin
+      .from("notifications")
+      .update({ email_sent: true })
+      .eq("id", notif.id)
+      .eq("email_sent", false)
+      .select("id")
+      .maybeSingle();
+    if (!claimed) return json({ ok: true, skipped: "race" });
 
-    const body = parsedBody.data;
-
-    if (body.userId === callerId && body.role !== "admin") {
-      return json({ error: "You cannot remove your own admin role" }, 400);
-    }
-
-    const { error: updateError } = await adminClient
+    const { data: profile } = await admin
       .from("profiles")
-      .update({
-        full_name: body.full_name,
-        role: body.role,
-        department: body.department || null,
-        position: body.position || null,
-        phone: body.phone || null,
-      })
-      .eq("id", body.userId);
+      .select("email, full_name")
+      .eq("id", notif.user_id)
+      .maybeSingle();
 
-    if (updateError) {
-      return json({ error: updateError.message }, 400);
-    }
+    if (!profile?.email) return json({ ok: true, skipped: "no_email" });
 
-    return json({ success: true });
+    const resendKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendKey) return json({ ok: true, skipped: "email_disabled" });
+
+    const from = Deno.env.get("RESEND_FROM") ??
+      "Trilo <onboarding@resend.dev>";
+
+    const emailRes = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [profile.email],
+        subject: notif.title,
+        html: `<p>Hi ${profile.full_name ?? "there"},</p><p>${notif.body}</p>`,
+      }),
+    });
+
+    return json({ ok: emailRes.ok, status: emailRes.status });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);
