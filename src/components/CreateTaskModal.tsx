@@ -30,14 +30,8 @@ const schema = z.object({
   project_team_id: z.string().optional(),
 }).superRefine((val, ctx) => {
   const isSales = (val.category ?? "").trim().toLowerCase() === "sales";
-  if (!isSales) {
-    if (!val.deadline) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline is required" });
-    } else if (val.deadline < today()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
-    }
-  } else if (val.deadline && val.deadline < today()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline must be today or a future date" });
+  if (!isSales && !val.deadline) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deadline"], message: "Deadline is required" });
   }
 });
 type FormData = z.infer<typeof schema>;
@@ -434,7 +428,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-ink-primary">Deadline {(draft.category ?? "").trim().toLowerCase() === "sales" ? <span className="text-ink-muted font-normal">(optional)</span> : "*"}</label>
-                  <Input {...register("deadline")} type="date" min={today()} className="h-10" />
+                  <Input {...register("deadline")} type="date" className="h-10" />
                   {errors.deadline && <p className="mt-1 text-xs text-destructive">{errors.deadline.message}</p>}
                 </div>
               </div>
