@@ -2,13 +2,9 @@
   "name": "taskflow",
   "productName": "TaskFlow",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/mohanjr07/trilotasks-ae6b4081.git"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -57,11 +53,14 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "docx": "^9.5.1",
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
     "framer-motion": "^11.0.0",
     "input-otp": "^1.4.2",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.462.0",
+    "mammoth": "^1.12.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -117,31 +116,13 @@
     ],
     "win": {
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        { "target": "dmg", "arch": ["x64", "arm64"] }
       ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns"
