@@ -3,22 +3,19 @@ import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, FileStack,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
-
 type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
-
 const adminNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
-  { label: "Production Forms", path: "/production-forms", icon: FileStack },
   { label: "Users", path: "/users", icon: Users },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -27,13 +24,11 @@ const adminNav: NavItem[] = [
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
-
 const managerNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
-  { label: "Production Forms", path: "/production-forms", icon: FileStack },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -43,30 +38,25 @@ const managerNav: NavItem[] = [
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
-
 const employeeNav: NavItem[] = [
   { label: "Dashboard", path: "/my-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
-  { label: "Production Forms", path: "/production-forms", icon: FileStack },
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Leave", path: "/my-leave", icon: Calendar },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
-
 const internNav: NavItem[] = [
   { label: "Dashboard", path: "/intern-dashboard", icon: LayoutDashboard },
   { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
   { label: "Projects", path: "/projects", icon: FolderKanban },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
-  { label: "Production Forms", path: "/production-forms", icon: FileStack },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Profile", path: "/profile", icon: User },
 ];
-
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
@@ -79,7 +69,6 @@ export default function AppLayout() {
   const isManager = profile?.role === "manager";
   const isIntern = profile?.role === "intern";
   const nav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
-
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains("dark"));
@@ -87,12 +76,10 @@ export default function AppLayout() {
     observer.observe(document.documentElement, { attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, []);
-
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
   };
-
   return (
     <div className="flex min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -117,7 +104,6 @@ export default function AppLayout() {
             />
           </div>
         </div>
-
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
             {nav.map((item) => {
@@ -146,7 +132,6 @@ export default function AppLayout() {
             })}
           </ul>
         </nav>
-
         <div className="border-t border-border p-3">
           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
@@ -160,7 +145,6 @@ export default function AppLayout() {
           </div>
         </div>
       </aside>
-
       {/* Mobile overlay */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -171,7 +155,6 @@ export default function AppLayout() {
           />
         )}
       </AnimatePresence>
-
       {/* Mobile sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -240,7 +223,6 @@ export default function AppLayout() {
           </motion.aside>
         )}
       </AnimatePresence>
-
       {/* Main content */}
       <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
         {/* Header */}
@@ -258,12 +240,10 @@ export default function AppLayout() {
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
           </Link>
         </header>
-
         <main className="flex-1 px-4 py-6 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <Outlet />
         </main>
       </div>
-
       {/* Mobile bottom tab bar */}
       <div className="fixed bottom-0 left-0 right-0 flex md:hidden border-t border-border bg-card z-30">
         {nav.slice(0, 5).map((item) => {
