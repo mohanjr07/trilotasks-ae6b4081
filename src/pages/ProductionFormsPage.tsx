@@ -15,13 +15,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileSpreadsheet, FileText, Plus, Trash2, FolderOpen, Loader2 } from "lucide-react";
+import { FileSpreadsheet, FileText, Plus, Trash2, FolderOpen, Loader2, History } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import type { FieldLocator } from "@/lib/productionForms";
 import { formatRefNumber } from "@/lib/productionForms";
 import ProductionFormUploadDialog from "@/components/ProductionFormUploadDialog";
 import ProductionFormEditDialog from "@/components/ProductionFormEditDialog";
+import ProductionFormLogDialog from "@/components/ProductionFormLogDialog";
 
 export type ProductionForm = {
   id: string;
@@ -43,6 +44,7 @@ export default function ProductionFormsPage() {
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<ProductionForm | null>(null);
   const [deletingForm, setDeletingForm] = useState<ProductionForm | null>(null);
 
@@ -90,9 +92,14 @@ export default function ProductionFormsPage() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={() => setUploadOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" /> Upload Form
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setLogOpen(true)} className="gap-2">
+              <History className="h-4 w-4" /> View Log
+            </Button>
+            <Button onClick={() => setUploadOpen(true)} className="gap-2">
+              <Plus className="h-4 w-4" /> Upload Form
+            </Button>
+          </div>
         )}
       </div>
 
@@ -158,6 +165,8 @@ export default function ProductionFormsPage() {
         onClose={() => setUploadOpen(false)}
         onCreated={() => queryClient.invalidateQueries({ queryKey: ["production_forms"] })}
       />
+
+      {isAdmin && <ProductionFormLogDialog open={logOpen} onClose={() => setLogOpen(false)} />}
 
       {editingForm && (
         <ProductionFormEditDialog
