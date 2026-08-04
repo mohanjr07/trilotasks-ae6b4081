@@ -20,7 +20,11 @@ import ExcelJS from "exceljs";
 import mammoth from "mammoth";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 
-export type WordFieldLocator = { type: "bookmark"; name: string };
+// `part` is which XML piece inside the .docx the bookmark lives in — the main
+// body (word/document.xml) or a header/footer (word/header1.xml, etc). Most
+// real-world templates put the reference number in the header, so we have to
+// track this instead of assuming everything is in the body.
+export type WordFieldLocator = { type: "bookmark"; name: string; part?: string };
 export type ExcelFieldLocator = { type: "cell"; sheet: string; cell: string };
 export type FieldLocator = WordFieldLocator | ExcelFieldLocator;
 
@@ -47,6 +51,49 @@ export async function getDocumentXml(zip: JSZip): Promise<string> {
   const entry = zip.file(DOCUMENT_XML_PATH);
   if (!entry) throw new Error("This doesn't look like a valid .docx file (word/document.xml missing).");
   return entry.async("text");
+}
+
+/** Every XML part that can hold visible text/bookmarks: the body plus any headers/footers. */
+const HEADER_FOOTER_RE = /^word\/(header|footer)\d+\.xml$/;
+
+export function listWordXmlParts(zip: JSZip): string[] {
+  const parts = [DOCUMENT_XML_PATH];
+  zip.forEach((relPath) => {
+    if (HEADER_FOOTER_RE.test(relPath)) parts.push(relPath);
+  });
+  return parts;
+}
+
+export async function getXmlPart(zip: JSZip, part: string): Promise<string> {
+  const entry = zip.file(part);
+  if (!entry) throw new Error(`Missing ${part} in this .docx file.`);
+  return entry.async("text");
+}
+
+/**
+ * Scan the document body plus every header/footer for bookmarks (most
+ * real-world templates — like ones with a company letterhead — put the
+ * reference number in the header, not the body). Returns which XML part each
+ * bookmark was found in, so the caller can patch the right one later.
+ */
+export async function listWordBookmarksWithParts(zip: JSZip): Promise<{ name: string; part: string }[]> {
+  const parts = listWordXmlParts(zip);
+  const found: { name: string; part: string }[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    let xml: string;
+    try {
+      xml = await getXmlPart(zip, part);
+    } catch {
+      continue;
+    }
+    for (const name of listWordBookmarks(xml)) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      found.push({ name, part });
+    }
+  }
+  return found;
 }
 
 /** Word auto-creates a few internal bookmarks (e.g. _GoBack) — hide those from the picker. */
