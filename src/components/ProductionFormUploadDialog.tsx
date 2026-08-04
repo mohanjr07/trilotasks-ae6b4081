@@ -17,11 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Upload } from "lucide-react";
 import {
-  listWordBookmarks,
+  listWordBookmarksWithParts,
   listSheetNames,
   loadWorkbook,
   loadDocxZip,
-  getDocumentXml,
 } from "@/lib/productionForms";
 
 type Props = {
@@ -42,7 +41,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
   const [description, setDescription] = useState("");
 
   // Word
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
+  const [bookmarks, setBookmarks] = useState<{ name: string; part: string }[]>([]);
   const [selectedBookmark, setSelectedBookmark] = useState("");
 
   // Excel
@@ -95,10 +94,9 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
       const buf = await f.arrayBuffer();
       if (isWord) {
         const zip = await loadDocxZip(buf);
-        const xml = await getDocumentXml(zip);
-        const found = listWordBookmarks(xml);
+        const found = await listWordBookmarksWithParts(zip);
         setBookmarks(found);
-        setSelectedBookmark(found[0] ?? "");
+        setSelectedBookmark(found[0]?.name ?? "");
         if (found.length === 0) {
           toast.error("No bookmarks found in this document. In Word, select the spot for the reference number and add a Bookmark (Insert → Bookmark) before uploading.");
         }
@@ -136,9 +134,10 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
         .upload(path, file, { upsert: false });
       if (uploadError) throw uploadError;
 
+      const bookmarkMeta = bookmarks.find((b) => b.name === selectedBookmark);
       const field_locator =
         fileType === "word"
-          ? { type: "bookmark" as const, name: selectedBookmark }
+          ? { type: "bookmark" as const, name: selectedBookmark, part: bookmarkMeta?.part ?? "word/document.xml" }
           : { type: "cell" as const, sheet: selectedSheet, cell: cellRef.trim().toUpperCase() };
 
       const { error: insertError } = await supabase.from("production_forms").insert({
@@ -217,7 +216,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {bookmarks.map((b) => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                      <SelectItem key={b.name} value={b.name}>{b.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
