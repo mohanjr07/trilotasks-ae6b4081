@@ -17,7 +17,7 @@ import { Loader2, Download, Save } from "lucide-react";
 import type { ProductionForm } from "@/pages/ProductionFormsPage";
 import {
   loadDocxZip,
-  getDocumentXml,
+  getXmlPart,
   setWordBookmarkText,
   docxToHtml,
   htmlToDocxBlob,
@@ -39,6 +39,11 @@ type Props = {
 const BUCKET = "production-forms";
 
 export default function ProductionFormEditDialog({ form, onClose, onSaved }: Props) {
+  const isHeaderFooterBookmark =
+    form.file_type === "word" &&
+    (form.field_locator as WordFieldLocator).part !== undefined &&
+    (form.field_locator as WordFieldLocator).part !== "word/document.xml";
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [referenceValue, setReferenceValue] = useState<string>("");
@@ -77,10 +82,12 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
 
         if (result.file_type === "word") {
           const locator = result.field_locator as unknown as WordFieldLocator;
+          // Older forms saved before header/footer support default to the body.
+          const part = locator.part || "word/document.xml";
           const zip = await loadDocxZip(buffer);
-          const xml = await getDocumentXml(zip);
+          const xml = await getXmlPart(zip, part);
           const patchedXml = setWordBookmarkText(xml, locator.name, result.reference_value);
-          zip.file("word/document.xml", patchedXml);
+          zip.file(part, patchedXml);
           const patchedBuffer = await zip.generateAsync({ type: "arraybuffer" });
 
           // Persist the number bump immediately — it should stick even if the
@@ -189,7 +196,9 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
           </div>
           <DialogDescription>
             {form.file_type === "word"
-              ? "Basic formatting only (bold, italics, headings, lists). For complex layouts, use Download and edit in Word."
+              ? isHeaderFooterBookmark
+                ? "The reference number lives in this document's header/footer, so it won't appear in the preview below — but it's already updated in the file. Download to confirm, or use Save after editing the body text."
+                : "Basic formatting only (bold, italics, headings, lists). For complex layouts, use Download and edit in Word."
               : "Edit cells directly, then save. Formulas and formatting from the original file are preserved."}
           </DialogDescription>
         </DialogHeader>
