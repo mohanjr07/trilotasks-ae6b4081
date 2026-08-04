@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Upload } from "lucide-react";
 import {
@@ -39,6 +40,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
   const [fileType, setFileType] = useState<FileType | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [refNumberEnabled, setRefNumberEnabled] = useState(true);
 
   // Word
   const [bookmarks, setBookmarks] = useState<{ name: string; part: string }[]>([]);
@@ -60,6 +62,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
     setFileType(null);
     setTitle("");
     setDescription("");
+    setRefNumberEnabled(true);
     setBookmarks([]);
     setSelectedBookmark("");
     setSheets([]);
@@ -97,7 +100,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
         const found = await listWordBookmarksWithParts(zip);
         setBookmarks(found);
         setSelectedBookmark(found[0]?.name ?? "");
-        if (found.length === 0) {
+        if (found.length === 0 && refNumberEnabled) {
           toast.error("No bookmarks found in this document. In Word, select the spot for the reference number and add a Bookmark (Insert → Bookmark) before uploading.");
         }
       } else {
@@ -118,9 +121,10 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
   const canSave =
     !!file &&
     !!title.trim() &&
-    (fileType === "word" ? !!selectedBookmark : !!selectedSheet && !!cellRef.trim()) &&
-    padding >= 1 &&
-    padding <= 10;
+    (!refNumberEnabled ||
+      ((fileType === "word" ? !!selectedBookmark : !!selectedSheet && !!cellRef.trim()) &&
+        padding >= 1 &&
+        padding <= 10));
 
   const handleSave = async () => {
     if (!file || !fileType || !user) return;
@@ -135,8 +139,9 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
       if (uploadError) throw uploadError;
 
       const bookmarkMeta = bookmarks.find((b) => b.name === selectedBookmark);
-      const field_locator =
-        fileType === "word"
+      const field_locator = !refNumberEnabled
+        ? null
+        : fileType === "word"
           ? { type: "bookmark" as const, name: selectedBookmark, part: bookmarkMeta?.part ?? "word/document.xml" }
           : { type: "cell" as const, sheet: selectedSheet, cell: cellRef.trim().toUpperCase() };
 
@@ -147,8 +152,9 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
         storage_path: path,
         original_filename: file.name,
         field_locator,
-        ref_prefix: prefix,
-        ref_padding: padding,
+        ref_number_enabled: refNumberEnabled,
+        ref_prefix: refNumberEnabled ? prefix : "",
+        ref_padding: refNumberEnabled ? padding : 3,
         current_number: 0,
         created_by: user.id,
       });
@@ -204,7 +210,17 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
 
-          {fileType === "word" && file && !analyzing && (
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div className="space-y-0.5 pr-4">
+              <Label>Reference number needed?</Label>
+              <p className="text-xs text-ink-muted">
+                Turn off for forms that don't need a running reference number — just upload, view, and download.
+              </p>
+            </div>
+            <Switch checked={refNumberEnabled} onCheckedChange={setRefNumberEnabled} />
+          </div>
+
+          {refNumberEnabled && fileType === "word" && file && !analyzing && (
             <div className="space-y-2">
               <Label>Reference number bookmark</Label>
               {bookmarks.length === 0 ? (
@@ -224,7 +240,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
             </div>
           )}
 
-          {fileType === "excel" && file && !analyzing && (
+          {refNumberEnabled && fileType === "excel" && file && !analyzing && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Sheet</Label>
@@ -244,25 +260,29 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Prefix (optional)</Label>
-              <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="e.g. PF-2026-" />
-            </div>
-            <div className="space-y-2">
-              <Label>Digits</Label>
-              <Input
-                type="number"
-                min={1}
-                max={10}
-                value={padding}
-                onChange={(e) => setPadding(Number(e.target.value) || 1)}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-ink-muted">
-            First open will produce <span className="font-mono">{prefix}{String(1).padStart(padding, "0")}</span>, then {prefix}{String(2).padStart(padding, "0")}, and so on.
-          </p>
+          {refNumberEnabled && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Prefix (optional)</Label>
+                  <Input value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="e.g. PF-2026-" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Digits</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={padding}
+                    onChange={(e) => setPadding(Number(e.target.value) || 1)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-ink-muted">
+                First use will produce <span className="font-mono">{prefix}{String(1).padStart(padding, "0")}</span>, then {prefix}{String(2).padStart(padding, "0")}, and so on.
+              </p>
+            </>
+          )}
         </div>
 
         <DialogFooter>
