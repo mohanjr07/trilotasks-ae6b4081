@@ -13,9 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Download, Save, Eye, Pencil } from "lucide-react";
+import { Loader2, Download, CheckCircle2, Eye, Pencil } from "lucide-react";
 import type { ProductionForm } from "@/pages/ProductionFormsPage";
 import {
+  formatRefNumber,
   loadDocxZip,
   getXmlPart,
   setWordBookmarkText,
@@ -40,7 +41,11 @@ const BUCKET = "production-forms";
 
 export default function ProductionFormEditDialog({ form, onClose, onSaved }: Props) {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [using, setUsing] = useState(false);
+  // Becomes true only after "Use This" successfully assigns + saves the real
+  // reference number. Nothing is written to storage and Download stays
+  // locked until then — opening/previewing the form no longer burns a number.
+  const [used, setUsed] = useState(false);
   const [referenceValue, setReferenceValue] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -52,11 +57,12 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   // this view so what's shown actually matches the original form.
   const [viewMode, setViewMode] = useState<"preview" | "edit">("preview");
   const previewRef = useRef<HTMLDivElement>(null);
-  // The byte-for-byte patched .docx (ref number already written into it).
-  // Download/Save use this directly unless the user actually typed changes
-  // in the Edit tab — that avoids silently round-tripping every open/save
-  // through the lossy HTML<->docx converter when nothing was edited.
+  // A preview render with the *next* reference number patched in, purely for
+  // display — nothing is uploaded until "Use This" is clicked.
   const [originalBuffer, setOriginalBuffer] = useState<ArrayBuffer | null>(null);
+  // The untouched original bytes, kept so "Use This" can patch in the real
+  // (RPC-assigned) number without losing header/table/style fidelity.
+  const rawBufferRef = useRef<ArrayBuffer | null>(null);
   const [edited, setEdited] = useState(false);
 
   // Excel state
@@ -70,55 +76,44 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     async function run() {
       setLoading(true);
       setError(null);
+      setUsed(false);
       setEdited(false);
       setViewMode("preview");
       setOriginalBuffer(null);
+      rawBufferRef.current = null;
       try {
-        const { data: rows, error: rpcError } = await supabase.rpc("open_production_form", {
-          p_form_id: form.id,
-        });
-        if (rpcError) throw rpcError;
-        const result = rows?.[0];
-        if (!result) throw new Error("Couldn't open this form.");
+        // Just a preview of what "Use This" would assign — the counter isn't
+        // touched here, so opening the form to look at it is free.
+        const previewValue = formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1);
         if (cancelled) return;
-        setReferenceValue(result.reference_value);
+        setReferenceValue(previewValue);
 
         const { data: blob, error: downloadError } = await supabase.storage
           .from(BUCKET)
-          .download(result.storage_path);
+          .download(form.storage_path);
         if (downloadError) throw downloadError;
         const buffer = await blob.arrayBuffer();
 
-        if (result.file_type === "word") {
-          const locator = result.field_locator as unknown as WordFieldLocator;
+        if (form.file_type === "word") {
+          const locator = form.field_locator as unknown as WordFieldLocator;
           // Older forms saved before header/footer support default to the body.
           const part = locator.part || "word/document.xml";
+          rawBufferRef.current = buffer;
+
           const zip = await loadDocxZip(buffer);
           const xml = await getXmlPart(zip, part);
-          const patchedXml = setWordBookmarkText(xml, locator.name, result.reference_value);
+          const patchedXml = setWordBookmarkText(xml, locator.name, previewValue);
           zip.file(part, patchedXml);
           const patchedBuffer = await zip.generateAsync({ type: "arraybuffer" });
-
-          // Persist the number bump immediately — it should stick even if the
-          // user never touches the body content.
-          const patchedBlob = new Blob([patchedBuffer], {
-            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          });
-          const { error: upErr } = await supabase.storage.from(BUCKET).upload(result.storage_path, patchedBlob, { upsert: true });
-          if (upErr) throw upErr;
 
           const renderedHtml = await docxToHtml(patchedBuffer);
           if (cancelled) return;
           setHtml(renderedHtml);
           setOriginalBuffer(patchedBuffer);
         } else {
-          const locator = result.field_locator as unknown as ExcelFieldLocator;
+          const locator = form.field_locator as unknown as ExcelFieldLocator;
           const wb = await loadWorkbook(buffer);
-          setCellValue(wb, locator.sheet, locator.cell, result.reference_value);
-
-          const patchedBlob = await workbookToBlob(wb);
-          const { error: upErr } = await supabase.storage.from(BUCKET).upload(result.storage_path, patchedBlob, { upsert: true });
-          if (upErr) throw upErr;
+          setCellValue(wb, locator.sheet, locator.cell, previewValue);
 
           wbRef.current = wb;
           sheetNameRef.current = locator.sheet;
@@ -169,6 +164,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   };
 
   const handleDownload = async () => {
+    if (!used) return; // button is disabled until then, this is just a guard
     try {
       let blob: Blob;
       if (form.file_type === "excel" && wbRef.current) {
@@ -197,36 +193,64 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     }
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  // The single action that both assigns the real reference number and saves
+  // the file — this replaces the old auto-increment-on-open + separate Save
+  // button. Only takes effect once; the counter is a shared resource, so
+  // this can't be re-run in the same session without burning another number.
+  const handleUseThis = async () => {
+    setUsing(true);
     try {
-      if (form.file_type === "word" && !edited) {
-        // The ref-number bump was already persisted to storage the moment
-        // this form was opened — nothing else changed, so there's nothing
-        // new to save (and no reason to lossily regenerate the file).
-        toast.success("Already up to date");
-        onSaved();
-        onClose();
-        return;
-      }
+      const { data: rows, error: rpcError } = await supabase.rpc("open_production_form", {
+        p_form_id: form.id,
+      });
+      if (rpcError) throw rpcError;
+      const result = rows?.[0];
+      if (!result) throw new Error("Couldn't reserve a reference number for this form.");
 
       let blob: Blob;
-      if (form.file_type === "excel") {
-        if (!wbRef.current) throw new Error("Nothing to save yet");
-        blob = await workbookToBlob(wbRef.current);
+      if (form.file_type === "word") {
+        const locator = result.field_locator as unknown as WordFieldLocator;
+        const part = locator.part || "word/document.xml";
+
+        if (edited) {
+          // Body text was customized — regenerate from the edited HTML.
+          // (Basic formatting only; headers/tables aren't reproduced here,
+          // same tradeoff as the Edit tab always had.)
+          const editedHtml = editorRef.current?.innerHTML ?? html;
+          blob = await htmlToDocxBlob(editedHtml);
+        } else if (rawBufferRef.current) {
+          const zip = await loadDocxZip(rawBufferRef.current);
+          const xml = await getXmlPart(zip, part);
+          const patchedXml = setWordBookmarkText(xml, locator.name, result.reference_value);
+          zip.file(part, patchedXml);
+          const patchedBuffer = await zip.generateAsync({ type: "arraybuffer" });
+          blob = new Blob([patchedBuffer], {
+            type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          });
+          setOriginalBuffer(patchedBuffer);
+          setHtml(await docxToHtml(patchedBuffer));
+        } else {
+          throw new Error("Missing the original file — try closing and reopening this form.");
+        }
       } else {
-        const editedHtml = editorRef.current?.innerHTML ?? html;
-        blob = await htmlToDocxBlob(editedHtml);
+        const locator = result.field_locator as unknown as ExcelFieldLocator;
+        if (!wbRef.current) throw new Error("Missing the workbook — try closing and reopening this form.");
+        setCellValue(wbRef.current, locator.sheet, locator.cell, result.reference_value);
+        blob = await workbookToBlob(wbRef.current);
+        setGrid(sheetToGrid(wbRef.current, locator.sheet, 200, 40).cells);
       }
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(form.storage_path, blob, { upsert: true });
+
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(result.storage_path, blob, { upsert: true });
       if (upErr) throw upErr;
-      toast.success("Saved");
+
+      setReferenceValue(result.reference_value);
+      setUsed(true);
+      toast.success(`Reference number ${result.reference_value} assigned`);
       onSaved();
-      onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(err instanceof Error ? err.message : "Failed to assign a reference number");
     } finally {
-      setSaving(false);
+      setUsing(false);
     }
   };
 
@@ -236,12 +260,16 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
         <DialogHeader>
           <div className="flex items-center gap-3">
             <DialogTitle>{form.title}</DialogTitle>
-            {referenceValue && <Badge className="font-mono">{referenceValue}</Badge>}
+            {referenceValue && (
+              <Badge variant={used ? "default" : "secondary"} className="font-mono">
+                {used ? referenceValue : `Next: ${referenceValue}`}
+              </Badge>
+            )}
           </div>
           <DialogDescription>
             {form.file_type === "word"
-              ? "Preview shows the actual document — header, tables, and layout included. Switch to Edit body text for quick text changes (basic formatting only); for anything more complex, use Download and edit in Word."
-              : "Edit cells directly, then save. Formulas and formatting from the original file are preserved."}
+              ? "Preview shows the actual document — header, tables, and layout included. Nothing is assigned or saved yet: click \"Use This\" to lock in this reference number and unlock Download."
+              : "Edit cells directly, then click \"Use This\" to lock in this reference number, save the file, and unlock Download."}
           </DialogDescription>
         </DialogHeader>
 
@@ -317,12 +345,13 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleDownload} disabled={loading || !!error} className="gap-2">
+          <Button variant="outline" onClick={handleDownload} disabled={loading || !!error || !used} className="gap-2">
             <Download className="h-4 w-4" /> Download
           </Button>
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={handleSave} disabled={loading || !!error || saving} className="gap-2">
-            <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save"}
+          <Button onClick={handleUseThis} disabled={loading || !!error || using || used} className="gap-2">
+            {used ? <CheckCircle2 className="h-4 w-4" /> : null}
+            {using ? "Assigning…" : used ? "Used" : "Use This"}
           </Button>
         </DialogFooter>
       </DialogContent>
