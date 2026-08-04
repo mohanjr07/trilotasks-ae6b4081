@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ExcelJS from "exceljs";
-import JSZip from "jszip";
+import { renderAsync as renderDocxPreview } from "docx-preview";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Download, Save } from "lucide-react";
+import { Loader2, Download, Save, Eye, Pencil } from "lucide-react";
 import type { ProductionForm } from "@/pages/ProductionFormsPage";
 import {
   loadDocxZip,
@@ -39,11 +39,6 @@ type Props = {
 const BUCKET = "production-forms";
 
 export default function ProductionFormEditDialog({ form, onClose, onSaved }: Props) {
-  const isHeaderFooterBookmark =
-    form.file_type === "word" &&
-    (form.field_locator as WordFieldLocator).part !== undefined &&
-    (form.field_locator as WordFieldLocator).part !== "word/document.xml";
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [referenceValue, setReferenceValue] = useState<string>("");
@@ -52,6 +47,17 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   // Word state
   const [html, setHtml] = useState<string>("");
   const editorRef = useRef<HTMLDivElement>(null);
+  // Accurate, read-only rendering (headers/footers/tables/layout) — the real
+  // document, not the simplified mammoth body-only conversion. Defaults to
+  // this view so what's shown actually matches the original form.
+  const [viewMode, setViewMode] = useState<"preview" | "edit">("preview");
+  const previewRef = useRef<HTMLDivElement>(null);
+  // The byte-for-byte patched .docx (ref number already written into it).
+  // Download/Save use this directly unless the user actually typed changes
+  // in the Edit tab — that avoids silently round-tripping every open/save
+  // through the lossy HTML<->docx converter when nothing was edited.
+  const [originalBuffer, setOriginalBuffer] = useState<ArrayBuffer | null>(null);
+  const [edited, setEdited] = useState(false);
 
   // Excel state
   const wbRef = useRef<ExcelJS.Workbook | null>(null);
@@ -64,6 +70,9 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     async function run() {
       setLoading(true);
       setError(null);
+      setEdited(false);
+      setViewMode("preview");
+      setOriginalBuffer(null);
       try {
         const { data: rows, error: rpcError } = await supabase.rpc("open_production_form", {
           p_form_id: form.id,
@@ -101,6 +110,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
           const renderedHtml = await docxToHtml(patchedBuffer);
           if (cancelled) return;
           setHtml(renderedHtml);
+          setOriginalBuffer(patchedBuffer);
         } else {
           const locator = result.field_locator as unknown as ExcelFieldLocator;
           const wb = await loadWorkbook(buffer);
@@ -129,6 +139,23 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.id]);
 
+  // Render the true document (header, footer, tables, layout) into the
+  // Preview pane once the patched file is ready and its container is
+  // mounted. Kept separate from viewMode so switching tabs is instant —
+  // both panes exist in the DOM at once, toggled with a CSS class.
+  useEffect(() => {
+    if (loading || !originalBuffer || !previewRef.current) return;
+    const container = previewRef.current;
+    container.innerHTML = "";
+    renderDocxPreview(originalBuffer, container, container, {
+      className: "docx-preview",
+      inWrapper: true,
+      ignoreHeight: true,
+    }).catch(() => {
+      // Best-effort — Edit tab and Download still work even if this fails.
+    });
+  }, [originalBuffer, loading]);
+
   const handleCellChange = (rowIdx: number, colIdx: number, value: string) => {
     setGrid((prev) => {
       const next = prev.map((row) => row.slice());
@@ -146,6 +173,13 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
       let blob: Blob;
       if (form.file_type === "excel" && wbRef.current) {
         blob = await workbookToBlob(wbRef.current);
+      } else if (form.file_type === "word" && !edited && originalBuffer) {
+        // Nothing was edited — hand back the real file (with the ref number
+        // already patched in) instead of round-tripping through the
+        // simplified HTML converter and losing headers/tables/styling.
+        blob = new Blob([originalBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
       } else {
         const container = editorRef.current;
         blob = await htmlToDocxBlob(container?.innerHTML ?? html);
@@ -166,6 +200,16 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (form.file_type === "word" && !edited) {
+        // The ref-number bump was already persisted to storage the moment
+        // this form was opened — nothing else changed, so there's nothing
+        // new to save (and no reason to lossily regenerate the file).
+        toast.success("Already up to date");
+        onSaved();
+        onClose();
+        return;
+      }
+
       let blob: Blob;
       if (form.file_type === "excel") {
         if (!wbRef.current) throw new Error("Nothing to save yet");
@@ -196,9 +240,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
           </div>
           <DialogDescription>
             {form.file_type === "word"
-              ? isHeaderFooterBookmark
-                ? "The reference number lives in this document's header/footer, so it won't appear in the preview below — but it's already updated in the file. Download to confirm, or use Save after editing the body text."
-                : "Basic formatting only (bold, italics, headings, lists). For complex layouts, use Download and edit in Word."
+              ? "Preview shows the actual document — header, tables, and layout included. Switch to Edit body text for quick text changes (basic formatting only); for anything more complex, use Download and edit in Word."
               : "Edit cells directly, then save. Formulas and formatting from the original file are preserved."}
           </DialogDescription>
         </DialogHeader>
@@ -215,13 +257,42 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
           )}
 
           {!loading && !error && form.file_type === "word" && (
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              className="prose prose-sm max-w-none p-6 focus:outline-none"
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
+            <div className="flex flex-col h-full">
+              <div className="flex items-center gap-2 border-b border-border px-4 py-2 bg-muted/30 shrink-0">
+                <Button
+                  size="sm"
+                  variant={viewMode === "preview" ? "secondary" : "ghost"}
+                  onClick={() => setViewMode("preview")}
+                  className="gap-1.5 h-7 px-2 text-xs"
+                >
+                  <Eye className="h-3.5 w-3.5" /> Preview
+                </Button>
+                <Button
+                  size="sm"
+                  variant={viewMode === "edit" ? "secondary" : "ghost"}
+                  onClick={() => setViewMode("edit")}
+                  className="gap-1.5 h-7 px-2 text-xs"
+                >
+                  <Pencil className="h-3.5 w-3.5" /> Edit body text
+                </Button>
+              </div>
+              <div
+                ref={previewRef}
+                className={viewMode === "preview" ? "p-4 overflow-auto" : "hidden"}
+              />
+              <div
+                ref={editorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={() => setEdited(true)}
+                className={
+                  viewMode === "edit"
+                    ? "prose prose-sm max-w-none p-6 focus:outline-none"
+                    : "hidden"
+                }
+                dangerouslySetInnerHTML={{ __html: html }}
+              />
+            </div>
           )}
 
           {!loading && !error && form.file_type === "excel" && (
