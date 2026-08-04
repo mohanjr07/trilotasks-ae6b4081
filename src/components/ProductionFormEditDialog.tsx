@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Download, CheckCircle2, Eye, Pencil } from "lucide-react";
+import { Loader2, Download, CheckCircle2, Eye, Pencil, Save } from "lucide-react";
 import type { ProductionForm } from "@/pages/ProductionFormsPage";
 import {
   formatRefNumber,
@@ -40,12 +40,16 @@ type Props = {
 const BUCKET = "production-forms";
 
 export default function ProductionFormEditDialog({ form, onClose, onSaved }: Props) {
+  const refEnabled = form.ref_number_enabled;
+
   const [loading, setLoading] = useState(true);
   const [using, setUsing] = useState(false);
-  // Becomes true only after "Use This" successfully assigns + saves the real
-  // reference number. Nothing is written to storage and Download stays
-  // locked until then — opening/previewing the form no longer burns a number.
-  const [used, setUsed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // For ref-number forms: becomes true only after "Use This" successfully
+  // assigns + saves the real number — Download stays locked until then.
+  // For forms with no reference number, there's nothing to gate on, so
+  // Download is available as soon as the file loads.
+  const [used, setUsed] = useState(!refEnabled);
   const [referenceValue, setReferenceValue] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -57,8 +61,9 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   // this view so what's shown actually matches the original form.
   const [viewMode, setViewMode] = useState<"preview" | "edit">("preview");
   const previewRef = useRef<HTMLDivElement>(null);
-  // A preview render with the *next* reference number patched in, purely for
-  // display — nothing is uploaded until "Use This" is clicked.
+  // A preview render — with the *next* reference number patched in when this
+  // form uses one — purely for display. Nothing is uploaded until "Use
+  // This"/"Save" is clicked.
   const [originalBuffer, setOriginalBuffer] = useState<ArrayBuffer | null>(null);
   // The untouched original bytes, kept so "Use This" can patch in the real
   // (RPC-assigned) number without losing header/table/style fidelity.
@@ -76,7 +81,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     async function run() {
       setLoading(true);
       setError(null);
-      setUsed(false);
+      setUsed(!refEnabled);
       setEdited(false);
       setViewMode("preview");
       setOriginalBuffer(null);
@@ -84,9 +89,12 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
       try {
         // Just a preview of what "Use This" would assign — the counter isn't
         // touched here, so opening the form to look at it is free.
-        const previewValue = formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1);
-        if (cancelled) return;
-        setReferenceValue(previewValue);
+        let previewValue = "";
+        if (refEnabled) {
+          previewValue = formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1);
+          if (cancelled) return;
+          setReferenceValue(previewValue);
+        }
 
         const { data: blob, error: downloadError } = await supabase.storage
           .from(BUCKET)
@@ -95,30 +103,38 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
         const buffer = await blob.arrayBuffer();
 
         if (form.file_type === "word") {
-          const locator = form.field_locator as unknown as WordFieldLocator;
-          // Older forms saved before header/footer support default to the body.
-          const part = locator.part || "word/document.xml";
           rawBufferRef.current = buffer;
+          let bufferForPreview = buffer;
 
-          const zip = await loadDocxZip(buffer);
-          const xml = await getXmlPart(zip, part);
-          const patchedXml = setWordBookmarkText(xml, locator.name, previewValue);
-          zip.file(part, patchedXml);
-          const patchedBuffer = await zip.generateAsync({ type: "arraybuffer" });
+          if (refEnabled && form.field_locator) {
+            const locator = form.field_locator as WordFieldLocator;
+            // Older forms saved before header/footer support default to the body.
+            const part = locator.part || "word/document.xml";
+            const zip = await loadDocxZip(buffer);
+            const xml = await getXmlPart(zip, part);
+            const patchedXml = setWordBookmarkText(xml, locator.name, previewValue);
+            zip.file(part, patchedXml);
+            bufferForPreview = await zip.generateAsync({ type: "arraybuffer" });
+          }
 
-          const renderedHtml = await docxToHtml(patchedBuffer);
+          const renderedHtml = await docxToHtml(bufferForPreview);
           if (cancelled) return;
           setHtml(renderedHtml);
-          setOriginalBuffer(patchedBuffer);
+          setOriginalBuffer(bufferForPreview);
         } else {
-          const locator = form.field_locator as unknown as ExcelFieldLocator;
           const wb = await loadWorkbook(buffer);
-          setCellValue(wb, locator.sheet, locator.cell, previewValue);
+
+          if (refEnabled && form.field_locator) {
+            const locator = form.field_locator as ExcelFieldLocator;
+            setCellValue(wb, locator.sheet, locator.cell, previewValue);
+            sheetNameRef.current = locator.sheet;
+          } else {
+            sheetNameRef.current = wb.worksheets[0]?.name ?? "";
+          }
 
           wbRef.current = wb;
-          sheetNameRef.current = locator.sheet;
           if (cancelled) return;
-          setGrid(sheetToGrid(wb, locator.sheet, 200, 40).cells);
+          setGrid(sheetToGrid(wb, sheetNameRef.current, 200, 40).cells);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to open this form.");
@@ -152,6 +168,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   }, [originalBuffer, loading]);
 
   const handleCellChange = (rowIdx: number, colIdx: number, value: string) => {
+    setEdited(true);
     setGrid((prev) => {
       const next = prev.map((row) => row.slice());
       next[rowIdx][colIdx] = value;
@@ -171,8 +188,9 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
         blob = await workbookToBlob(wbRef.current);
       } else if (form.file_type === "word" && !edited && originalBuffer) {
         // Nothing was edited — hand back the real file (with the ref number
-        // already patched in) instead of round-tripping through the
-        // simplified HTML converter and losing headers/tables/styling.
+        // already patched in, if this form uses one) instead of
+        // round-tripping through the simplified HTML converter and losing
+        // headers/tables/styling.
         blob = new Blob([originalBuffer], {
           type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         });
@@ -194,9 +212,9 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
   };
 
   // The single action that both assigns the real reference number and saves
-  // the file — this replaces the old auto-increment-on-open + separate Save
-  // button. Only takes effect once; the counter is a shared resource, so
-  // this can't be re-run in the same session without burning another number.
+  // the file — only used for forms with reference numbers turned on. Only
+  // takes effect once; the counter is a shared resource, so this can't be
+  // re-run in the same session without burning another number.
   const handleUseThis = async () => {
     setUsing(true);
     try {
@@ -254,22 +272,50 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
     }
   };
 
+  // For forms with no reference number — just persist whatever was edited.
+  // Download already works without this; Save only matters if something
+  // was actually changed.
+  const handleSaveEdits = async () => {
+    setSaving(true);
+    try {
+      let blob: Blob;
+      if (form.file_type === "excel") {
+        if (!wbRef.current) throw new Error("Nothing to save yet");
+        blob = await workbookToBlob(wbRef.current);
+      } else {
+        const editedHtml = editorRef.current?.innerHTML ?? html;
+        blob = await htmlToDocxBlob(editedHtml);
+      }
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(form.storage_path, blob, { upsert: true });
+      if (upErr) throw upErr;
+      toast.success("Saved");
+      onSaved();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <DialogTitle>{form.title}</DialogTitle>
-            {referenceValue && (
+            {refEnabled && referenceValue && (
               <Badge variant={used ? "default" : "secondary"} className="font-mono">
                 {used ? referenceValue : `Next: ${referenceValue}`}
               </Badge>
             )}
           </div>
           <DialogDescription>
-            {form.file_type === "word"
-              ? "Preview shows the actual document — header, tables, and layout included. Nothing is assigned or saved yet: click \"Use This\" to lock in this reference number and unlock Download."
-              : "Edit cells directly, then click \"Use This\" to lock in this reference number, save the file, and unlock Download."}
+            {refEnabled
+              ? form.file_type === "word"
+                ? "Preview shows the actual document — header, tables, and layout included. Nothing is assigned or saved yet: click \"Use This\" to lock in this reference number and unlock Download."
+                : "Edit cells directly, then click \"Use This\" to lock in this reference number, save the file, and unlock Download."
+              : "This form doesn't use a reference number. Download is available right away — use Save if you make changes."}
           </DialogDescription>
         </DialogHeader>
 
@@ -349,10 +395,16 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
             <Download className="h-4 w-4" /> Download
           </Button>
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={handleUseThis} disabled={loading || !!error || using || used} className="gap-2">
-            {used ? <CheckCircle2 className="h-4 w-4" /> : null}
-            {using ? "Assigning…" : used ? "Used" : "Use This"}
-          </Button>
+          {refEnabled ? (
+            <Button onClick={handleUseThis} disabled={loading || !!error || using || used} className="gap-2">
+              {used ? <CheckCircle2 className="h-4 w-4" /> : null}
+              {using ? "Assigning…" : used ? "Used" : "Use This"}
+            </Button>
+          ) : (
+            <Button onClick={handleSaveEdits} disabled={loading || !!error || saving || !edited} className="gap-2">
+              <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
