@@ -31,7 +31,8 @@ export type ProductionForm = {
   file_type: "word" | "excel";
   storage_path: string;
   original_filename: string;
-  field_locator: FieldLocator;
+  field_locator: FieldLocator | null;
+  ref_number_enabled: boolean;
   ref_prefix: string;
   ref_padding: number;
   current_number: number;
@@ -88,7 +89,7 @@ export default function ProductionFormsPage() {
         <div>
           <h2 className="font-heading text-xl font-semibold text-ink-primary">Forms and Formats</h2>
           <p className="text-sm text-ink-muted mt-0.5">
-            Word and Excel templates with an auto-incrementing reference number — it bumps up every time someone opens the form.
+            Word and Excel templates — optionally with a running reference number assigned when someone clicks "Use This".
           </p>
         </div>
         {isAdmin && (
@@ -145,9 +146,11 @@ export default function ProductionFormsPage() {
                 )}
 
                 <div className="flex items-center gap-2 mt-auto pt-2">
-                  <Badge variant="secondary" className="font-mono">
-                    Next: {formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1)}
-                  </Badge>
+                  {form.ref_number_enabled && (
+                    <Badge variant="secondary" className="font-mono">
+                      Next: {formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1)}
+                    </Badge>
+                  )}
                   <Badge variant="outline" className="capitalize">{form.file_type}</Badge>
                 </div>
 
