@@ -65,7 +65,7 @@ export default function ProductionFormsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Production form deleted");
+      toast.success("Form deleted");
       queryClient.invalidateQueries({ queryKey: ["production_forms"] });
       setDeletingForm(null);
     },
@@ -84,7 +84,7 @@ export default function ProductionFormsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-heading text-xl font-semibold text-ink-primary">Production Forms</h2>
+          <h2 className="font-heading text-xl font-semibold text-ink-primary">Forms and Formats</h2>
           <p className="text-sm text-ink-muted mt-0.5">
             Word and Excel templates with an auto-incrementing reference number — it bumps up every time someone opens the form.
           </p>
@@ -99,11 +99,11 @@ export default function ProductionFormsPage() {
       {forms.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
-          title="No production forms yet"
+          title="No forms yet"
           description={
             isAdmin
               ? "Upload a Word or Excel template and mark which field holds the running reference number."
-              : "Your admin hasn't uploaded any production forms yet."
+              : "Your admin hasn't uploaded any forms yet."
           }
           actionLabel={isAdmin ? "Upload Form" : undefined}
           onAction={isAdmin ? () => setUploadOpen(true) : undefined}
