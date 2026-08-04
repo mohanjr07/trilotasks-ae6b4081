@@ -14,59 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      assets: {
-        Row: {
-          asset_category: string
-          asset_name: string
-          asset_type: string
-          assigned_at: string | null
-          created_at: string
-          holder_id: string | null
-          holder_name: string | null
-          id: string
-          notes: string | null
-          serial_number: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          asset_category?: string
-          asset_name: string
-          asset_type?: string
-          assigned_at?: string | null
-          created_at?: string
-          holder_id?: string | null
-          holder_name?: string | null
-          id?: string
-          notes?: string | null
-          serial_number?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          asset_category?: string
-          asset_name?: string
-          asset_type?: string
-          assigned_at?: string | null
-          created_at?: string
-          holder_id?: string | null
-          holder_name?: string | null
-          id?: string
-          notes?: string | null
-          serial_number?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assets_holder_id_fkey"
-            columns: ["holder_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       holidays: {
         Row: {
           created_at: string | null
@@ -100,114 +47,6 @@ export type Database = {
         }
         Relationships: []
       }
-      kra_kpi: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          cycle_year: number
-          final_feedback: string | null
-          final_rating: number | null
-          focus_area: string
-          goal: string
-          id: string
-          kpi: string | null
-          q1_admin_feedback: string | null
-          q1_manager_feedback: string | null
-          q1_progress: string | null
-          q1_rating: number | null
-          q2_admin_feedback: string | null
-          q2_manager_feedback: string | null
-          q2_progress: string | null
-          q2_rating: number | null
-          q3_admin_feedback: string | null
-          q3_manager_feedback: string | null
-          q3_progress: string | null
-          q3_rating: number | null
-          q4_admin_feedback: string | null
-          q4_manager_feedback: string | null
-          q4_progress: string | null
-          q4_rating: number | null
-          updated_at: string
-          user_id: string
-          weightage: number | null
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          cycle_year?: number
-          final_feedback?: string | null
-          final_rating?: number | null
-          focus_area: string
-          goal: string
-          id?: string
-          kpi?: string | null
-          q1_admin_feedback?: string | null
-          q1_manager_feedback?: string | null
-          q1_progress?: string | null
-          q1_rating?: number | null
-          q2_admin_feedback?: string | null
-          q2_manager_feedback?: string | null
-          q2_progress?: string | null
-          q2_rating?: number | null
-          q3_admin_feedback?: string | null
-          q3_manager_feedback?: string | null
-          q3_progress?: string | null
-          q3_rating?: number | null
-          q4_admin_feedback?: string | null
-          q4_manager_feedback?: string | null
-          q4_progress?: string | null
-          q4_rating?: number | null
-          updated_at?: string
-          user_id: string
-          weightage?: number | null
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          cycle_year?: number
-          final_feedback?: string | null
-          final_rating?: number | null
-          focus_area?: string
-          goal?: string
-          id?: string
-          kpi?: string | null
-          q1_admin_feedback?: string | null
-          q1_manager_feedback?: string | null
-          q1_progress?: string | null
-          q1_rating?: number | null
-          q2_admin_feedback?: string | null
-          q2_manager_feedback?: string | null
-          q2_progress?: string | null
-          q2_rating?: number | null
-          q3_admin_feedback?: string | null
-          q3_manager_feedback?: string | null
-          q3_progress?: string | null
-          q3_rating?: number | null
-          q4_admin_feedback?: string | null
-          q4_manager_feedback?: string | null
-          q4_progress?: string | null
-          q4_rating?: number | null
-          updated_at?: string
-          user_id?: string
-          weightage?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "kra_kpi_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "kra_kpi_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       leave_policy: {
         Row: {
           allowed_days: number | null
@@ -239,13 +78,9 @@ export type Database = {
           employee_id: string
           end_date: string | null
           end_time: string | null
-          half_day_period: string | null
           id: string
-          is_half_day: boolean
           leave_category: string | null
           reason: string
-          reverted_at: string | null
-          reverted_by: string | null
           reviewed_at: string | null
           reviewed_by: string | null
           start_date: string
@@ -259,13 +94,9 @@ export type Database = {
           employee_id: string
           end_date?: string | null
           end_time?: string | null
-          half_day_period?: string | null
           id?: string
-          is_half_day?: boolean
           leave_category?: string | null
           reason: string
-          reverted_at?: string | null
-          reverted_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           start_date: string
@@ -279,13 +110,9 @@ export type Database = {
           employee_id?: string
           end_date?: string | null
           end_time?: string | null
-          half_day_period?: string | null
           id?: string
-          is_half_day?: boolean
           leave_category?: string | null
           reason?: string
-          reverted_at?: string | null
-          reverted_by?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           start_date?: string
@@ -297,13 +124,6 @@ export type Database = {
           {
             foreignKeyName: "leave_requests_employee_id_fkey"
             columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "leave_requests_reverted_by_fkey"
-            columns: ["reverted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -393,155 +213,16 @@ export type Database = {
           },
         ]
       }
-      organisation_flow_nodes: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          parent_id: string | null
-          position: number
-          subtitle: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          parent_id?: string | null
-          position?: number
-          subtitle?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          parent_id?: string | null
-          position?: number
-          subtitle?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organisation_flow_nodes_parent_id_fkey"
-            columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "organisation_flow_nodes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      production_form_opens: {
-        Row: {
-          form_id: string
-          id: string
-          opened_at: string
-          opened_by: string | null
-          reference_value: string
-        }
-        Insert: {
-          form_id: string
-          id?: string
-          opened_at?: string
-          opened_by?: string | null
-          reference_value: string
-        }
-        Update: {
-          form_id?: string
-          id?: string
-          opened_at?: string
-          opened_by?: string | null
-          reference_value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "production_form_opens_form_id_fkey"
-            columns: ["form_id"]
-            isOneToOne: false
-            referencedRelation: "production_forms"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_form_opens_opened_by_fkey"
-            columns: ["opened_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      production_forms: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          current_number: number
-          description: string | null
-          field_locator: Json
-          file_type: string
-          id: string
-          original_filename: string
-          ref_padding: number
-          ref_prefix: string
-          storage_path: string
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          current_number?: number
-          description?: string | null
-          field_locator?: Json
-          file_type: string
-          id?: string
-          original_filename: string
-          ref_padding?: number
-          ref_prefix?: string
-          storage_path: string
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          current_number?: number
-          description?: string | null
-          field_locator?: Json
-          file_type?: string
-          id?: string
-          original_filename?: string
-          ref_padding?: number
-          ref_prefix?: string
-          storage_path?: string
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "production_forms_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           avatar_url: string | null
           created_at: string | null
           created_by: string | null
-          date_of_birth: string | null
           department: string | null
           email: string
           full_name: string
           id: string
           is_active: boolean | null
-          joined_at: string | null
-          manager_id: string | null
           phone: string | null
           position: string | null
           role: string | null
@@ -550,14 +231,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by?: string | null
-          date_of_birth?: string | null
           department?: string | null
           email: string
           full_name: string
           id: string
           is_active?: boolean | null
-          joined_at?: string | null
-          manager_id?: string | null
           phone?: string | null
           position?: string | null
           role?: string | null
@@ -566,14 +244,11 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           created_by?: string | null
-          date_of_birth?: string | null
           department?: string | null
           email?: string
           full_name?: string
           id?: string
           is_active?: boolean | null
-          joined_at?: string | null
-          manager_id?: string | null
           phone?: string | null
           position?: string | null
           role?: string | null
@@ -586,147 +261,22 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "profiles_manager_id_fkey"
-            columns: ["manager_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_members: {
-        Row: {
-          created_at: string | null
-          id: string
-          project_id: string
-          role: string | null
-          sort_order: number | null
-          team_id: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          project_id: string
-          role?: string | null
-          sort_order?: number | null
-          team_id?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          project_id?: string
-          role?: string | null
-          sort_order?: number | null
-          team_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_members_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "project_teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_members_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_teams: {
-        Row: {
-          created_at: string | null
-          id: string
-          name: string
-          project_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          name: string
-          project_id: string
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          name?: string
-          project_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_teams_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      projects: {
-        Row: {
-          color: string | null
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          id: string
-          name: string
-          status: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          color?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          name: string
-          status?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          color?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          id?: string
-          name?: string
-          status?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       task_assignees: {
         Row: {
-          assignee_role: string
           created_at: string | null
           id: string
           task_id: string
           user_id: string
         }
         Insert: {
-          assignee_role?: string
           created_at?: string | null
           id?: string
           task_id: string
           user_id: string
         }
         Update: {
-          assignee_role?: string
           created_at?: string | null
           id?: string
           task_id?: string
@@ -794,50 +344,6 @@ export type Database = {
           },
         ]
       }
-      task_columns: {
-        Row: {
-          color: string
-          created_at: string
-          created_by: string | null
-          id: string
-          is_default: boolean
-          key: string
-          label: string
-          position: number
-          updated_at: string
-        }
-        Insert: {
-          color?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_default?: boolean
-          key: string
-          label: string
-          position?: number
-          updated_at?: string
-        }
-        Update: {
-          color?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          is_default?: boolean
-          key?: string
-          label?: string
-          position?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "task_columns_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       task_comments: {
         Row: {
           body: string
@@ -865,13 +371,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "task_comments_parent_id_fkey"
-            columns: ["parent_id"]
-            isOneToOne: false
-            referencedRelation: "task_comments"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "task_comments_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
@@ -892,15 +391,12 @@ export type Database = {
           assigned_by: string
           assigned_to: string
           category: string | null
-          completed_at: string | null
           created_at: string | null
           deadline: string | null
           description: string | null
           id: string
           priority: string | null
           progress: number | null
-          project_id: string | null
-          project_team_id: string | null
           status: string | null
           title: string
           updated_at: string | null
@@ -909,15 +405,12 @@ export type Database = {
           assigned_by: string
           assigned_to: string
           category?: string | null
-          completed_at?: string | null
           created_at?: string | null
           deadline?: string | null
           description?: string | null
           id?: string
           priority?: string | null
           progress?: number | null
-          project_id?: string | null
-          project_team_id?: string | null
           status?: string | null
           title: string
           updated_at?: string | null
@@ -926,15 +419,12 @@ export type Database = {
           assigned_by?: string
           assigned_to?: string
           category?: string | null
-          completed_at?: string | null
           created_at?: string | null
           deadline?: string | null
           description?: string | null
           id?: string
           priority?: string | null
           progress?: number | null
-          project_id?: string | null
-          project_team_id?: string | null
           status?: string | null
           title?: string
           updated_at?: string | null
@@ -952,20 +442,6 @@ export type Database = {
             columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tasks_project_team_id_fkey"
-            columns: ["project_team_id"]
-            isOneToOne: false
-            referencedRelation: "project_teams"
             referencedColumns: ["id"]
           },
         ]
@@ -1038,57 +514,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_documents: {
-        Row: {
-          category: string | null
-          file_path: string
-          file_size: number | null
-          id: string
-          mime_type: string | null
-          name: string
-          uploaded_at: string
-          uploaded_by: string | null
-          user_id: string
-        }
-        Insert: {
-          category?: string | null
-          file_path: string
-          file_size?: number | null
-          id?: string
-          mime_type?: string | null
-          name: string
-          uploaded_at?: string
-          uploaded_by?: string | null
-          user_id: string
-        }
-        Update: {
-          category?: string | null
-          file_path?: string
-          file_size?: number | null
-          id?: string
-          mime_type?: string | null
-          name?: string
-          uploaded_at?: string
-          uploaded_by?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_documents_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_documents_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_notes: {
         Row: {
           content: string
@@ -1116,127 +541,101 @@ export type Database = {
         }
         Relationships: []
       }
-      user_task_column_prefs: {
+      production_forms: {
         Row: {
-          column_key: string
-          created_at: string
-          custom_label: string
           id: string
+          title: string
+          description: string | null
+          file_type: string
+          storage_path: string
+          original_filename: string
+          field_locator: Json | null
+          ref_number_enabled: boolean
+          ref_prefix: string
+          ref_padding: number
+          current_number: number
+          created_by: string | null
+          created_at: string
           updated_at: string
-          user_id: string
         }
         Insert: {
-          column_key: string
-          created_at?: string
-          custom_label: string
           id?: string
+          title: string
+          description?: string | null
+          file_type: string
+          storage_path: string
+          original_filename: string
+          field_locator?: Json | null
+          ref_number_enabled?: boolean
+          ref_prefix?: string
+          ref_padding?: number
+          current_number?: number
+          created_by?: string | null
+          created_at?: string
           updated_at?: string
-          user_id: string
         }
         Update: {
-          column_key?: string
-          created_at?: string
-          custom_label?: string
           id?: string
+          title?: string
+          description?: string | null
+          file_type?: string
+          storage_path?: string
+          original_filename?: string
+          field_locator?: Json | null
+          ref_number_enabled?: boolean
+          ref_prefix?: string
+          ref_padding?: number
+          current_number?: number
+          created_by?: string | null
+          created_at?: string
           updated_at?: string
-          user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_task_column_prefs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
-      user_task_columns: {
+      production_form_opens: {
         Row: {
-          color: string
-          created_at: string
           id: string
-          key: string
-          label: string
-          position: number
-          updated_at: string
-          user_id: string
+          form_id: string
+          opened_by: string | null
+          reference_value: string
+          opened_at: string
         }
         Insert: {
-          color?: string
-          created_at?: string
           id?: string
-          key: string
-          label: string
-          position?: number
-          updated_at?: string
-          user_id: string
+          form_id: string
+          opened_by?: string | null
+          reference_value: string
+          opened_at?: string
         }
         Update: {
-          color?: string
-          created_at?: string
           id?: string
-          key?: string
-          label?: string
-          position?: number
-          updated_at?: string
-          user_id?: string
+          form_id?: string
+          opened_by?: string | null
+          reference_value?: string
+          opened_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_task_columns_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      get_active_profiles: {
-        Args: never
-        Returns: {
-          avatar_url: string
-          full_name: string
-          id: string
-          role: string
-        }[]
-      }
-      get_task_comment_recipients: {
-        Args: { p_commenter_id: string; p_task_id: string }
-        Returns: {
-          email: string
-          full_name: string
-          user_id: string
-        }[]
-      }
       get_user_role: { Args: { uid: string }; Returns: string }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_strict_admin: { Args: { uid: string }; Returns: boolean }
       open_production_form: {
         Args: { p_form_id: string }
         Returns: {
-          current_number: number
-          field_locator: Json
-          file_type: string
-          ref_padding: number
-          ref_prefix: string
           reference_value: string
+          current_number: number
+          ref_prefix: string
+          ref_padding: number
+          file_type: string
           storage_path: string
+          field_locator: Json
           title: string
         }[]
-      }
-      user_can_access_project: {
-        Args: { pid: string; uid: string }
-        Returns: boolean
-      }
-      user_can_access_task: {
-        Args: { task_id: string; uid: string }
-        Returns: boolean
       }
     }
     Enums: {
