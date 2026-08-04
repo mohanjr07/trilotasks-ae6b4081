@@ -158,7 +158,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
         throw insertError;
       }
 
-      toast.success("Production form uploaded");
+      toast.success("Form uploaded");
       onCreated();
       handleClose();
     } catch (err) {
@@ -172,7 +172,7 @@ export default function ProductionFormUploadDialog({ open, onClose, onCreated }:
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload Production Form</DialogTitle>
+          <DialogTitle>Upload Form</DialogTitle>
           <DialogDescription>
             Upload a Word or Excel template, then choose which field holds the running reference number.
           </DialogDescription>
