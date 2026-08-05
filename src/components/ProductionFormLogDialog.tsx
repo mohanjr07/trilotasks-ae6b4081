@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -7,6 +8,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, History } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
@@ -18,6 +26,7 @@ type Props = {
 
 type LogRow = {
   id: string;
+  form_id: string;
   reference_value: string;
   opened_at: string;
   profiles: { full_name: string } | null;
@@ -25,19 +34,39 @@ type LogRow = {
 };
 
 export default function ProductionFormLogDialog({ open, onClose }: Props) {
+  const [formFilter, setFormFilter] = useState<string>("all");
+
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["production_form_opens_log"],
     enabled: open,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("production_form_opens")
-        .select("id, reference_value, opened_at, profiles(full_name), production_forms(title)")
+        .select("id, form_id, reference_value, opened_at, profiles(full_name), production_forms(title)")
         .order("opened_at", { ascending: false })
         .limit(500);
       if (error) throw error;
       return data as unknown as LogRow[];
     },
   });
+
+  const { data: forms = [] } = useQuery({
+    queryKey: ["production_forms_log_filter"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("production_forms")
+        .select("id, title")
+        .order("title");
+      if (error) throw error;
+      return data as { id: string; title: string }[];
+    },
+  });
+
+  const filtered = useMemo(
+    () => (formFilter === "all" ? rows : rows.filter((r) => r.form_id === formFilter)),
+    [rows, formFilter]
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -50,16 +79,36 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
           </DialogDescription>
         </DialogHeader>
 
+        <div className="shrink-0">
+          <Select value={formFilter} onValueChange={setFormFilter}>
+            <SelectTrigger className="w-full sm:w-72">
+              <SelectValue placeholder="All forms" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All forms ({rows.length})</SelectItem>
+              {forms.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.title} ({rows.filter((r) => r.form_id === f.id).length})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : rows.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <EmptyState
               icon={History}
               title="No usage yet"
-              description={'Once someone clicks "Use This" on a form, it will show up here.'}
+              description={
+                formFilter === "all"
+                  ? 'Once someone clicks "Use This" on a form, it will show up here.'
+                  : "No reference numbers have been issued for this form yet."
+              }
             />
           ) : (
             <table className="w-full text-sm">
@@ -72,7 +121,7 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {filtered.map((row) => (
                   <tr key={row.id} className="border-b border-border last:border-0">
                     <td className="py-2 pr-3">
                       <Badge variant="secondary" className="font-mono">
