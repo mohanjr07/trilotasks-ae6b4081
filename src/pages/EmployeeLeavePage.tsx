@@ -303,6 +303,42 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
         throw new Error("bad date");
       }
 
+      // Casual leave quota is 2 days per month. A leave spanning a month
+      // boundary (e.g. Aug 31 – Sep 1) must fit within EACH month's quota:
+      // 1 day against August and 1 day against September.
+      if (effectiveCategory === "casual_leave" && !useHalfDay) {
+        const s = new Date(startDate + "T00:00:00");
+        const e = new Date((endDate || startDate) + "T00:00:00");
+        // Collect every (year, month) this request touches
+        const months: Array<{ year: number; month: number }> = [];
+        const cursor = new Date(s.getFullYear(), s.getMonth(), 1);
+        while (cursor.getTime() <= e.getTime()) {
+          months.push({ year: cursor.getFullYear(), month: cursor.getMonth() });
+          cursor.setMonth(cursor.getMonth() + 1);
+        }
+        const { data: approvedRows } = await supabase
+          .from("leave_requests")
+          .select("start_date, end_date, is_half_day, reverted_at")
+          .eq("employee_id", user!.id)
+          .eq("type", "leave")
+          .eq("leave_category", "casual_leave")
+          .eq("status", "approved")
+          .lte("start_date", (endDate || startDate))
+          .or(`end_date.gte.${startDate},end_date.is.null`);
+        const newReq = { start_date: startDate, end_date: endDate || startDate, is_half_day: false };
+        for (const m of months) {
+          const used = (approvedRows ?? [])
+            .filter((r: any) => !r.reverted_at)
+            .reduce((sum: number, r: any) => sum + countDaysInMonth(r, m.year, m.month), 0);
+          const requested = countDaysInMonth(newReq, m.year, m.month);
+          if (requested > 0 && used + requested > MONTHLY_QUOTA) {
+            const label = new Date(m.year, m.month, 1).toLocaleString(undefined, { month: "long", year: "numeric" });
+            toast.error(`Casual leave limit exceeded for ${label} (${used + requested}/${MONTHLY_QUOTA} days). Split the request or pick another category.`);
+            throw new Error("quota exceeded");
+          }
+        }
+      }
+
       // Permission-specific validation: time range required and start < end
       if (isPermission) {
         if (!startTime || !endTime) {
