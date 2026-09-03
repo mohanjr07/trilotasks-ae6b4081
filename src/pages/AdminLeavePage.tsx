@@ -784,12 +784,15 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
       // Bound the leave query to the chosen month so we don't ship the whole table
       const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
       const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
-      // A request "touches" this month if start_date <= monthEnd AND end_date >= monthStart
+      // A request "touches" this month if start_date <= monthEnd AND (end_date >= monthStart OR end_date is null).
+      // The null branch keeps single-day leaves (no end_date); days outside the month are ignored while building the grid,
+      // so leaves spanning a month boundary are rendered for their in-month portion.
+      const overlapFilter = `end_date.gte.${monthStart},end_date.is.null`;
       const reqRes = await supabase
         .from("leave_requests")
         .select("employee_id, start_date, end_date, reverted_at, status, type, leave_category, is_half_day, half_day_period")
         .lte("start_date", monthEnd)
-        .gte("end_date", monthStart);
+        .or(overlapFilter);
       if (reqRes.error) {
         // Fallback if reverted_at column doesn't exist yet — re-query without it
         if (reqRes.error.code === "42703" || (reqRes.error.message ?? "").includes("reverted_at")) {
@@ -797,7 +800,7 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
             .from("leave_requests")
             .select("employee_id, start_date, end_date, status, type, leave_category, is_half_day, half_day_period")
             .lte("start_date", monthEnd)
-            .gte("end_date", monthStart);
+            .or(overlapFilter);
           if (fallback.error) throw fallback.error;
           await exportLeavesToExcel({ year, month, employees, leaveRequests: fallback.data ?? [], additionalGroups });
         } else {
