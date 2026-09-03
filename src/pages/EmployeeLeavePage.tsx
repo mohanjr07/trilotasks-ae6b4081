@@ -178,7 +178,34 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
     );
   })();
 
-  // Check how many casual leave days were approved in the *target* month (half-day = 0.5)
+  // Count how many days of a request fall inside a given month.
+  // A leave spanning a month boundary (e.g. Aug 31 – Sep 1) is split:
+  // 1 day counts against August's quota and 1 against September's.
+  // Sundays are not counted (rest day, consistent with the calendar view).
+  const countDaysInMonth = (r: { start_date: string; end_date?: string | null; is_half_day?: boolean | null }, year: number, month: number) => {
+    if (r.is_half_day) {
+      const d = new Date(r.start_date + "T00:00:00");
+      return d.getFullYear() === year && d.getMonth() === month ? 0.5 : 0;
+    }
+    const s = new Date(r.start_date + "T00:00:00");
+    const e = r.end_date ? new Date(r.end_date + "T00:00:00") : new Date(s);
+    let total = 0;
+    const cursor = new Date(s);
+    while (cursor.getTime() <= e.getTime()) {
+      if (
+        cursor.getFullYear() === year &&
+        cursor.getMonth() === month &&
+        cursor.getDay() !== 0 // skip Sundays
+      ) {
+        total += 1;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return total;
+  };
+
+  // Check how many casual leave days were approved in the *target* month (half-day = 0.5).
+  // Matches any request whose date range overlaps the month, not just those starting in it.
   const { data: approvedCasualDays = 0 } = useQuery({
     queryKey: ["casual-leave-usage", user?.id, targetMonth.year, targetMonth.month],
     queryFn: async () => {
@@ -187,7 +214,6 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       // Select with the new columns; if the schema hasn't been migrated yet,
       // fall back to the old column set (is_half_day / reverted_at absent).
       let rows: any[] | null = null;
-      let errored = false;
       const withNewCols = await supabase
         .from("leave_requests")
         .select("start_date, end_date, is_half_day, reverted_at")
@@ -195,14 +221,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
         .eq("type", "leave")
         .eq("leave_category", "casual_leave")
         .eq("status", "approved")
-        .gte("start_date", monthStart)
-        .lte("start_date", monthEnd);
+        .lte("start_date", monthEnd)
+        .or(`end_date.gte.${monthStart},end_date.is.null`);
       if (withNewCols.error) {
-        errored = true;
-      } else {
-        rows = withNewCols.data ?? [];
-      }
-      if (errored) {
         const { data } = await supabase
           .from("leave_requests")
           .select("start_date, end_date")
@@ -210,22 +231,23 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
           .eq("type", "leave")
           .eq("leave_category", "casual_leave")
           .eq("status", "approved")
-          .gte("start_date", monthStart)
-          .lte("start_date", monthEnd);
+          .lte("start_date", monthEnd)
+          .or(`end_date.gte.${monthStart},end_date.is.null`);
         rows = data ?? [];
+      } else {
+        rows = withNewCols.data ?? [];
       }
       if (!rows) return 0;
       let total = 0;
       rows.forEach((r: any) => {
         // Skip reverted rows entirely
         if (r.reverted_at) return;
-        if (r.is_half_day) {
-          total += 0.5;
-          return;
+        // A null end_date only counts if the start date itself is in this month
+        if (!r.end_date) {
+          const d = new Date(r.start_date + "T00:00:00");
+          if (d.getFullYear() !== targetMonth.year || d.getMonth() !== targetMonth.month) return;
         }
-        const s = new Date(r.start_date);
-        const e = r.end_date ? new Date(r.end_date) : s;
-        total += Math.round((e.getTime() - s.getTime()) / 86400000) + 1;
+        total += countDaysInMonth(r, targetMonth.year, targetMonth.month);
       });
       return total;
     },
