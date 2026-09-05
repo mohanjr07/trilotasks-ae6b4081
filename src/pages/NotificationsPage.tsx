@@ -14,6 +14,7 @@ const iconColors: Record<string, string> = {
   task: "bg-accent-light text-primary",
   leave: "bg-warning-light text-warning",
   system: "bg-muted text-ink-muted",
+  payment: "bg-success-light text-success",
 };
 
 export default function NotificationsPage() {
@@ -32,7 +33,7 @@ export default function NotificationsPage() {
 
   const filtered = notifications.filter((n: any) => {
     if (filter === "unread") return !n.is_read;
-    if (filter === "task" || filter === "leave" || filter === "system") return n.type === filter;
+    if (filter === "task" || filter === "leave" || filter === "system" || filter === "payment") return n.type === filter;
     return true;
   });
 
@@ -67,7 +68,7 @@ export default function NotificationsPage() {
   });
 
   const unreadCount = notifications.filter((n: any) => !n.is_read).length;
-  const tabs = ["all", "unread", "task", "leave", "system"];
+  const tabs = ["all", "unread", "task", "leave", "payment", "system"];
 
   return (
     <AnimatedPage>

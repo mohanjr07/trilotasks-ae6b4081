@@ -40,6 +40,7 @@ import KraKpiPage from "@/pages/KraKpiPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import TeamMembersPage from "@/pages/TeamMembersPage";
 import BirthdaysPage from "@/pages/BirthdaysPage";
+import PaymentsPage from "@/pages/PaymentsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="/intern-dashboard" element={<ProtectedRoute allowedRoles={["intern"]}><InternDashboard /></ProtectedRoute>} />
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/birthdays" element={<BirthdaysPage />} />
               <Route path="/profile" element={<ProfilePage />} />
