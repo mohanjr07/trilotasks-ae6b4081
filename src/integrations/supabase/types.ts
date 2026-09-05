@@ -434,6 +434,73 @@ export type Database = {
           },
         ]
       }
+      payment_requests: {
+        Row: {
+          amount: number
+          bill_name: string | null
+          bill_path: string
+          created_at: string | null
+          id: string
+          project_id: string | null
+          purpose: string
+          requester_id: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          bill_name?: string | null
+          bill_path: string
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          purpose: string
+          requester_id: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          bill_name?: string | null
+          bill_path?: string
+          created_at?: string | null
+          id?: string
+          project_id?: string | null
+          purpose?: string
+          requester_id?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_form_opens: {
         Row: {
           form_id: string
@@ -668,73 +735,6 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      payment_requests: {
-        Row: {
-          amount: number
-          bill_name: string | null
-          bill_path: string
-          created_at: string | null
-          id: string
-          project_id: string | null
-          purpose: string
-          requester_id: string
-          review_note: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-        }
-        Insert: {
-          amount: number
-          bill_name?: string | null
-          bill_path: string
-          created_at?: string | null
-          id?: string
-          project_id?: string | null
-          purpose: string
-          requester_id: string
-          review_note?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-        }
-        Update: {
-          amount?: number
-          bill_name?: string | null
-          bill_path?: string
-          created_at?: string | null
-          id?: string
-          project_id?: string | null
-          purpose?: string
-          requester_id?: string
-          review_note?: string | null
-          reviewed_at?: string | null
-          reviewed_by?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payment_requests_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payment_requests_requester_id_fkey"
-            columns: ["requester_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payment_requests_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1285,6 +1285,7 @@ export type Database = {
         }[]
       }
       get_user_role: { Args: { uid: string }; Returns: string }
+      is_accountant: { Args: { uid: string }; Returns: boolean }
       is_admin: { Args: { uid: string }; Returns: boolean }
       is_strict_admin: { Args: { uid: string }; Returns: boolean }
       open_production_form: {
