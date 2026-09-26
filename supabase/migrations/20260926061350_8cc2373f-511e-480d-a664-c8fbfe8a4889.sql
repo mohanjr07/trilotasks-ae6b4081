@@ -1,0 +1,1 @@
+CREATE POLICY "Admins can read note images (temp)" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'note-images' AND public.is_admin(auth.uid()));
