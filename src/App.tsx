@@ -41,6 +41,7 @@ import DocumentsPage from "@/pages/DocumentsPage";
 import TeamMembersPage from "@/pages/TeamMembersPage";
 import BirthdaysPage from "@/pages/BirthdaysPage";
 import PaymentsPage from "@/pages/PaymentsPage";
+import AttendancePage from "@/pages/AttendancePage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -93,6 +94,7 @@ const App = () => (
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ReportsPage /></ProtectedRoute>} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/attendance" element={<AttendancePage />} />
               <Route path="/teams" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TeamsPage /></ProtectedRoute>} />
               <Route path="/team-members" element={<TeamMembersPage />} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><SettingsPage /></ProtectedRoute>} />

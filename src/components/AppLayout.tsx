@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet,
+  FileStack, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -28,6 +28,7 @@ const adminNav: NavItem[] = [
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
+  { label: "Attendance", path: "/attendance", icon: Fingerprint },
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
   { label: "Notes", path: "/notes", icon: StickyNote },
@@ -50,6 +51,7 @@ const managerNav: NavItem[] = [
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
+  { label: "Attendance", path: "/attendance", icon: Fingerprint },
   { label: "All Leaves", path: "/leave", icon: Calendar },
   { label: "My Leave", path: "/my-leave", icon: Calendar },
   { label: "Reports", path: "/reports", icon: BarChart3 },
@@ -72,6 +74,7 @@ const employeeNav: NavItem[] = [
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Calendar", path: "/calendar", icon: Calendar },
+  { label: "Attendance", path: "/attendance", icon: Fingerprint },
   { label: "Leave", path: "/my-leave", icon: Calendar },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Birthdays", path: "/birthdays", icon: Cake },
