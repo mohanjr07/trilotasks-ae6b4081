@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Admins can read note images (temp)" ON storage.objects;
