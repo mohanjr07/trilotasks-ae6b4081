@@ -29,16 +29,21 @@ const db = supabase as any;
 
 type ViewKey = "daily" | "dates" | "weekly" | "monthly";
 
+type Company = "all" | "Trilo" | "Mapl";
+
 type AttendanceRow = {
+  company: string | null;
   employee_id: string; user_id: string | null; employee_name: string | null; work_date: string;
   punch_in: string | null; punch_out: string | null; total_hours: number | null; punch_count: number;
 };
 type DailySummaryRow = {
+  company?: string | null;
   work_date: string; day: string; employees_present: number; missing_punch_out: number;
   total_hours: number; avg_hours_per_person: number | null; first_arrival: string | null;
   last_arrival: string | null; last_departure: string | null; who_was_present: string;
 };
 type PeriodRow = {
+  company?: string | null;
   employee_id: string; employee_name: string | null; days_present: number; missing_punch_out: number;
   total_hours: number; avg_hours_per_day: number | null; earliest_in: string | null; latest_in: string | null;
   week_start?: string; week_end?: string; month?: string; month_name?: string;
@@ -61,6 +66,37 @@ function fmtHours(h: number | null | undefined) {
 const fmtDate = (d: string) => format(parseISO(d), "EEE, d MMM yyyy");
 const nameOf = (r: { employee_name: string | null; employee_id: string }) => r.employee_name || `ID ${r.employee_id}`;
 
+// daily_summary has one row per date per company; combine them for "All companies"
+function mergeByDate(rows: DailySummaryRow[]): DailySummaryRow[] {
+  const map = new Map<string, DailySummaryRow>();
+  for (const r of rows) {
+    const m = map.get(r.work_date);
+    if (!m) { map.set(r.work_date, { ...r }); continue; }
+    const present = Number(m.employees_present) + Number(r.employees_present);
+    const hours = Number(m.total_hours) + Number(r.total_hours);
+    const minT = (a: string | null, b: string | null) => (!a ? b : !b ? a : a < b ? a : b);
+    const maxT = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
+    map.set(r.work_date, {
+      ...m,
+      employees_present: present,
+      missing_punch_out: Number(m.missing_punch_out) + Number(r.missing_punch_out),
+      total_hours: hours,
+      avg_hours_per_person: present ? Number((hours / present).toFixed(2)) : null,
+      first_arrival: minT(m.first_arrival, r.first_arrival),
+      last_arrival: maxT(m.last_arrival, r.last_arrival),
+      last_departure: maxT(m.last_departure, r.last_departure),
+      who_was_present: [m.who_was_present, r.who_was_present].filter(Boolean).join(", "),
+    });
+  }
+  return [...map.values()].sort((a, b) => b.work_date.localeCompare(a.work_date));
+}
+
+function CompanyBadge({ c }: { c?: string | null }) {
+  if (!c) return null;
+  const cls = c === "Mapl" ? "bg-purple-light text-purple" : "bg-accent-light text-primary";
+  return <span className={`ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded-pill align-middle ${cls}`}>{c}</span>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function AttendancePage() {
   const { user, profile } = useAuth();
@@ -72,6 +108,8 @@ export default function AttendancePage() {
   const [date, setDate] = useState(today);
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [search, setSearch] = useState("");
+  const [company, setCompany] = useState<Company>("all");
+  const byCompany = (q: any) => (company === "all" ? q : q.eq("company", company));
   const [showLink, setShowLink] = useState(false);
 
   const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -95,10 +133,10 @@ export default function AttendancePage() {
   // ── Data ───────────────────────────────────────────────────────────────────
   // Admin daily = everyone on one date. Employee daily = own rows for the month.
   const dailyQ = useQuery({
-    queryKey: ["attendance-daily", isAdminView, date, month, user?.id],
+    queryKey: ["attendance-daily", isAdminView, date, month, user?.id, company],
     enabled: view === "daily" && !!user,
     queryFn: async () => {
-      let q = db.from("attendance").select("*");
+      let q = byCompany(db.from("attendance").select("*"));
       q = isAdminView
         ? q.eq("work_date", date).order("employee_id")
         : q.eq("user_id", user!.id).gte("work_date", monthStart).lte("work_date", monthEnd).order("work_date", { ascending: false });
@@ -109,31 +147,31 @@ export default function AttendancePage() {
   });
 
   const datesQ = useQuery({
-    queryKey: ["attendance-dates", month],
+    queryKey: ["attendance-dates", month, company],
     enabled: view === "dates" && isAdminView,
     queryFn: async () => {
-      const { data, error } = await db.from("daily_summary").select("*")
+      const { data, error } = await byCompany(db.from("daily_summary").select("*"))
         .gte("work_date", monthStart).lte("work_date", monthEnd).order("work_date", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as DailySummaryRow[];
+      return mergeByDate((data ?? []) as DailySummaryRow[]);
     },
   });
 
   const weeklyQ = useQuery({
-    queryKey: ["attendance-weekly", weekStart],
+    queryKey: ["attendance-weekly", weekStart, company],
     enabled: view === "weekly",
     queryFn: async () => {
-      const { data, error } = await db.from("weekly_attendance").select("*").eq("week_start", weekStart).order("employee_id");
+      const { data, error } = await byCompany(db.from("weekly_attendance").select("*")).eq("week_start", weekStart).order("employee_id");
       if (error) throw error;
       return (data ?? []) as PeriodRow[];
     },
   });
 
   const monthlyQ = useQuery({
-    queryKey: ["attendance-monthly", month],
+    queryKey: ["attendance-monthly", month, company],
     enabled: view === "monthly",
     queryFn: async () => {
-      const { data, error } = await db.from("monthly_attendance").select("*").eq("month", month).order("employee_id");
+      const { data, error } = await byCompany(db.from("monthly_attendance").select("*")).eq("month", month).order("employee_id");
       if (error) throw error;
       return (data ?? []) as PeriodRow[];
     },
@@ -199,7 +237,7 @@ export default function AttendancePage() {
     try {
       if (view === "daily") {
         const cols: ExportColumn[] = [
-          ...(isAdminView ? [{ header: "Employee ID", key: "employee_id", width: 12 }, { header: "Name", key: "name", width: 26 }] : []),
+          ...(isAdminView ? [{ header: "Employee ID", key: "employee_id", width: 12 }, { header: "Name", key: "name", width: 26 }, { header: "Company", key: "company", width: 10 }] : []),
           { header: "Date", key: "work_date", width: 14 },
           { header: "Punch In", key: "in", width: 12 },
           { header: "Punch Out", key: "out", width: 12 },
@@ -207,7 +245,7 @@ export default function AttendancePage() {
         ];
         const rows = dailyRows.map((r) => ({ ...r, name: nameOf(r), in: fmtTime(r.punch_in), out: fmtTime(r.punch_out) }));
         const label = isAdminView ? date : month;
-        await exportRowsToExcel(`attendance-daily-${label}`, "Daily", `Attendance — ${isAdminView ? fmtDate(date) : format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
+        await exportRowsToExcel(`attendance-daily-${label}${company === "all" ? "" : "-" + company}`, "Daily", `Attendance — ${isAdminView ? fmtDate(date) : format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
       } else if (view === "dates") {
         const cols: ExportColumn[] = [
           { header: "Date", key: "work_date", width: 14 }, { header: "Day", key: "day", width: 8 },
@@ -216,11 +254,12 @@ export default function AttendancePage() {
           { header: "Last Out", key: "last", width: 11 }, { header: "Who was present", key: "who_was_present", width: 60 },
         ];
         const rows = dateRows.map((r) => ({ ...r, first: fmtTime(r.first_arrival), last: fmtTime(r.last_departure) }));
-        await exportRowsToExcel(`attendance-datewise-${month}`, "Date-wise", `Date-wise Attendance — ${format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
+        await exportRowsToExcel(`attendance-datewise-${month}${company === "all" ? "" : "-" + company}`, "Date-wise", `Date-wise Attendance — ${format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
       } else {
         const isWeek = view === "weekly";
         const cols: ExportColumn[] = [
           { header: "Employee ID", key: "employee_id", width: 12 }, { header: "Name", key: "name", width: 26 },
+          { header: "Company", key: "company", width: 10 },
           { header: "Days Present", key: "days_present", width: 13 }, { header: "Missing Out", key: "missing_punch_out", width: 12 },
           { header: "Total Hours", key: "total_hours", width: 12 }, { header: "Avg Hours/Day", key: "avg_hours_per_day", width: 14 },
           { header: "Earliest In", key: "e_in", width: 12 }, { header: "Latest In", key: "l_in", width: 12 },
@@ -230,7 +269,7 @@ export default function AttendancePage() {
         const title = isWeek
           ? `Weekly Attendance — ${format(parseISO(weekStart), "d MMM")} to ${format(parseISO(weekEnd), "d MMM yyyy")}`
           : `Monthly Attendance — ${format(parseISO(monthStart), "MMMM yyyy")}`;
-        await exportRowsToExcel(`attendance-${view}-${isWeek ? weekStart : month}`, isWeek ? "Weekly" : "Monthly", title, cols, rows);
+        await exportRowsToExcel(`attendance-${view}-${isWeek ? weekStart : month}${company === "all" ? "" : "-" + company}`, isWeek ? "Weekly" : "Monthly", title, cols, rows);
       }
       toast.success("Excel downloaded");
     } catch (e: any) {
@@ -271,6 +310,18 @@ export default function AttendancePage() {
           ))}
         </div>
 
+        {isAdminView && (
+          <select
+            value={company}
+            onChange={(e) => setCompany(e.target.value as Company)}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-ink-primary"
+            title="Company"
+          >
+            <option value="all">All companies</option>
+            <option value="Trilo">Trilo</option>
+            <option value="Mapl">Mapl</option>
+          </select>
+        )}
         {view === "daily" && isAdminView && (
           <Input type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-9 w-[160px]" />
         )}
@@ -318,7 +369,7 @@ export default function AttendancePage() {
                 {dailyRows.map((r) => (
                   <tr key={r.employee_id + r.work_date} className="border-b border-border last:border-0 hover:bg-muted/40">
                     {isAdminView
-                      ? <><Td className="text-ink-muted">{r.employee_id}</Td><Td className="font-medium text-ink-primary">{nameOf(r)}</Td></>
+                      ? <><Td className="text-ink-muted">{r.employee_id}</Td><Td className="font-medium text-ink-primary">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</Td></>
                       : <Td className="font-medium text-ink-primary">{fmtDate(r.work_date)}</Td>}
                     <Td>{fmtTime(r.punch_in)}</Td>
                     <Td>{r.punch_out ? fmtTime(r.punch_out) : <Missing />}</Td>
@@ -361,7 +412,7 @@ export default function AttendancePage() {
                 {(view === "weekly" ? weeklyRows : monthlyRows).map((r) => (
                   <tr key={r.employee_id} className="border-b border-border last:border-0 hover:bg-muted/40">
                     <Td className="text-ink-muted">{r.employee_id}</Td>
-                    <Td className="font-medium text-ink-primary">{nameOf(r)}</Td>
+                    <Td className="font-medium text-ink-primary">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</Td>
                     <Td>{r.days_present}</Td>
                     <Td>{r.missing_punch_out > 0 ? <span className="text-warning">{r.missing_punch_out}</span> : 0}</Td>
                     <Td>{fmtHours(r.total_hours)}</Td>
