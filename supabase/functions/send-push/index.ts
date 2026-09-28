@@ -6,7 +6,10 @@
 //  the row is re-read with the service role and marked push_sent so it can
 //  only ever be pushed once.
 //
-//  Secret needed:  FCM_SERVICE_ACCOUNT = the Firebase service-account JSON
+//  Android phones → Firebase Cloud Messaging (secret FCM_SERVICE_ACCOUNT)
+//  iPhones        → Apple Push Notification service directly
+//                   (secrets APNS_KEY = .p8 file contents, APNS_KEY_ID,
+//                    APNS_TEAM_ID, optional APNS_BUNDLE_ID)
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -55,6 +58,48 @@ async function googleAccessToken(sa: ServiceAccount): Promise<string> {
   return data.access_token;
 }
 
+// ── Apple (APNs) ────────────────────────────────────────────────────────────
+let cachedApnsJwt: { value: string; iat: number } | null = null;
+
+async function apnsJwt(keyP8: string, keyId: string, teamId: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedApnsJwt && now - cachedApnsJwt.iat < 50 * 60) return cachedApnsJwt.value;
+  const header = b64url(JSON.stringify({ alg: "ES256", kid: keyId }));
+  const claims = b64url(JSON.stringify({ iss: teamId, iat: now }));
+  const pem = keyP8.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(`${header}.${claims}`));
+  const jwt = `${header}.${claims}.${b64url(sig)}`;
+  cachedApnsJwt = { value: jwt, iat: now };
+  return jwt;
+}
+
+/** Returns "ok", "dead" (token no longer valid) or "error". Tries production, then sandbox (Xcode debug builds). */
+async function sendApns(token: string, body: unknown, jwt: string, topic: string): Promise<"ok" | "dead" | "error"> {
+  for (const host of ["api.push.apple.com", "api.sandbox.push.apple.com"]) {
+    const res = await fetch(`https://${host}/3/device/${token}`, {
+      method: "POST",
+      headers: {
+        authorization: `bearer ${jwt}`,
+        "apns-topic": topic,
+        "apns-push-type": "alert",
+        "apns-priority": "10",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return "ok";
+    const err = await res.text();
+    if (res.status === 410) return "dead";
+    // Token from the other environment → try the next host
+    if (res.status === 400 && /BadDeviceToken/.test(err)) continue;
+    console.error("APNs error", host, res.status, err);
+    return "error";
+  }
+  return "dead";
+}
+
 const routeFor = (type: string | null) =>
   type === "task" ? "/notifications"
   : type === "leave" ? "/notifications"
@@ -66,8 +111,11 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
-    if (!saRaw) return json({ error: "FCM_SERVICE_ACCOUNT secret not set" }, 500);
-    const sa: ServiceAccount = JSON.parse(saRaw);
+    const sa: ServiceAccount | null = saRaw ? JSON.parse(saRaw) : null;
+    const apnsKey = Deno.env.get("APNS_KEY");
+    const apnsKeyId = Deno.env.get("APNS_KEY_ID");
+    const apnsTeamId = Deno.env.get("APNS_TEAM_ID");
+    const apnsTopic = Deno.env.get("APNS_BUNDLE_ID") ?? "com.triloautomation.taskflow";
 
     const payload = await req.json().catch(() => ({}));
     const id = payload?.record?.id;
@@ -86,7 +134,7 @@ Deno.serve(async (req) => {
     const n = rows?.[0];
     if (!n) return json({ ok: true, skipped: "not_found_or_already_sent" });
 
-    const { data: tokens } = await admin.from("push_tokens").select("token").eq("user_id", n.user_id);
+    const { data: tokens } = await admin.from("push_tokens").select("token, platform").eq("user_id", n.user_id);
     if (!tokens?.length) return json({ ok: true, skipped: "no_devices" });
 
     const { count: unread } = await admin
@@ -95,12 +143,37 @@ Deno.serve(async (req) => {
       .eq("user_id", n.user_id)
       .eq("is_read", false);
 
-    const accessToken = await googleAccessToken(sa);
-    const endpoint = `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`;
     let sent = 0;
     const dead: string[] = [];
+    const route = routeFor(n.type);
 
-    for (const { token } of tokens) {
+    // iPhones
+    const iosTokens = tokens.filter((t) => t.platform === "ios");
+    if (iosTokens.length) {
+      if (!apnsKey || !apnsKeyId || !apnsTeamId) {
+        console.warn("iPhone tokens present but APNS_* secrets are not set");
+      } else {
+        const jwt = await apnsJwt(apnsKey, apnsKeyId, apnsTeamId);
+        const body = {
+          aps: { alert: { title: n.title, body: n.body }, sound: "default", badge: unread ?? undefined, "thread-id": n.type ?? "taskflow" },
+          route,
+          notification_id: n.id,
+        };
+        for (const { token } of iosTokens) {
+          const r = await sendApns(token, body, jwt, apnsTopic);
+          if (r === "ok") sent++;
+          else if (r === "dead") dead.push(token);
+        }
+      }
+    }
+
+    // Android phones
+    const androidTokens = tokens.filter((t) => t.platform !== "ios");
+    if (androidTokens.length && !sa) console.warn("Android tokens present but FCM_SERVICE_ACCOUNT is not set");
+    const accessToken = androidTokens.length && sa ? await googleAccessToken(sa) : "";
+    const endpoint = sa ? `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send` : "";
+
+    for (const { token } of (sa ? androidTokens : [])) {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -108,7 +181,7 @@ Deno.serve(async (req) => {
           message: {
             token,
             notification: { title: n.title, body: n.body },
-            data: { route: routeFor(n.type), notification_id: n.id },
+            data: { route, notification_id: n.id },
             android: {
               priority: "HIGH",
               notification: {

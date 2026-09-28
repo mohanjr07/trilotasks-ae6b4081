@@ -66,10 +66,17 @@ Deno.serve(async (req) => {
       .eq("id", notif.user_id)
       .maybeSingle();
 
-    if (!profile?.email) return json({ ok: true, skipped: "no_email" });
+    if (!profile?.email) {
+      console.warn(`No email on profile ${notif.user_id}`);
+      return json({ ok: true, skipped: "no_email" });
+    }
 
     const resendKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendKey) return json({ ok: true, skipped: "email_disabled" });
+    if (!resendKey) {
+      console.error("RESEND_API_KEY secret is not set");
+      await admin.from("notifications").update({ email_sent: false }).eq("id", notif.id);
+      return json({ ok: false, skipped: "email_disabled" });
+    }
 
     const from = Deno.env.get("RESEND_FROM") ??
       "Trilo <onboarding@resend.dev>";
@@ -88,7 +95,16 @@ Deno.serve(async (req) => {
       }),
     });
 
-    return json({ ok: emailRes.ok, status: emailRes.status });
+    const resText = await emailRes.text();
+    if (!emailRes.ok) {
+      // Log Resend's real reason (unverified domain, bad key, etc.) and
+      // release the claim so the email can be retried later.
+      console.error(`Resend ${emailRes.status} from=${from} to=${profile.email}: ${resText}`);
+      await admin.from("notifications").update({ email_sent: false }).eq("id", notif.id);
+    } else {
+      console.log(`Email sent to ${profile.email}: ${resText}`);
+    }
+    return json({ ok: emailRes.ok, status: emailRes.status, resend: resText });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);

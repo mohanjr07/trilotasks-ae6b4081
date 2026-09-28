@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Push notifications (Android app only, via Firebase Cloud Messaging)
+//  Push notifications for the phone apps
+//   Android → Firebase Cloud Messaging token · iPhone → Apple (APNs) device token
 //   • asks the user for permission once
 //   • saves this phone's token in `push_tokens` for the logged-in user
 //   • tapping a notification opens the right page in the app
@@ -16,6 +17,8 @@ let started = false;
 export async function initPush(navigate: (path: string) => void): Promise<void> {
   const Push = plugin();
   if (!isNativeApp || !Push || started) return;
+  // iOS push needs a paid Apple Developer account (APNs) — disabled for now.
+  if ((window as any).Capacitor?.getPlatform?.() === "ios") return;
   started = true;
 
   try {
@@ -33,7 +36,8 @@ export async function initPush(navigate: (path: string) => void): Promise<void> 
 
     await Push.addListener("registration", async ({ value }: { value: string }) => {
       try { localStorage.setItem(TOKEN_KEY, value); } catch { /* ignore */ }
-      const { error } = await (supabase.rpc as any)("claim_push_token", { p_token: value, p_platform: "android" });
+      const platform = (window as any).Capacitor?.getPlatform?.() === "ios" ? "ios" : "android";
+      const { error } = await (supabase.rpc as any)("claim_push_token", { p_token: value, p_platform: platform });
       if (error) console.warn("Could not save push token", error.message);
     });
     await Push.addListener("registrationError", (e: any) => console.warn("Push registration failed", e));
