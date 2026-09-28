@@ -185,8 +185,8 @@ export default function TeamsPage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">Teams</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Teams</h1>
         {isAdmin && (
           <Button onClick={handleOpenCreate} size="sm">
             <Plus className="h-4 w-4 mr-1.5" /> Create Meeting
@@ -211,7 +211,7 @@ export default function TeamsPage() {
           )}
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
             {/* Upcoming */}
             {upcoming.length > 0 && (
@@ -272,7 +272,7 @@ export default function TeamsPage() {
             {selectedMeeting && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-                className="rounded-card bg-card p-5 shadow-card h-fit sticky top-20"
+                className="rounded-card bg-card p-4 sm:p-5 shadow-card h-fit sticky top-20"
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-heading text-base font-bold text-ink-primary">Participants</h3>
@@ -520,7 +520,7 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[520px] max-h-[85vh] overflow-y-auto rounded-modal bg-card p-6 shadow-modal mx-4"
+            className="relative w-full max-w-[520px] max-h-[85vh] overflow-y-auto rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Create Meeting</h2>
@@ -546,8 +546,8 @@ function CreateMeetingModal({ open, onClose }: { open: boolean; onClose: () => v
                 <p className="text-xs text-ink-muted mt-1">Paste your Microsoft Teams meeting link here</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="col-span-2 sm:col-span-1">
                   <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date *</label>
                   <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>

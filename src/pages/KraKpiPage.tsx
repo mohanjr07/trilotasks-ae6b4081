@@ -236,7 +236,7 @@ export default function KraKpiPage() {
   const years = [now + 1, now, now - 1, now - 2];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>

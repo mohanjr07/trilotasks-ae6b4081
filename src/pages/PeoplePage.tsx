@@ -369,7 +369,7 @@ export default function PeoplePage() {
   }, [leaves]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -379,21 +379,21 @@ export default function PeoplePage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: "Total People",   value: stats.total,                 icon: UsersIcon,    bg: "bg-primary/10",                       color: "text-primary" },
           { label: "Admins",         value: stats.admins,                icon: Shield,       bg: "bg-purple-100 dark:bg-purple-900/30", color: "text-purple-600" },
           { label: "Employees",      value: stats.employees,             icon: UserIcon,     bg: "bg-green-100 dark:bg-green-900/30",   color: "text-green-600" },
           { label: "Avg Attendance", value: `${orgAttendance}%`,         icon: CheckCircle2, bg: "bg-blue-100 dark:bg-blue-900/30",     color: "text-blue-600" },
         ].map(({ label, value, icon: Icon, bg, color }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-ink-secondary">{label}</p>
-                <p className="mt-1 text-3xl font-bold text-ink-primary">{value}</p>
+          <div key={label} className="rounded-xl border border-border bg-card p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-ink-secondary leading-snug">{label}</p>
+                <p className="mt-1 text-2xl sm:text-3xl font-bold text-ink-primary leading-tight">{value}</p>
               </div>
-              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", bg)}>
-                <Icon className={cn("h-5 w-5", color)} />
+              <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg", bg)}>
+                <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5", color)} />
               </div>
             </div>
           </div>

@@ -268,7 +268,7 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
-            className="relative w-full max-w-[560px] max-h-[90vh] overflow-y-auto rounded-modal bg-card p-6 shadow-modal mx-4"
+            className="relative w-full max-w-[560px] max-h-[90vh] overflow-y-auto rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4"
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Create Task</h2>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import MobileSegments from "@/components/MobileSegments";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw, FileSpreadsheet, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -149,12 +150,12 @@ export default function AdminLeavePage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">
           Leave & Permissions {pending > 0 && <span className="text-sm font-body bg-warning-light text-warning px-2 py-0.5 rounded-pill ml-2">{pending} pending</span>}
         </h1>
         {isStrictAdmin && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => setShowExport(true)} size="sm" variant="outline">
               <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Export to Excel
             </Button>
@@ -165,7 +166,7 @@ export default function AdminLeavePage() {
         )}
       </div>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard title="Total" value={requests.length} icon={CalendarIcon} />
         <StatCard title="Approved" value={approved} icon={CheckCircle2} iconBg="bg-success-light" iconColor="text-success" />
         <StatCard title="Rejected" value={rejected} icon={XCircle} iconBg="bg-destructive-light" iconColor="text-destructive" />
@@ -173,7 +174,13 @@ export default function AdminLeavePage() {
       </motion.div>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex gap-1 border-b border-border flex-1 min-w-[200px]">
+        <MobileSegments
+          className="w-full"
+          items={tabs.map((t) => ({ key: t.key, label: t.label.replace(/\s*\(\d+\)/, ""), count: t.key === "pending" ? pending : t.key === "reverted" ? reverted : undefined }))}
+          value={tab as any}
+          onChange={(k) => setTab(k as any)}
+        />
+        <div className="hidden md:flex gap-1 border-b border-border flex-1 min-w-0">
           {tabs.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "text-primary" : "text-ink-muted hover:text-ink-secondary"}`}>
@@ -182,7 +189,7 @@ export default function AdminLeavePage() {
             </button>
           ))}
         </div>
-        <div className="relative w-[220px]">
+        <div className="relative w-full sm:w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employee..." className="pl-9 h-9" />
         </div>
@@ -194,7 +201,7 @@ export default function AdminLeavePage() {
           const displayStatus = isReverted ? "reverted" : (req.status ?? "pending");
           return (
           <motion.div key={req.id} variants={staggerItem}
-            className={`flex items-center gap-4 rounded-card bg-card p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer ${isReverted ? "opacity-70" : ""}`}
+            className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 sm:gap-4 rounded-card bg-card p-3 sm:p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer ${isReverted ? "opacity-70" : ""}`}
             onClick={(e) => { if ((e.target as HTMLElement).closest("button")) return; setSelectedLeave(req); }}>
             <UserAvatar name={req.employee?.full_name ?? "?"} avatarUrl={req.employee?.avatar_url} size="md" />
             <div className="min-w-0 flex-1">
@@ -214,6 +221,7 @@ export default function AdminLeavePage() {
                 {req.start_time && ` · ${String(req.start_time).slice(0, 5)}–${String(req.end_time).slice(0, 5)}`}
               </p>
             </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto pl-[52px] sm:pl-0">
             <StatusBadge status={displayStatus} />
             {isStrictAdmin && req.status === "pending" && !isReverted && (
               <div className="flex gap-2">
@@ -251,6 +259,7 @@ export default function AdminLeavePage() {
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
+            </div>
           </motion.div>
           );
         })}
@@ -296,7 +305,7 @@ function LeaveDetailModal({ request, onClose }: { request: any; onClose: () => v
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[480px] rounded-modal bg-card p-6 shadow-modal mx-4"
+            className="relative w-full max-w-[480px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4"
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-5">
@@ -422,7 +431,7 @@ function ReviewModal({ request, onClose }: { request: any; onClose: () => void }
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-          className="relative w-full max-w-[460px] rounded-modal bg-card p-6 shadow-modal mx-4">
+          className="relative w-full max-w-[460px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-heading text-lg font-bold text-ink-primary">
               {request.action === "approved" ? "Approve" : "Reject"} Request
@@ -575,7 +584,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[460px] rounded-modal bg-card p-6 shadow-modal mx-4">
+            className="relative w-full max-w-[460px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">
                 {isPermission ? "Assign Permission on Behalf" : "Assign Leave on Behalf"}
@@ -825,7 +834,7 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[420px] rounded-modal bg-card p-6 shadow-modal mx-4">
+            className="relative w-full max-w-[420px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Export Leave Records</h2>
               <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
@@ -901,7 +910,7 @@ function DeleteLeaveModal({
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[440px] rounded-modal bg-card p-6 shadow-modal mx-4"
+            className="relative w-full max-w-[440px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4"
           >
             <div className="flex items-start gap-3 mb-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive-light">

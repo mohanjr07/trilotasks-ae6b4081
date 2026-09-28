@@ -111,7 +111,20 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
               }
             />
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="md:hidden divide-y divide-border">
+              {filtered.map((row) => (
+                <li key={row.id} className="py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="secondary" className="font-mono">{row.reference_value}</Badge>
+                    <span className="text-[11px] text-ink-muted">{new Date(row.opened_at).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-ink-primary truncate">{row.production_forms?.title ?? "—"}</p>
+                  <p className="text-xs text-ink-muted truncate">{row.profiles?.full_name ?? "Unknown"}</p>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden md:table w-full text-sm">
               <thead className="sticky top-0 bg-background">
                 <tr className="border-b border-border text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3 font-medium">Reference No.</th>
@@ -137,6 +150,7 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </div>
       </DialogContent>

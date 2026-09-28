@@ -6,6 +6,7 @@
 //  employees see only their own rows (enforced by RLS).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from "react";
+import MobileSegments from "@/components/MobileSegments";
 import { motion } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfWeek, addDays, parseISO } from "date-fns";
@@ -283,7 +284,7 @@ export default function AttendancePage() {
   return (
     <AnimatedPage>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">
           {isAdminView ? "Attendance" : "My Attendance"}
         </h1>
         <div className="flex gap-2">
@@ -300,7 +301,8 @@ export default function AttendancePage() {
 
       {/* Tabs + filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex gap-1 border-b border-border flex-1 min-w-[260px]">
+        <MobileSegments className="w-full" items={tabs} value={view} onChange={(k) => setView(k)} />
+        <div className="hidden md:flex gap-1 border-b border-border flex-1 min-w-[260px]">
           {tabs.map((t) => (
             <button key={t.key} onClick={() => setView(t.key)}
               className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${view === t.key ? "text-primary" : "text-ink-muted hover:text-ink-secondary"}`}>
@@ -314,7 +316,7 @@ export default function AttendancePage() {
           <select
             value={company}
             onChange={(e) => setCompany(e.target.value as Company)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-ink-primary"
+            className="h-9 flex-1 min-w-0 sm:flex-none rounded-md border border-input bg-background px-3 text-sm text-ink-primary"
             title="Company"
           >
             <option value="all">All companies</option>
@@ -323,7 +325,7 @@ export default function AttendancePage() {
           </select>
         )}
         {view === "daily" && isAdminView && (
-          <Input type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-9 w-[160px]" />
+          <Input type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[160px]" />
         )}
         {view === "weekly" && (
           <div className="flex items-center gap-1">
@@ -335,17 +337,17 @@ export default function AttendancePage() {
           </div>
         )}
         {(view === "monthly" || view === "dates" || (view === "daily" && !isAdminView)) && (
-          <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-[160px]" />
+          <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[160px]" />
         )}
         {isAdminView && view !== "dates" && (
-          <div className="relative w-[200px]">
+          <div className="relative w-full sm:w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or ID..." className="pl-9 h-9" />
           </div>
         )}
       </div>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         {stats.map((s) => (
           <StatCard key={s.title} title={s.title} value={s.value} subtitle={s.sub} icon={s.icon}
             {...(s.warn ? { iconBg: "bg-warning-light", iconColor: "text-warning" } : {})} />
@@ -353,14 +355,36 @@ export default function AttendancePage() {
       </motion.div>
 
       {/* Table */}
-      <div className="rounded-card bg-card shadow-card overflow-x-auto">
+      <div className="rounded-card bg-card shadow-card overflow-hidden md:overflow-x-auto">
         {activeQ.isLoading ? (
           <p className="p-8 text-center text-sm text-ink-muted">Loading…</p>
         ) : activeQ.error ? (
           <p className="p-8 text-center text-sm text-destructive">{(activeQ.error as Error).message}</p>
         ) : view === "daily" ? (
           dailyRows.length === 0 ? <Empty /> : (
-            <table className="w-full text-sm">
+            <>
+            {/* Phone: one card per row */}
+            <ul className="md:hidden divide-y divide-border">
+              {dailyRows.map((r) => (
+                <li key={r.employee_id + r.work_date} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-primary truncate">
+                        {isAdminView ? nameOf(r) : fmtDate(r.work_date)}
+                        {isAdminView && company === "all" && <CompanyBadge c={r.company} />}
+                      </p>
+                      {isAdminView && <p className="text-xs text-ink-muted">ID {r.employee_id}</p>}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-ink-primary tabular-nums">{fmtHours(r.total_hours)}</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-success/10 px-2.5 py-1.5"><span className="text-ink-muted">In </span><span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_in)}</span></div>
+                    <div className="rounded-lg bg-muted px-2.5 py-1.5"><span className="text-ink-muted">Out </span>{r.punch_out ? <span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_out)}</span> : <Missing />}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden md:table w-full text-sm">
               <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-muted">
                 {isAdminView ? <><Th>ID</Th><Th>Employee</Th></> : <Th>Date</Th>}
                 <Th>Punch In</Th><Th>Punch Out</Th><Th>Hours</Th>
@@ -378,10 +402,28 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            </>
           )
         ) : view === "dates" ? (
           dateRows.length === 0 ? <Empty /> : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="md:hidden divide-y divide-border">
+              {dateRows.map((r) => (
+                <li key={r.work_date} onClick={() => { setDate(r.work_date); setView("daily"); }} className="px-4 py-3 active:bg-muted/40 cursor-pointer">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-ink-primary">{fmtDate(r.work_date)}</p>
+                    <ChevronRight className="h-4 w-4 text-ink-muted shrink-0" />
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className="text-sm font-semibold text-ink-primary">{r.employees_present}</p><p className="text-[10px] text-ink-muted">Present</p></div>
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className={`text-sm font-semibold ${r.missing_punch_out > 0 ? "text-warning" : "text-ink-primary"}`}>{r.missing_punch_out}</p><p className="text-[10px] text-ink-muted">Missing out</p></div>
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className="text-sm font-semibold text-ink-primary">{fmtHours(r.avg_hours_per_person)}</p><p className="text-[10px] text-ink-muted">Avg hours</p></div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-ink-muted">First in {fmtTime(r.first_arrival)} · Last out {fmtTime(r.last_departure)}</p>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden md:table w-full text-sm">
               <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-muted">
                 <Th>Date</Th><Th>Present</Th><Th>Missing Out</Th><Th>Avg Hours</Th><Th>First In</Th><Th>Last Out</Th><Th>Who</Th>
               </tr></thead>
@@ -401,10 +443,31 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            </>
           )
         ) : (
           (view === "weekly" ? weeklyRows : monthlyRows).length === 0 ? <Empty /> : (
-            <table className="w-full text-sm">
+            <>
+            <ul className="md:hidden divide-y divide-border">
+              {(view === "weekly" ? weeklyRows : monthlyRows).map((r) => (
+                <li key={r.employee_id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-primary truncate">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</p>
+                      <p className="text-xs text-ink-muted">ID {r.employee_id}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-accent-light px-2.5 py-1 text-xs font-semibold text-primary">{r.days_present} days</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className="text-sm font-semibold text-ink-primary">{fmtHours(r.total_hours)}</p><p className="text-[10px] text-ink-muted">Total</p></div>
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className="text-sm font-semibold text-ink-primary">{fmtHours(r.avg_hours_per_day)}</p><p className="text-[10px] text-ink-muted">Avg / day</p></div>
+                    <div className="rounded-lg bg-muted/60 py-1.5"><p className={`text-sm font-semibold ${r.missing_punch_out > 0 ? "text-warning" : "text-ink-primary"}`}>{r.missing_punch_out}</p><p className="text-[10px] text-ink-muted">Missing out</p></div>
+                  </div>
+                  <p className="mt-2 text-[11px] text-ink-muted">Earliest in {fmtTime(r.earliest_in)} · Latest in {fmtTime(r.latest_in)}</p>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden md:table w-full text-sm">
               <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-muted">
                 <Th>ID</Th><Th>Employee</Th><Th>Days Present</Th><Th>Missing Out</Th><Th>Total Hours</Th><Th>Avg / Day</Th><Th>Earliest In</Th><Th>Latest In</Th>
               </tr></thead>
@@ -423,6 +486,7 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            </>
           )
         )}
       </div>
@@ -434,10 +498,10 @@ export default function AttendancePage() {
 
 // ── Small table helpers ──────────────────────────────────────────────────────
 function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 font-medium whitespace-nowrap">{children}</th>;
+  return <th className="px-3 sm:px-4 py-3 font-medium whitespace-nowrap">{children}</th>;
 }
 function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
-  return <td className={`px-4 py-3 text-ink-secondary ${className}`} title={title}>{children}</td>;
+  return <td className={`px-3 sm:px-4 py-3 text-ink-secondary ${className}`} title={title}>{children}</td>;
 }
 function Missing() {
   return <span className="text-[11px] font-semibold bg-warning-light text-warning px-2 py-0.5 rounded-pill">Not punched</span>;

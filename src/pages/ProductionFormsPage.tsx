@@ -85,19 +85,19 @@ export default function ProductionFormsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="font-heading text-xl font-semibold text-ink-primary">Forms and Formats</h2>
           <p className="text-sm text-ink-muted mt-0.5">
             Word and Excel templates — optionally with a running reference number assigned when someone clicks "Use This".
           </p>
         </div>
         {isAdmin && (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setLogOpen(true)} className="gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" onClick={() => setLogOpen(true)} className="gap-2 flex-1 sm:flex-none">
               <History className="h-4 w-4" /> View Log
             </Button>
-            <Button onClick={() => setUploadOpen(true)} className="gap-2">
+            <Button onClick={() => setUploadOpen(true)} className="gap-2 flex-1 sm:flex-none">
               <Plus className="h-4 w-4" /> Upload Form
             </Button>
           </div>

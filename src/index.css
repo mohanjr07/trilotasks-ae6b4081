@@ -4,6 +4,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Safe areas: keeps the header / bottom menu clear of the phone's status bar and gesture bar.
+   Zero on normal browsers and desktop. */
+:root {
+  --sat: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+@layer utilities {
+  .pt-safe { padding-top: var(--sat); }
+  .pb-safe { padding-bottom: var(--sab); }
+  .h-header { height: calc(60px + var(--sat)); }
+}
+
+/* ───────── Phone layout (under 768px) ───────── */
+@media (max-width: 767px) {
+  /* 16px text in form fields stops phones zooming in when you tap a field */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+  /* Pop-up panels never taller than the screen; they scroll inside instead */
+  .shadow-modal {
+    max-height: calc(100dvh - 24px - var(--sat) - var(--sab));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  /* Pop-up forms open as bottom sheets, like a native phone app */
+  .fixed.inset-0.flex.items-center.justify-center:has(> .relative.shadow-modal.mx-4) {
+    align-items: flex-end;
+  }
+  .fixed.inset-0 > .relative.shadow-modal.mx-4 {
+    margin: 0;
+    max-width: none;
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(1.25rem + var(--sab));
+    max-height: calc(100dvh - 40px - var(--sat));
+  }
+  .fixed.inset-0 > .relative.shadow-modal.mx-4::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: -6px auto 10px;
+    border-radius: 9999px;
+    background: hsl(var(--border));
+  }
+  /* shadcn dialogs / sheets */
+  [role="dialog"] {
+    max-height: calc(100dvh - 24px - var(--sat) - var(--sab));
+    overflow-y: auto;
+  }
+  /* Wide tables scroll sideways smoothly inside their card */
+  .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+  /* Toasts sit above the bottom tab bar */
+  [data-sonner-toaster][data-y-position="bottom"] { bottom: calc(72px + var(--sab)) !important; }
+}
+
+/* Touch screens have no hover: show controls that normally appear on hover */
+@media (hover: none) {
+  .opacity-0.group-hover\:opacity-100,
+  .opacity-0.hover\:opacity-100 { opacity: 1 !important; }
+}
+
+/* No grey flash when tapping buttons/links on phones */
+* { -webkit-tap-highlight-color: transparent; }
+/* Horizontal tab strips: scroll without a visible scrollbar */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
 @layer base {
   :root {
     --background: 40 20% 97%;

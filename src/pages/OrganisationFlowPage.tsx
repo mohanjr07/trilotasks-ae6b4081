@@ -183,8 +183,11 @@ export default function OrganisationFlowPage() {
       // no left/right gaps. Container height then follows the chart's
       // scaled height (set via scaledSize.h below), so no top/bottom gap
       // either. Capped at 1.5x so a tiny chart doesn't get silly-sized.
+      // On phones a whole-org chart fitted to ~340px is unreadably tiny,
+      // so never shrink below 45% there — the chart scrolls/pans instead.
+      const minFit = window.innerWidth < 768 ? 0.45 : 0;
       const nextZoom = autoFit
-        ? Math.min(1.5, availableWidth / naturalWidth)
+        ? Math.max(minFit, Math.min(1.5, availableWidth / naturalWidth))
         : zoom;
       if (autoFit && Math.abs(nextZoom - zoom) > 0.001) setZoom(nextZoom);
       setScaledSize({ w: naturalWidth * nextZoom, h: naturalHeight * nextZoom });
@@ -229,7 +232,7 @@ export default function OrganisationFlowPage() {
         style={fullBleed}
       >
         <div>
-          <h1 className="font-heading text-[28px] font-bold text-ink-primary">Organisation Flow</h1>
+          <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Organisation Flow</h1>
           <p className="text-sm text-ink-muted">
             {canEdit
               ? "Click a node to edit it, or the + button to add a child."
@@ -283,7 +286,7 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-hidden p-4"
+          className="rounded-xl border border-border bg-muted/20 overflow-auto max-h-[70dvh] md:max-h-none md:overflow-hidden p-4 touch-pan-x touch-pan-y"
           style={fullBleed}
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the

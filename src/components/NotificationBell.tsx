@@ -193,7 +193,7 @@ export default function NotificationBell() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="absolute right-0 top-full mt-2 w-[340px] rounded-card bg-card shadow-modal border border-border z-50"
+            className="fixed left-3 right-3 top-[calc(64px+var(--sat))] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-[340px] rounded-card bg-card shadow-modal border border-border z-50"
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h3 className="text-sm font-semibold text-ink-primary">Notifications</h3>

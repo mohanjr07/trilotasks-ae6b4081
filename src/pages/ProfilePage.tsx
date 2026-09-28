@@ -38,7 +38,7 @@ export default function ProfilePage() {
     <AnimatedPage>
       <div className="max-w-2xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-card bg-card p-6 shadow-card mb-6">
+          className="rounded-card bg-card p-4 sm:p-6 shadow-card mb-6">
           <div className="flex items-center gap-4 mb-6">
             <AvatarUpload size="xl" />
             <div>
@@ -77,7 +77,7 @@ export default function ProfilePage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="rounded-card bg-card p-6 shadow-card">
+          className="rounded-card bg-card p-4 sm:p-6 shadow-card">
           <h3 className="font-heading text-lg font-semibold text-ink-primary mb-4">Change Password</h3>
           <div className="space-y-3">
             <Input type="password" placeholder="New password (min 8 chars)" value={newPw} onChange={(e) => setNewPw(e.target.value)} className="h-10" />

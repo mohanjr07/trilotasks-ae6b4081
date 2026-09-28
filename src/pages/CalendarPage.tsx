@@ -165,12 +165,12 @@ export default function CalendarPage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">Calendar</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Calendar</h1>
+        <div className="flex flex-wrap items-center gap-2">
           {/* Filter dropdown */}
           <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className="w-[140px] sm:w-[160px] h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -240,8 +240,12 @@ export default function CalendarPage() {
             return (
               <button
                 key={i}
-                onClick={() => setSelectedDate(day)}
-                className={`relative min-h-[72px] md:min-h-[90px] p-1 md:p-2 border-b border-r border-border text-left transition-colors
+                onClick={() => {
+                  setSelectedDate(day);
+                  // On phones, bring the day's details into view below the grid
+                  if (window.innerWidth < 768) setTimeout(() => document.getElementById("cal-day-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+                }}
+                className={`relative min-h-[56px] md:min-h-[90px] p-1 md:p-2 border-b border-r border-border text-left transition-colors
                   ${!inMonth ? "bg-muted/40" : "hover:bg-accent-light/40"}
                   ${selected ? "bg-accent-light ring-1 ring-primary" : ""}
                 `}
@@ -250,8 +254,16 @@ export default function CalendarPage() {
                   {format(day, "d")}
                 </span>
 
+                {/* Phone: coloured dots instead of text */}
+                {events && (events.holidays.length + events.tasks.length + events.leaves.length) > 0 && (
+                  <div className="md:hidden mt-1 flex flex-wrap gap-0.5">
+                    {events.holidays.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-destructive" />}
+                    {events.tasks.slice(0, 3).map((t: any) => <span key={t.id} className="h-1.5 w-1.5 rounded-full bg-primary" />)}
+                    {events.leaves.slice(0, 3).map((_: any, idx: number) => <span key={idx} className="h-1.5 w-1.5 rounded-full bg-success" />)}
+                  </div>
+                )}
                 {events && (
-                  <div className="mt-1 space-y-0.5">
+                  <div className="hidden md:block mt-1 space-y-0.5">
                     {events.holidays.slice(0, 1).map((h: any) => (
                       <div key={h.id} className="truncate text-[10px] md:text-xs rounded px-1 py-0.5 bg-destructive/10 text-destructive font-medium">
                         {h.title}
@@ -285,7 +297,8 @@ export default function CalendarPage() {
         {selectedDate && (
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-            className="mt-4 rounded-card bg-card p-5 shadow-card"
+            id="cal-day-detail"
+            className="mt-4 rounded-card bg-card p-4 sm:p-5 shadow-card scroll-mt-20"
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-heading text-lg font-bold text-ink-primary">
@@ -519,7 +532,7 @@ function AddHolidayModal({ open, onClose }: { open: boolean; onClose: () => void
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[460px] rounded-modal bg-card p-6 shadow-modal mx-4">
+            className="relative w-full max-w-[460px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">Add Holiday</h2>
               <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>

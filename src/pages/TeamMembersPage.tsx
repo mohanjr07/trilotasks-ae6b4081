@@ -120,7 +120,7 @@ export default function TeamMembersPage() {
   }, [unassigned, pickerSearch]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="md:p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -323,7 +323,7 @@ function TeamFlow({
   highlightSelfId?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="rounded-xl border border-border bg-card p-4 md:p-6">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Shield className="h-4 w-4 text-primary" />
@@ -338,8 +338,32 @@ function TeamFlow({
         )}
       </div>
 
-      {/* Flow chart */}
-      <div className="flex flex-col items-center overflow-x-auto">
+      {/* Phone: vertical tree (manager on top, team listed below) */}
+      <div className="md:hidden">
+        <PersonNode person={manager} isManager fluid />
+        {members.length > 0 ? (
+          <ul className="mt-3 ml-6 space-y-3 border-l-2 border-border pl-4">
+            {members.map((m) => (
+              <li key={m.id} className="relative">
+                <span className="absolute -left-4 top-1/2 w-4 border-t-2 border-border" />
+                <PersonNode
+                  person={m}
+                  fluid
+                  onRemove={isAdmin && onRemoveMember ? () => onRemoveMember(m) : undefined}
+                  highlight={highlightSelfId === m.id}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-ink-muted">
+            No team members yet{isAdmin ? ". Tap Add member to get started." : "."}
+          </p>
+        )}
+      </div>
+
+      {/* Tablet/desktop: flow chart */}
+      <div className="hidden md:flex flex-col items-center overflow-x-auto">
         {/* Manager card */}
         <PersonNode person={manager} isManager />
 
@@ -387,9 +411,10 @@ function TeamFlow({
 // Single person card in the flow
 // =========================================================================
 function PersonNode({
-  person, isManager, onRemove, highlight,
+  person, isManager, onRemove, highlight, fluid,
 }: {
   person: Person;
+  fluid?: boolean;
   isManager?: boolean;
   onRemove?: () => void;
   highlight?: boolean;
@@ -397,7 +422,8 @@ function PersonNode({
   return (
     <div
       className={cn(
-        "relative rounded-xl border bg-card px-4 py-3 flex items-center gap-3 shadow-sm min-w-[200px] max-w-[240px]",
+        "relative rounded-xl border bg-card px-4 py-3 flex items-center gap-3 shadow-sm",
+        fluid ? "w-full" : "min-w-[200px] max-w-[240px]",
         isManager
           ? "border-primary/40 bg-primary/5"
           : highlight
@@ -419,7 +445,7 @@ function PersonNode({
       {onRemove && (
         <button
           onClick={onRemove}
-          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-card border border-border flex items-center justify-center text-ink-muted hover:text-destructive hover:border-destructive shadow-sm"
+          className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-card border border-border flex items-center justify-center text-ink-muted hover:text-destructive hover:border-destructive shadow-sm"
           title="Remove from team"
         >
           <UserMinus className="h-3 w-3" />

@@ -115,7 +115,7 @@ export default function CompletedTasksPage() {
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="font-heading text-[28px] font-bold text-ink-primary">Completed Tasks</h1>
+          <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Completed Tasks</h1>
           <p className="text-sm text-ink-muted mt-1">
             {isAdmin
               ? "Tasks completed more than a week ago, grouped by team member."

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, StickyNote, Check, Loader2, Pencil, ImagePlus, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, StickyNote, Check, Loader2, Pencil, ImagePlus, X } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -450,9 +450,9 @@ export default function NotesPage() {
   const imageBlocks = blocks.filter((b): b is Extract<Block, { kind: "image" }> => b.kind === "image");
 
   return (
-    <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-160px)]">
+    <div className="flex flex-col md:flex-row gap-4 h-[calc(100dvh-230px)] md:h-[calc(100vh-160px)]">
       {/* Sidebar – note list */}
-      <div className="w-full md:w-72 shrink-0 flex flex-col gap-2">
+      <div className={cn("w-full md:w-72 shrink-0 flex flex-col gap-2 min-h-0 flex-1 md:flex-none", selectedNote && "hidden md:flex")}>
         <div className="grid grid-cols-2 gap-2">
           <Button onClick={() => createMutation.mutate("text")} disabled={createMutation.isPending} className="gap-1.5 w-full">
             <Plus className="h-4 w-4" /> Note
@@ -510,6 +510,7 @@ export default function NotesPage() {
       <Card
         className={cn(
           "flex-1 flex flex-col min-h-0 relative transition-colors",
+          !selectedNote && "hidden md:flex",
           dragOver && "ring-2 ring-primary ring-offset-2 ring-offset-background",
         )}
         onDragEnter={handleDragEnter}
@@ -530,7 +531,10 @@ export default function NotesPage() {
         )}
         {selectedNote ? (
           <>
-            <div className="flex items-center gap-3 px-5 py-3 border-b border-border">
+            <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-3 border-b border-border">
+              <button onClick={() => setSelectedId(null)} className="md:hidden -ml-1 p-1.5 rounded-md text-ink-secondary hover:bg-muted" aria-label="Back to notes">
+                <ArrowLeft className="h-5 w-5" />
+              </button>
               <Input
                 value={selectedNote.title}
                 onChange={(e) => handleFieldChange("title", e.target.value)}

@@ -1,3 +1,4 @@
+import MobileSegments from "@/components/MobileSegments";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -53,6 +54,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const [createOpen, setCreateOpen] = useState(() => sessionStorage.getItem(TASK_CREATE_OPEN_KEY) === "1");
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  const [mobileCol, setMobileCol] = useState<string | null>(null); // phone: which status column is shown
 
   // Drag-and-drop state
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -394,9 +396,9 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   return (
     <AnimatedPage>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">{pageTitle}</h1>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">{pageTitle}</h1>
+        <div className="flex flex-wrap items-center gap-2">
           {/* Board / List toggle */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-1 bg-card">
             <button
@@ -418,9 +420,9 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
           </div>
           <Link
             to="/completed-tasks"
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-ink-secondary hover:bg-muted transition-colors"
+            title="Completed Tasks" className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-ink-secondary hover:bg-muted transition-colors"
           >
-            <CheckCircle2 className="h-4 w-4 text-success" /> Completed Tasks
+            <CheckCircle2 className="h-4 w-4 text-success" /> <span className="hidden sm:inline">Completed Tasks</span>
           </Link>
           {canCreateTasks && (
             <Button onClick={handleOpenCreate} className="gap-2">
@@ -432,12 +434,12 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tasks..." className="pl-9 h-10" />
         </div>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[140px] h-10"><SelectValue placeholder="Priority" /></SelectTrigger>
+          <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-10"><SelectValue placeholder="Priority" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Priority</SelectItem>
             <SelectItem value="high">High</SelectItem>
@@ -447,7 +449,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         </Select>
         {isAdmin && !myTasksOnly && (
           <Select value={assigneeFilter} onValueChange={setAssignee}>
-            <SelectTrigger className="w-[180px] h-10"><SelectValue placeholder="Assignee" /></SelectTrigger>
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-[180px] h-10"><SelectValue placeholder="Assignee" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Members</SelectItem>
               {members.map((m: any) => (
@@ -492,6 +494,14 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
         />
       ) : viewMode === "board" ? (
         /* ─── BOARD VIEW ─── */
+        <>
+        {/* Phone: pick a status, see that column only (no sideways scrolling) */}
+        <MobileSegments
+          className="mb-3"
+          items={columns.map((c) => ({ key: c.key, label: c.label, count: (tasksByStatus[c.key] ?? []).length }))}
+          value={mobileCol ?? columns[0]?.key}
+          onChange={(k) => setMobileCol(k)}
+        />
         <div
           className="grid gap-4 items-start"
           style={{
@@ -512,7 +522,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
                   if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverCol(null);
                 }}
                 onDrop={() => { handleTaskDrop(col.key); setDragOverCol(null); }}
-                className={`rounded-xl border-2 flex flex-col overflow-hidden transition-colors group ${
+                className={`${col.key !== (mobileCol ?? columns[0]?.key) ? "hidden md:flex" : "flex"} rounded-xl border-2 flex-col overflow-hidden transition-colors group ${
                   isDragTarget ? "border-primary bg-accent-light/40" : "border-border bg-muted/30"
                 }`}
               >
@@ -729,6 +739,7 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
             </div>
           )}
         </div>
+        </>
       ) : (
         /* ─── LIST VIEW ─── */
         filteredTasks.length === 0 ? (

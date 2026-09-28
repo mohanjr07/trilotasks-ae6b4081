@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
+import InstallAppBanner from "@/components/InstallAppBanner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
@@ -95,6 +96,19 @@ const internNav: NavItem[] = [
   { label: "Birthdays", path: "/birthdays", icon: Cake },
   { label: "Profile", path: "/profile", icon: User },
 ];
+// Phone bottom bar: 5 fixed shortcuts per role (full menu is behind ☰ in the header)
+const mobileTabPaths: Record<string, string[]> = {
+  admin: ["/dashboard", "/tasks", "/completed-tasks", "/projects", "/leave"],
+  manager: ["/dashboard", "/tasks", "/completed-tasks", "/projects", "/leave"],
+  employee: ["/my-dashboard", "/my-tasks", "/completed-tasks", "/projects", "/my-leave"],
+  intern: ["/intern-dashboard", "/intern-tasks", "/completed-tasks", "/projects", "/notes"],
+};
+const shortLabel: Record<string, string> = {
+  "/my-tasks": "Tasks", "/intern-tasks": "Tasks", "/my-dashboard": "Dashboard",
+  "/intern-dashboard": "Dashboard", "/completed-tasks": "Completed",
+  "/leave": "Leave", "/my-leave": "Leave",
+};
+
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
@@ -107,6 +121,13 @@ export default function AppLayout() {
   const isManager = profile?.role === "manager";
   const isIntern = profile?.role === "intern";
   const nav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
+  const roleKey = isAdmin ? "admin" : isManager ? "manager" : isIntern ? "intern" : "employee";
+  const mobileTabs = mobileTabPaths[roleKey]
+    .map((p) => nav.find((n) => n.path === p))
+    .filter(Boolean) as NavItem[];
+  const currentLabel = nav.find((n) => n.path === location.pathname)?.label ?? "";
+  // Close the phone menu whenever the page changes
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains("dark"));
@@ -197,9 +218,9 @@ export default function AppLayout() {
       <AnimatePresence>
         {sidebarOpen && (
           <motion.aside
-            initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
+            initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed inset-y-0 left-0 w-60 bg-card border-r border-border z-50 flex flex-col md:hidden"
+            className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-card border-r border-border z-50 flex flex-col md:hidden pt-safe pb-safe"
           >
             <div className="flex h-[60px] items-center justify-between px-5 border-b border-border">
               <div className="flex items-center gap-2">
@@ -262,12 +283,13 @@ export default function AppLayout() {
         )}
       </AnimatePresence>
       {/* Main content */}
-      <div className="flex-1 md:ml-60 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 md:ml-60 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-20 flex h-[60px] items-center gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8">
-          <button className="md:hidden text-ink-secondary" onClick={() => setSidebarOpen(true)}>
+        <header className="sticky top-0 z-20 flex h-header pt-safe items-center gap-2 md:gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8">
+          <button className="md:hidden -ml-2 p-2 text-ink-secondary" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
+          <span className="md:hidden font-heading text-base font-semibold text-ink-primary truncate">{currentLabel}</span>
           <h1 className="font-heading text-lg font-semibold text-ink-primary hidden md:block">
             {nav.find((n) => n.path === location.pathname)?.label ?? ""}
           </h1>
@@ -278,29 +300,44 @@ export default function AppLayout() {
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
           </Link>
         </header>
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
+        <main className="flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
+          <InstallAppBanner />
           <Outlet />
         </main>
       </div>
       {/* Mobile bottom tab bar */}
-      <div className="fixed bottom-0 left-0 right-0 flex md:hidden border-t border-border bg-card z-30">
-        {nav.slice(0, 5).map((item) => {
-          const active = location.pathname === item.path;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                active ? "text-primary" : "text-ink-muted"
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+      <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
+        <div className="grid grid-cols-5 h-16">
+          {mobileTabs.map((item) => {
+            const active = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="flex flex-col items-center justify-center gap-1 min-w-0"
+                aria-current={active ? "page" : undefined}
+              >
+                <span
+                  className={cn(
+                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors",
+                    active ? "bg-accent-light text-primary" : "text-ink-muted"
+                  )}
+                >
+                  <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
+                </span>
+                <span
+                  className={cn(
+                    "w-full truncate text-center text-[11px] leading-none",
+                    active ? "font-semibold text-primary" : "font-medium text-ink-muted"
+                  )}
+                >
+                  {shortLabel[item.path] ?? item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

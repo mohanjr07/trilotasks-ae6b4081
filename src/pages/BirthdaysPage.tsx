@@ -112,7 +112,7 @@ export default function BirthdaysPage() {
   };
 
   return (
-    <div className="px-4 md:px-8 py-6 md:py-10 max-w-7xl mx-auto space-y-10">
+    <div className="md:px-8 py-1 md:py-10 max-w-7xl mx-auto space-y-8 md:space-y-10">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>

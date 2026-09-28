@@ -78,7 +78,7 @@ export default function AdminDashboard() {
   if (total === 0) {
     return (
       <AnimatedPage>
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary mb-6">Dashboard</h1>
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary mb-6">Dashboard</h1>
         <EmptyState
           icon={CheckSquare}
           title="Welcome to TaskFlow!"
@@ -92,17 +92,17 @@ export default function AdminDashboard() {
 
   return (
     <AnimatedPage>
-      <h1 className="font-heading text-[28px] font-bold text-ink-primary mb-6">Dashboard</h1>
+      <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary mb-6">Dashboard</h1>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
         <StatCard title="Total Tasks" value={total} subtitle="All tasks" icon={CheckSquare} />
         <StatCard title="Completed" value={completed} subtitle={total ? `${Math.round((completed / total) * 100)}% rate` : "0%"} icon={CheckCircle2} iconBg="bg-success-light" iconColor="text-success" />
         <StatCard title="In Progress" value={inProgress} icon={Clock} iconBg="bg-accent-light" iconColor="text-primary" />
         <StatCard title="Overdue" value={overdue} subtitle={overdue > 0 ? "Needs attention" : "All on track"} icon={AlertTriangle} iconBg="bg-destructive-light" iconColor="text-destructive" />
       </motion.div>
 
-      <div className="grid lg:grid-cols-5 gap-6 mb-8">
-        <div className="lg:col-span-3 rounded-card bg-card p-5 shadow-card">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+        <div className="lg:col-span-3 rounded-card bg-card p-4 sm:p-5 shadow-card">
           <h3 className="text-sm font-semibold text-ink-primary mb-4">Task Completion Trend</h3>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={trendData}>
@@ -120,7 +120,7 @@ export default function AdminDashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="lg:col-span-2 rounded-card bg-card p-5 shadow-card">
+        <div className="lg:col-span-2 rounded-card bg-card p-4 sm:p-5 shadow-card">
           <h3 className="text-sm font-semibold text-ink-primary mb-4">By Status</h3>
           {statusData.length > 0 ? (
             <>
@@ -149,7 +149,7 @@ export default function AdminDashboard() {
 
       {/* Manager's own assigned tasks */}
       {isManager && (
-        <div className="rounded-card bg-card p-5 shadow-card mb-8">
+        <div className="rounded-card bg-card p-4 sm:p-5 shadow-card mb-8">
           <div className="flex items-center gap-2 mb-4">
             <ClipboardList className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-ink-primary">My Tasks</h3>
@@ -189,7 +189,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="rounded-card bg-card p-5 shadow-card">
+      <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Recent Tasks</h3>
         <div className="space-y-3">
           {tasks.slice(0, 5).map((task: any) => {

@@ -63,7 +63,7 @@ export default function EmployeeDashboard() {
         </motion.div>
       )}
 
-      <div className="rounded-card bg-card p-5 shadow-card">
+      <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Active Tasks</h3>
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-3">
           {activeTasks.map((task) => (

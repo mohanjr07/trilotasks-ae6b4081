@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { appOrigin } from "@/lib/platform";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckSquare, ArrowLeft } from "lucide-react";
@@ -21,7 +22,7 @@ export default function ForgotPasswordPage() {
   const onSubmit = async ({ email }: { email: string }) => {
     setLoading(true);
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appOrigin()}/reset-password`,
     });
     setLoading(false);
     setSent(true);

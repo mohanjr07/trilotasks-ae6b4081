@@ -138,7 +138,7 @@ export default function ReportsPage() {
   if (totalTasks === 0 && totalLeave === 0) {
     return (
       <AnimatedPage>
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary mb-6">Reports</h1>
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary mb-6">Reports</h1>
         <EmptyState icon={BarChart3} title="No data yet" description="Reports will appear once you have tasks and leave requests." />
       </AnimatedPage>
     );
@@ -146,8 +146,8 @@ export default function ReportsPage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">Reports</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Reports</h1>
         <div className="flex gap-1 rounded-lg border border-border p-1">
           {(["week", "month", "quarter"] as const).map((r) => (
             <button key={r} onClick={() => setRange(r)}
@@ -167,15 +167,15 @@ export default function ReportsPage() {
           </Button>
         </div>
 
-        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <StatCard title="Total Tasks" value={totalTasks} icon={CheckCircle2} />
           <StatCard title="Completion Rate" value={completionRate} subtitle="%" icon={BarChart3} iconBg="bg-success-light" iconColor="text-success" />
           <StatCard title="Avg Days" value={avgDays} subtitle="to complete" icon={Clock} iconBg="bg-accent-light" iconColor="text-primary" />
           <StatCard title="Overdue Rate" value={overdueRate} subtitle="%" icon={AlertTriangle} iconBg="bg-destructive-light" iconColor="text-destructive" />
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          <div className="rounded-card bg-card p-5 shadow-card">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
             <h3 className="text-sm font-semibold text-ink-primary mb-4">Task Completion Trend</h3>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={trendData}>
@@ -187,7 +187,7 @@ export default function ReportsPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="rounded-card bg-card p-5 shadow-card">
+          <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
             <h3 className="text-sm font-semibold text-ink-primary mb-4">Tasks by Status</h3>
             {statusData.length > 0 ? (
               <>
@@ -208,8 +208,8 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="rounded-card bg-card p-5 shadow-card">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
             <h3 className="text-sm font-semibold text-ink-primary mb-4">Tasks by Priority</h3>
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={priorityData} layout="vertical">
@@ -222,7 +222,7 @@ export default function ReportsPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="rounded-card bg-card p-5 shadow-card">
+          <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
             <h3 className="text-sm font-semibold text-ink-primary mb-4">Tasks by Category</h3>
             {(() => {
               const cats = tasks.reduce((acc: Record<string, number>, t: any) => {
@@ -256,7 +256,28 @@ export default function ReportsPage() {
           </Button>
         </div>
         <div className="rounded-card bg-card shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Phone: one card per employee */}
+          <ul className="md:hidden divide-y divide-border">
+            {teamPerformance.map((p) => (
+              <li key={p.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="sm" />
+                  <p className="flex-1 min-w-0 truncate text-sm font-semibold text-ink-primary">{p.full_name}</p>
+                  <span className="text-sm font-semibold text-ink-primary tabular-nums">{p.rate}%</span>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${p.rate}%` }} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+                  <span>Assigned <b className="text-ink-primary font-semibold">{p.assigned}</b></span>
+                  <span>Done <b className="text-success font-semibold">{p.completed}</b></span>
+                  <span>Active <b className="text-ink-primary font-semibold">{p.inProgress}</b></span>
+                  <span>Overdue <b className={p.overdue > 0 ? "text-destructive font-semibold" : "text-ink-primary font-semibold"}>{p.overdue}</b></span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
@@ -302,15 +323,15 @@ export default function ReportsPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-heading text-xl font-semibold text-ink-primary">Leave & Permissions</h2>
         </div>
-        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-3 gap-4 mb-6">
+        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
           <StatCard title="Total Requests" value={totalLeave} icon={Calendar} />
           <StatCard title="Approval Rate" value={approvalRate} subtitle="%" icon={CheckCircle2} iconBg="bg-success-light" iconColor="text-success" />
           <StatCard title="Most Common" value={0} subtitle={mostCommonType} icon={BarChart3} iconBg="bg-purple-light" iconColor="text-purple" />
         </motion.div>
 
         {leaveStatusData.length > 0 && (
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="rounded-card bg-card p-5 shadow-card">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
               <h3 className="text-sm font-semibold text-ink-primary mb-4">Request Status</h3>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart><Pie data={leaveStatusData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value">
@@ -325,7 +346,7 @@ export default function ReportsPage() {
                 ))}
               </div>
             </div>
-            <div className="rounded-card bg-card p-5 shadow-card">
+            <div className="rounded-card bg-card p-4 sm:p-5 shadow-card">
               <h3 className="text-sm font-semibold text-ink-primary mb-4">Leave by Category</h3>
               {(() => {
                 const cats = leaveRequests.reduce((acc: Record<string, { total: number; approved: number; rejected: number }>, r: any) => {
@@ -340,7 +361,7 @@ export default function ReportsPage() {
                 const data = Object.entries(cats).map(([name, v]) => ({ name, ...v, rate: v.total ? Math.round((v.approved / v.total) * 100) : 0 }));
                 if (data.length === 0) return <p className="text-center py-8 text-sm text-ink-muted">No data</p>;
                 return (
-                  <div className="overflow-x-auto">
+                  <div>
                     <table className="w-full text-sm">
                       <thead><tr className="border-b border-border">
                         <th className="text-left px-3 py-2 text-xs text-ink-muted capitalize">Category</th>
@@ -351,7 +372,7 @@ export default function ReportsPage() {
                       <tbody>
                         {data.map(d => (
                           <tr key={d.name} className="border-b border-border last:border-0">
-                            <td className="px-3 py-2 capitalize text-ink-primary">{d.name}</td>
+                            <td className="px-3 py-2 capitalize text-ink-primary">{String(d.name).replace(/_/g, " ")}</td>
                             <td className="text-center px-3 py-2 text-ink-secondary">{d.total}</td>
                             <td className="text-center px-3 py-2 text-success">{d.approved}</td>
                             <td className="text-center px-3 py-2 text-ink-primary font-medium">{d.rate}%</td>

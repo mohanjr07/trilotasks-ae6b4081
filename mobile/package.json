@@ -1,0 +1,20 @@
+{
+  "name": "taskflow-mobile",
+  "private": true,
+  "description": "Android app for Trilo Task Flow (Capacitor wrapper around the website build in ../dist)",
+  "scripts": {
+    "build:web": "cd .. && npm run build",
+    "setup": "npm run build:web && cap add android && npm run icons && cap sync android",
+    "icons": "capacitor-assets generate --android --iconBackgroundColor '#ffffff' --iconBackgroundColorDark '#ffffff' --splashBackgroundColor '#ffffff' --splashBackgroundColorDark '#111111'",
+    "sync": "npm run build:web && cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2"
+  }
+}

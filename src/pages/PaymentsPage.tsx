@@ -156,7 +156,7 @@ export default function PaymentsPage() {
         </Button>
       </div>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard title="Total Requests" value={stats.total} icon={Wallet} />
         <StatCard title="Pending" value={stats.pending} icon={Clock} iconBg="bg-warning-light" iconColor="text-warning" />
         <StatCard title="Approved" value={stats.approved} icon={CheckCircle2} iconBg="bg-success-light" iconColor="text-success" />

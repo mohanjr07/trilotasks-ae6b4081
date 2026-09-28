@@ -1,0 +1,8 @@
+{
+  "appId": "com.triloautomation.taskflow",
+  "appName": "TaskFlow",
+  "webDir": "../dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MobileSegments from "@/components/MobileSegments";
 import { motion } from "framer-motion";
 import { Plus, Calendar as CalendarIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -65,21 +66,22 @@ export default function EmployeeLeavePage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-heading text-[28px] font-bold text-ink-primary">Leave & Permissions</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Leave & Permissions</h1>
         <Button onClick={() => setCreateOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" /> New Request
         </Button>
       </div>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-3 gap-4 mb-6">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
         <StatCard title="Approved" value={approved} icon={CheckCircle2} iconBg="bg-success-light" iconColor="text-success" />
         <StatCard title="Pending" value={pending} icon={Clock} iconBg="bg-warning-light" iconColor="text-warning" />
         <StatCard title="Total" value={requests.length} icon={CalendarIcon} />
       </motion.div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 overflow-x-auto border-b border-border">
+      <MobileSegments className="mb-5" items={tabs} value={tab as any} onChange={(k) => setTab(k as any)} />
+      <div className="hidden md:flex gap-1 mb-6 border-b border-border">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`relative px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${tab === t.key ? "text-primary" : "text-ink-muted hover:text-ink-secondary"}`}>
@@ -437,7 +439,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
             className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
           <motion.div
             initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
-            className="relative w-full md:max-w-[500px] rounded-t-modal md:rounded-modal bg-card p-6 shadow-modal"
+            className="relative w-full md:max-w-[500px] rounded-t-modal md:rounded-modal bg-card p-5 sm:p-6 shadow-modal"
           >
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-heading text-xl font-bold text-ink-primary">

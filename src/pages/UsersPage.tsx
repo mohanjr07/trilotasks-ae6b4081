@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { appOrigin } from "@/lib/platform";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Users as UsersIcon, Shield, UserCheck, UserPlus, MoreVertical, X, Copy, CheckSquare, Calendar, Eye, EyeOff } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -114,7 +115,7 @@ export default function UsersPage() {
 
   const resetPassword = async (email: string) => {
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appOrigin()}/reset-password`,
     });
     toast.success(`Password reset email sent to ${email}`);
   };
@@ -123,7 +124,7 @@ export default function UsersPage() {
     <AnimatedPage>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-heading text-[28px] font-bold text-ink-primary">Users</h1>
+          <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Users</h1>
           <p className="text-sm text-ink-muted">{totalUsers} total members</p>
         </div>
         <Button onClick={() => setAddOpen(true)} className="gap-2">
@@ -131,7 +132,7 @@ export default function UsersPage() {
         </Button>
       </div>
 
-      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
         <StatCard title="Total Users" value={totalUsers} icon={UsersIcon} />
         <StatCard title="Admins" value={adminCount} icon={Shield} iconBg="bg-accent-light" iconColor="text-primary" />
         <StatCard title="Employees" value={employeeCount} icon={UsersIcon} iconBg="bg-purple-light" iconColor="text-purple" />
@@ -353,7 +354,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
           phone: data.phone || null,
           passwordMode,
           password: passwordMode === "password" ? data.password : undefined,
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `${appOrigin()}/reset-password`,
         },
       });
 
@@ -376,7 +377,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ display: open ? 'flex' : 'none' }}>
       <motion.div animate={{ opacity: open ? 1 : 0 }} className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="relative w-full max-w-[520px] max-h-[90vh] overflow-y-auto rounded-modal bg-card p-6 shadow-modal mx-4">
+        className="relative w-full max-w-[520px] max-h-[90vh] overflow-y-auto rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-heading text-xl font-bold text-ink-primary">Add New User</h2>
           <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
@@ -526,7 +527,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="relative w-full max-w-[480px] rounded-modal bg-card p-6 shadow-modal mx-4">
+        className="relative w-full max-w-[480px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-heading text-xl font-bold text-ink-primary">Edit User</h2>
           <button onClick={onClose} className="text-ink-muted"><X className="h-5 w-5" /></button>

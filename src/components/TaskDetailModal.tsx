@@ -579,7 +579,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
         />
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-          className="relative w-full max-w-[720px] max-h-[90vh] overflow-y-auto rounded-modal bg-card shadow-modal mx-4"
+          className="relative w-full max-w-[720px] max-h-[90vh] overflow-y-auto rounded-modal bg-card shadow-modal mx-4 pt-3 md:pt-0"
         >
           {/* Header */}
           <div className="sticky top-0 bg-card z-10 flex items-center justify-between p-5 border-b border-border gap-3">
@@ -635,7 +635,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
             </div>
           </div>
 
-          <div className="grid md:grid-cols-5 gap-6 p-5">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 p-4 sm:p-5">
             {/* Left column */}
             <div className="md:col-span-3 space-y-5">
               {/* Move-to-Project inline panel (admin only) */}

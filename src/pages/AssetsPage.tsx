@@ -458,7 +458,7 @@ export default function AssetsPage() {
   const exactExists = typeSuggestions.some(t => t.toLowerCase() === queryTrim.toLowerCase());
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="md:p-6 space-y-6">
 
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -478,21 +478,21 @@ export default function AssetsPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         {[
           { label: "Total Assets",  value: stats.total,       icon: Package,      color: "text-primary",    bg: "bg-primary/10" },
           { label: "Available",     value: stats.available,   icon: CheckCircle2, color: "text-green-600",  bg: "bg-green-100 dark:bg-green-900/30" },
           { label: "Assigned",      value: stats.assigned,    icon: Clock,        color: "text-blue-600",   bg: "bg-blue-100 dark:bg-blue-900/30" },
           { label: "Maintenance",   value: stats.maintenance, icon: AlertCircle,  color: "text-yellow-600", bg: "bg-yellow-100 dark:bg-yellow-900/30" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-ink-secondary">{label}</p>
-                <p className="mt-1 text-3xl font-bold text-ink-primary">{value}</p>
+          <div key={label} className="rounded-xl border border-border bg-card p-3.5 sm:p-5 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-ink-secondary leading-snug">{label}</p>
+                <p className="mt-1 text-2xl sm:text-3xl font-bold text-ink-primary leading-tight">{value}</p>
               </div>
-              <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", bg)}>
-                <Icon className={cn("h-5 w-5", color)} />
+              <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg", bg)}>
+                <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5", color)} />
               </div>
             </div>
           </div>
@@ -511,7 +511,7 @@ export default function AssetsPage() {
           />
         </div>
         <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as any)}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectTrigger className="flex-1 min-w-[28%] sm:flex-none sm:w-40"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
             {CATEGORY_OPTIONS.map((c) => (
@@ -520,7 +520,7 @@ export default function AssetsPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="flex-1 min-w-[28%] sm:flex-none sm:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             {STATUS_OPTIONS.map((s) => (
@@ -529,7 +529,7 @@ export default function AssetsPage() {
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
+          <SelectTrigger className="flex-1 min-w-[28%] sm:flex-none sm:w-40"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             {allTypesInUse.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -563,7 +563,39 @@ export default function AssetsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phone: one card per asset */}
+          <ul className="md:hidden divide-y divide-border">
+            {filtered.map((asset) => {
+              const Icon = assetTypeIcon(asset.asset_type);
+              const sc = statusConfig[asset.status] ?? statusConfig.available;
+              const StatusIcon = sc.icon;
+              const cat = categoryConfig[asset.asset_category] ?? categoryConfig.IT;
+              return (
+                <li key={asset.id} onClick={() => setViewAsset(asset)} className="flex items-start gap-3 px-4 py-3.5 active:bg-muted/40 cursor-pointer">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-ink-primary text-sm leading-snug">{asset.asset_name}</p>
+                      <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0", sc.color)}>
+                        <StatusIcon className="h-3 w-3" />
+                        {sc.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-muted mt-0.5 truncate">
+                      {cat.label} · {asset.asset_type}{asset.serial_number ? ` · ${asset.serial_number}` : ""}
+                    </p>
+                    <div className="mt-1.5 text-xs">
+                      <HolderCell holderName={asset.holder_name} />
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-ink-muted text-xs uppercase tracking-wide">
@@ -625,6 +657,7 @@ export default function AssetsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
