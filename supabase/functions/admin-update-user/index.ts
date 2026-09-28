@@ -10,6 +10,7 @@ const UpdateUserSchema = z.object({
   userId: z.string().uuid(),
   full_name: z.string().trim().min(1).max(100),
   role: z.enum(["admin", "manager", "employee", "intern", "intern_admin"]),
+  company: z.enum(["Trilo", "Magic Aisles"]).nullable().optional(),
   department: z.string().trim().max(100).nullable().optional(),
   position: z.string().trim().max(100).nullable().optional(),
   phone: z.string().trim().max(20).nullable().optional(),
@@ -84,6 +85,7 @@ Deno.serve(async (req) => {
       .update({
         full_name: body.full_name,
         role: body.role,
+        company: body.company || null,
         department: body.department || null,
         position: body.position || null,
         phone: body.phone || null,

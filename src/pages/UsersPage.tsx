@@ -198,7 +198,7 @@ export default function UsersPage() {
                         <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="md" />
                         <div>
                           <p className="font-medium text-ink-primary">{p.full_name}</p>
-                          <p className="text-xs text-ink-muted">{p.email}</p>
+                          <p className="text-xs text-ink-muted">{p.email}{p.company ? ` · ${p.company}` : ""}</p>
                         </div>
                       </div>
                     </td>
@@ -293,6 +293,7 @@ const addUserSchema = z.object({
   full_name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email").max(255),
   role: z.enum(["admin", "manager", "employee", "intern"]),
+  company: z.enum(["Trilo", "Magic Aisles"], { required_error: "Select a company" }),
   department: z.string().max(100).optional(),
   position: z.string().max(100).optional(),
   phone: z.string().max(20).optional(),
@@ -307,7 +308,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
 
   const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<z.infer<typeof addUserSchema>>({
     resolver: zodResolver(addUserSchema),
-    defaultValues: { role: "employee" },
+    defaultValues: { role: "employee", company: "Trilo" },
   });
 
   const createUser = useMutation({
@@ -326,6 +327,7 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
           full_name: data.full_name,
           email: data.email,
           role: data.role,
+          company: data.company,
           department: data.department || null,
           position: data.position || null,
           phone: data.phone || null,
@@ -385,6 +387,17 @@ function AddUserModal({ open, onClose }: { open: boolean; onClose: () => void })
                 </button>
               ))}
             </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink-primary">Company *</label>
+            <Select value={watch("company")} onValueChange={(v) => setValue("company", v as any, { shouldValidate: true })}>
+              <SelectTrigger className="h-10"><SelectValue placeholder="Select company" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Trilo">Trilo</SelectItem>
+                <SelectItem value="Magic Aisles">Magic Aisles</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.company && <p className="mt-1 text-xs text-destructive">{errors.company.message}</p>}
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Job Title / Position</label>
@@ -454,6 +467,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
     defaultValues: {
       full_name: editingUser.full_name,
       role: editingUser.role,
+      company: editingUser.company ?? "",
       department: editingUser.department ?? "",
       position: editingUser.position ?? "",
       phone: editingUser.phone ?? "",
@@ -468,6 +482,7 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
           userId: editingUser.id,
           full_name: data.full_name,
           role: data.role,
+          company: data.company || null,
           department: data.department || null,
           position: data.position || null,
           phone: data.phone || null,
@@ -514,6 +529,16 @@ function EditUserModal({ user: editingUser, onClose }: { user: any; onClose: () 
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="employee">Employee</SelectItem>
                 <SelectItem value="intern">Intern</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink-primary">Company</label>
+            <Select value={watch("company")} onValueChange={(v) => setValue("company", v)}>
+              <SelectTrigger className="h-10"><SelectValue placeholder="Select company" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Trilo">Trilo</SelectItem>
+                <SelectItem value="Magic Aisles">Magic Aisles</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -641,6 +666,7 @@ function UserDetailPanel({ user: selectedUser, onClose, taskCounts, onEdit, onCr
                 </div>
               </div>
               {selectedUser.phone && <div className="flex justify-between"><span className="text-ink-muted">Phone</span><span className="text-ink-primary">{selectedUser.phone}</span></div>}
+              {selectedUser.company && <div className="flex justify-between"><span className="text-ink-muted">Company</span><span className="text-ink-primary">{selectedUser.company}</span></div>}
               {selectedUser.department && <div className="flex justify-between"><span className="text-ink-muted">Department</span><span className="text-ink-primary">{selectedUser.department}</span></div>}
               {selectedUser.position && <div className="flex justify-between"><span className="text-ink-muted">Position</span><span className="text-ink-primary">{selectedUser.position}</span></div>}
               {selectedUser.created_at && <div className="flex justify-between"><span className="text-ink-muted">Member since</span><span className="text-ink-primary">{format(new Date(selectedUser.created_at), "MMM d, yyyy")}</span></div>}
