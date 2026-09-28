@@ -2,6 +2,10 @@
   "appId": "com.triloautomation.taskflow",
   "appName": "TaskFlow",
   "webDir": "../dist",
+  "server": {
+    "url": "https://taskflow.triloautomation.com",
+    "errorPath": "offline.html"
+  },
   "android": {
     "allowMixedContent": false
   }

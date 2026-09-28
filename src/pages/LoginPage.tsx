@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
+import { isNativeApp } from "@/lib/platform";
+import { ANDROID_APK_URL } from "@/components/InstallAppBanner";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, KeyRound } from "lucide-react";
@@ -431,7 +434,16 @@ export default function LoginPage() {
             </motion.div>
           </motion.form>
 
-
+          {/* Android phones browsing the site: offer the app */}
+          {typeof navigator !== "undefined" && /android/i.test(navigator.userAgent) && !isNativeApp && (
+            <a
+              href={ANDROID_APK_URL}
+              download="TaskFlow.apk"
+              className="mt-6 flex items-center justify-center gap-2 rounded-xl border border-[#5c5fef]/30 bg-[#5c5fef]/5 py-3 text-sm font-semibold text-[#5c5fef]"
+            >
+              <Download className="h-4 w-4" /> Download the Android app
+            </a>
+          )}
         </motion.div>
       </div>
     </div>
