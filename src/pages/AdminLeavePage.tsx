@@ -151,8 +151,8 @@ export default function AdminLeavePage() {
   return (
     <AnimatedPage>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">
-          Leave & Permissions {pending > 0 && <span className="text-sm font-body bg-warning-light text-warning px-2 py-0.5 rounded-pill ml-2">{pending} pending</span>}
+        <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>Leave & Permissions</span> {pending > 0 && <span className="text-xs sm:text-sm font-body font-medium bg-warning-light text-warning px-2 py-0.5 rounded-pill whitespace-nowrap">{pending} pending</span>}
         </h1>
         {isStrictAdmin && (
           <div className="flex flex-wrap gap-2">

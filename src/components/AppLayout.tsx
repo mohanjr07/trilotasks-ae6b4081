@@ -306,7 +306,7 @@ export default function AppLayout() {
         </main>
       </div>
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 md:hidden border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
+      <nav className="fixed inset-x-0 bottom-0 z-30 md:hidden [transform:translateZ(0)] border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
         <div className="grid grid-cols-5 h-16">
           {mobileTabs.map((item) => {
             const active = location.pathname === item.path;

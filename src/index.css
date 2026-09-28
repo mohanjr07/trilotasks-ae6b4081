@@ -67,6 +67,13 @@
   .opacity-0.hover\:opacity-100 { opacity: 1 !important; }
 }
 
+/* App feel: page never slides sideways or rubber-bands, so the header and
+   bottom bar stay locked in place */
+html, body {
+  overflow-x: clip;
+  overscroll-behavior: none;
+}
+
 /* No grey flash when tapping buttons/links on phones */
 * { -webkit-tap-highlight-color: transparent; }
 /* Horizontal tab strips: scroll without a visible scrollbar */

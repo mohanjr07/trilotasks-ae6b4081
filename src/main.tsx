@@ -15,3 +15,10 @@ if (
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   });
 }
+
+// Inside the Android app: lock pinch-zoom so the layout (and bottom bar) never drifts
+if ((window as any).Capacitor?.isNativePlatform?.()) {
+  document
+    .querySelector('meta[name="viewport"]')
+    ?.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+}
