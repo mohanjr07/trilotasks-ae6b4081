@@ -13,6 +13,7 @@ import StatCard from "@/components/StatCard";
 import UserAvatar from "@/components/UserAvatar";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { saveFile } from "@/lib/nativeFiles";
 
 const COLORS = {
   status: ["hsl(60,2%,66%)", "hsl(224,72%,53%)", "hsl(32,95%,44%)", "hsl(142,72%,39%)"],
@@ -128,11 +129,7 @@ export default function ReportsPage() {
     const keys = Object.keys(data[0]);
     const csv = [keys.join(","), ...data.map(row => keys.map(k => `"${row[k] ?? ""}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `taskflow-${filename}-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    a.click();
+    saveFile(blob, `taskflow-${filename}-${format(new Date(), "yyyy-MM-dd")}.csv`).catch(() => {});
   };
 
   if (totalTasks === 0 && totalLeave === 0) {

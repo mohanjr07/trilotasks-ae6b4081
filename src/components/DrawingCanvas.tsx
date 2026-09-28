@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Eraser, Pencil, Trash2, Undo2, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { saveFile } from "@/lib/nativeFiles";
 
 export type Stroke = {
   color: string;
@@ -123,10 +124,7 @@ export default function DrawingCanvas({ value, onChange }: Props) {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, tmp.width, tmp.height);
     ctx.drawImage(canvas, 0, 0);
-    const a = document.createElement("a");
-    a.href = tmp.toDataURL("image/png");
-    a.download = `drawing-${Date.now()}.png`;
-    a.click();
+    tmp.toBlob((b) => { if (b) saveFile(b, `drawing-${Date.now()}.png`).catch(() => {}); }, "image/png");
   };
 
   return (

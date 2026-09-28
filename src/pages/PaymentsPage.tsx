@@ -18,6 +18,7 @@ import StatCard from "@/components/StatCard";
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { openExternal } from "@/lib/nativeFiles";
 
 const BUCKET = "payment-bills";
 
@@ -92,7 +93,7 @@ export default function PaymentsPage() {
     try {
       const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
       if (error) throw error;
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      await openExternal(data.signedUrl);
     } catch (e: any) {
       toast.error("Could not open the bill: " + (e?.message ?? ""));
     }

@@ -17,6 +17,8 @@ import {
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { saveFromUrl, openExternal } from "@/lib/nativeFiles";
+import { isNativeApp } from "@/lib/platform";
 
 const BUCKET = "user-documents";
 
@@ -173,6 +175,7 @@ export default function DocumentsPage() {
         .createSignedUrl(doc.file_path, 60);
       if (error) throw error;
       // Force download in a new tab
+      if (isNativeApp) { await saveFromUrl(data.signedUrl, doc.name); return; }
       const a = document.createElement("a");
       a.href = data.signedUrl;
       a.target = "_blank";
@@ -192,7 +195,7 @@ export default function DocumentsPage() {
         .from(BUCKET)
         .createSignedUrl(doc.file_path, 60);
       if (error) throw error;
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      await openExternal(data.signedUrl);
     } catch (e: any) {
       toast.error("Could not open file: " + (e?.message ?? ""));
     }

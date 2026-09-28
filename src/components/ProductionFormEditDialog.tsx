@@ -30,6 +30,7 @@ import {
   type ExcelFieldLocator,
   type WordFieldLocator,
 } from "@/lib/productionForms";
+import { saveFile } from "@/lib/nativeFiles";
 
 type Props = {
   form: ProductionForm;
@@ -198,14 +199,7 @@ export default function ProductionFormEditDialog({ form, onClose, onSaved }: Pro
         const container = editorRef.current;
         blob = await htmlToDocxBlob(container?.innerHTML ?? html);
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = form.original_filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await saveFile(blob, form.original_filename);
     } catch {
       toast.error("Couldn't prepare the file for download");
     }

@@ -25,6 +25,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import ExcelJS from "exceljs";
+import { saveFile } from "@/lib/nativeFiles";
 
 export interface LeaveExportEmployee {
   id: string;
@@ -319,13 +320,6 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   const blob = new Blob([buf], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Attendance_${monthName}_${year}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  await saveFile(blob, `Attendance_${monthName}_${year}.xlsx`);
 }
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { openExternal } from "@/lib/nativeFiles";
 
 type Meeting = {
   id: string;
@@ -231,7 +232,7 @@ export default function TeamsPage() {
                         if (confirm("Delete this meeting?")) deleteMeeting.mutate(m.id);
                       }}
                       onJoin={() => {
-                        if (m.meeting_link) window.open(m.meeting_link, "_blank");
+                        if (m.meeting_link) openExternal(m.meeting_link).catch(() => {});
                         joinMeeting.mutate(m.id);
                       }}
                       userId={user?.id}

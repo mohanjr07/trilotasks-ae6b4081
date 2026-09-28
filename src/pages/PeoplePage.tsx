@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { saveFromUrl, openExternal } from "@/lib/nativeFiles";
+import { isNativeApp } from "@/lib/platform";
 
 type Profile = {
   id: string;
@@ -276,6 +278,7 @@ export default function PeoplePage() {
         .from("user-documents")
         .createSignedUrl(doc.file_path, 60);
       if (error) throw error;
+      if (isNativeApp) { await saveFromUrl(data.signedUrl, doc.name); return; }
       const a = document.createElement("a");
       a.href = data.signedUrl;
       a.target = "_blank";

@@ -3,6 +3,7 @@
 //  Downloads whatever the Attendance page is showing as an .xlsx file.
 // ─────────────────────────────────────────────────────────────────────────────
 import ExcelJS from "exceljs";
+import { saveFile } from "@/lib/nativeFiles";
 
 export type ExportColumn = { header: string; key: string; width?: number };
 
@@ -57,12 +58,5 @@ export async function exportRowsToExcel(
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  await saveFile(blob, fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`);
 }
