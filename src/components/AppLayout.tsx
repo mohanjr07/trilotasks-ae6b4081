@@ -285,8 +285,8 @@ export default function AppLayout() {
       {/* Main content */}
       <div className="flex-1 min-w-0 md:ml-60 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-20 flex h-header pt-safe items-center gap-2 md:gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8">
-          <button className="md:hidden -ml-2 p-2 text-ink-secondary" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+        <header className="sticky top-0 z-20 flex h-header pt-safe items-center gap-1 md:gap-2 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8">
+          <button className="md:hidden -ml-2 flex h-10 w-10 items-center justify-center rounded-full text-ink-secondary hover:bg-muted" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
           <span className="md:hidden font-heading text-base font-semibold text-ink-primary truncate">{currentLabel}</span>
@@ -296,8 +296,8 @@ export default function AppLayout() {
           <div className="flex-1" />
           <ThemeToggle />
           <NotificationBell />
-          <Link to="/profile">
-            <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" />
+          <Link to="/profile" className="-mr-2 md:mr-0 flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted transition-colors" aria-label="My profile">
+            <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-8 !w-8 !text-xs" />
           </Link>
         </header>
         <main className="flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">

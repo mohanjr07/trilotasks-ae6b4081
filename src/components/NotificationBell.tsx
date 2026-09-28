@@ -177,11 +177,12 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="relative text-ink-secondary hover:text-ink-primary transition-colors"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink-secondary hover:text-ink-primary hover:bg-muted transition-colors"
+        aria-label="Notifications"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground px-1">
+          <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full ring-2 ring-card bg-destructive text-[10px] font-bold text-destructive-foreground px-1">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
