@@ -39,6 +39,7 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [companyFilter, setCompanyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
@@ -66,6 +67,8 @@ export default function UsersPage() {
   const filtered = profiles.filter((p: any) => {
     if (search && !p.full_name.toLowerCase().includes(search.toLowerCase()) && !p.email.toLowerCase().includes(search.toLowerCase())) return false;
     if (roleFilter !== "all" && p.role !== roleFilter) return false;
+    if (companyFilter === "none" && p.company) return false;
+    if (companyFilter !== "all" && companyFilter !== "none" && p.company !== companyFilter) return false;
     if (statusFilter === "active" && !p.is_active) return false;
     if (statusFilter === "inactive" && p.is_active) return false;
     return true;
@@ -140,6 +143,15 @@ export default function UsersPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or email..." className="pl-9 h-10" />
         </div>
+        <Select value={companyFilter} onValueChange={setCompanyFilter}>
+          <SelectTrigger className="w-[170px] h-10"><SelectValue placeholder="Company" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Companies</SelectItem>
+            <SelectItem value="Trilo">Trilo</SelectItem>
+            <SelectItem value="Magic Aisles">Magic Aisles</SelectItem>
+            <SelectItem value="none">Not set</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
           <SelectTrigger className="w-[140px] h-10"><SelectValue placeholder="Role" /></SelectTrigger>
           <SelectContent>
@@ -182,6 +194,7 @@ export default function UsersPage() {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left px-4 py-3 text-xs font-medium text-ink-muted uppercase tracking-wider">User</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-ink-muted uppercase tracking-wider">Company</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-ink-muted uppercase tracking-wider">Role</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-ink-muted uppercase tracking-wider hidden lg:table-cell">Department</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-ink-muted uppercase tracking-wider hidden lg:table-cell">Tasks</th>
@@ -198,9 +211,16 @@ export default function UsersPage() {
                         <UserAvatar name={p.full_name} avatarUrl={p.avatar_url} size="md" />
                         <div>
                           <p className="font-medium text-ink-primary">{p.full_name}</p>
-                          <p className="text-xs text-ink-muted">{p.email}{p.company ? ` · ${p.company}` : ""}</p>
+                          <p className="text-xs text-ink-muted">{p.email}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.company ? (
+                        <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill whitespace-nowrap ${
+                          p.company === "Magic Aisles" ? "bg-purple-light text-purple" : "bg-accent-light text-primary"
+                        }`}>{p.company}</span>
+                      ) : <span className="text-ink-muted">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex text-[11px] font-medium px-2 py-0.5 rounded-pill capitalize ${
