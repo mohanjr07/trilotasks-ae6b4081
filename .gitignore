@@ -26,3 +26,6 @@ supabase/.temp/
 
 # Android app
 mobile/node_modules/
+mobile/android/app/release/
+*.jks
+*firebase-adminsdk*.json

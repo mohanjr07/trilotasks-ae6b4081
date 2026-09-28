@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { initPush } from "@/lib/push";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import InstallAppBanner from "@/components/InstallAppBanner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -128,6 +129,8 @@ export default function AppLayout() {
   const currentLabel = nav.find((n) => n.path === location.pathname)?.label ?? "";
   // Close the phone menu whenever the page changes
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  // Android app: register this phone for push notifications once logged in
+  useEffect(() => { if (profile?.id) initPush(navigate); }, [profile?.id, navigate]);
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains("dark"));
