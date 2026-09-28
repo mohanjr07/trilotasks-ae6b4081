@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Wallet, Plus, X, Paperclip, FileText, CheckCircle2, XCircle, Clock,
-  ExternalLink, Loader2,
+  ExternalLink, Loader2, Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -114,6 +114,27 @@ export default function PaymentsPage() {
     onError: (e: any) => toast.error("Failed to update: " + (e?.message ?? "")),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (r: PaymentRequest) => {
+      const { data, error } = await supabase.from("payment_requests").delete().eq("id", r.id).select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("not allowed (run the admin-delete SQL in Supabase)");
+      if (r.bill_path) await supabase.storage.from(BUCKET).remove([r.bill_path]).catch(() => {});
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payment-requests"] });
+      toast.success("Payment request deleted");
+      setSelected(null);
+    },
+    onError: (e: any) => toast.error("Failed to delete: " + (e?.message ?? "")),
+  });
+
+  const confirmDelete = (r: PaymentRequest) => {
+    if (window.confirm(`Delete "${r.purpose}" (${formatINR(r.amount)})? This cannot be undone.`)) {
+      deleteMutation.mutate(r);
+    }
+  };
+
   const tabs = [
     { key: "all" as const, label: "All" },
     { key: "pending" as const, label: `Pending (${stats.pending})` },
@@ -213,6 +234,17 @@ export default function PaymentsPage() {
                   </div>
                 </div>
                 <p className="shrink-0 font-heading text-base font-bold text-ink-primary">{formatINR(r.amount)}</p>
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); confirmDelete(r); }}
+                    disabled={deleteMutation.isPending}
+                    className="shrink-0 -mr-1 rounded-md p-1.5 text-ink-muted hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                    title="Delete request"
+                    aria-label="Delete request"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </motion.div>
           ))}
@@ -304,6 +336,17 @@ export default function PaymentsPage() {
                       <CheckCircle2 className="h-4 w-4" /> Approve
                     </Button>
                   </div>
+                )}
+
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    className="w-full gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => confirmDelete(selected)}
+                  >
+                    <Trash2 className="h-4 w-4" /> {deleteMutation.isPending ? "Deleting..." : "Delete request"}
+                  </Button>
                 )}
               </div>
             </motion.div>
