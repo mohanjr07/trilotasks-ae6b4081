@@ -16,7 +16,8 @@
     "electron:dev": "concurrently -k \"npm:dev\" \"wait-on http://localhost:8080 && electron .\"",
     "electron:build": "npm run build && electron-builder --win --x64 --publish never",
     "electron:build:portable": "npm run build && electron-builder --win portable --x64 --publish never",
-    "electron:build:mac": "npm run build && electron-builder --mac --x64 --arm64 --publish never"
+    "electron:build:mac": "npm run build && electron-builder --mac --x64 --arm64 --publish never",
+    "deploy:functions": "bash scripts/deploy-functions.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -117,13 +118,24 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "build/icon.ico"
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns"
