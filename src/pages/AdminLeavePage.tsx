@@ -816,7 +816,7 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
       // 2) Rows: active non-admin employees + anyone who has a leave this month.
       const empRes = await supabase
         .from("profiles")
-        .select("id, full_name, role, is_active")
+        .select("id, full_name, role, is_active, company")
         .order("full_name");
       if (empRes.error) throw empRes.error;
       const adminRoles = new Set(["admin", "super_admin"]);
@@ -854,14 +854,20 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         allEmployees.splice(0, allEmployees.length, ...merged);
       }
 
-      // Employees that belong to the separate MAPL table (case-insensitive name match)
+      // Which table each person goes in comes from their Company (Users → Edit → Company):
+      //   "Magic Aisles" → MAPL table, "Trilo" → main table.
+      // Users with no company set fall back to this name list.
       const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh", "puspakanth", "pushpakanth"]);
-      const employees = allEmployees.filter(
-        (e) => !MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
-      );
-      const maplEmployees = allEmployees.filter(
-        (e) => MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
-      );
+      const companyById: Record<string, string | null> = {};
+      for (const p of empRes.data ?? []) companyById[(p as any).id] = (p as any).company ?? null;
+      const isMapl = (e: { id: string; full_name: string }) => {
+        const c = companyById[e.id];
+        if (c === "Magic Aisles") return true;
+        if (c === "Trilo") return false;
+        return MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase());
+      };
+      const employees = allEmployees.filter((e) => !isMapl(e));
+      const maplEmployees = allEmployees.filter((e) => isMapl(e));
       const additionalGroups = maplEmployees.length
         ? [{ title: "MAPL", employees: maplEmployees }]
         : [];
