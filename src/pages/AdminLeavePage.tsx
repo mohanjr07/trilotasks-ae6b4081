@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { exportLeavesToExcel } from "@/lib/leaveExcelExport";
+import LeaveBalanceTable from "@/components/LeaveBalanceTable";
 
 export default function AdminLeavePage() {
   const { user, profile } = useAuth();
@@ -146,6 +147,8 @@ export default function AdminLeavePage() {
     { key: "approved", label: "Approved" },
     { key: "rejected", label: "Rejected" },
     { key: "reverted", label: `Reverted${reverted ? ` (${reverted})` : ""}` },
+    // Paid-leave balance — admins only
+    ...(isStrictAdmin ? [{ key: "balance", label: "Leave Balance" }] : []),
   ];
 
   return (
@@ -195,6 +198,9 @@ export default function AdminLeavePage() {
         </div>
       </div>
 
+      {tab === "balance" && isStrictAdmin ? (
+        <LeaveBalanceTable requests={requests} search={search} />
+      ) : (
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
         {filtered.map((req: any) => {
           const isReverted = !!req.reverted_at;
@@ -265,6 +271,7 @@ export default function AdminLeavePage() {
         })}
         {filtered.length === 0 && <div className="py-16 text-center text-sm text-ink-muted">No requests found</div>}
       </motion.div>
+      )}
 
       <ReviewModal request={reviewReq} onClose={() => setReviewReq(null)} />
       <LeaveDetailModal request={selectedLeave} onClose={() => setSelectedLeave(null)} />
@@ -766,37 +773,15 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const handleExport = async () => {
     setExporting(true);
     try {
-      // Active employees (including managers) in alphabetical order — admins excluded.
-      // Mirrors the paper sheet's S.No layout.
-      const empRes = await supabase
-        .from("profiles")
-        .select("id, full_name, role")
-        .eq("is_active", true)
-        .order("full_name");
-      if (empRes.error) throw empRes.error;
-      const adminRoles = new Set(["admin", "super_admin"]);
-      // Employees that belong to the separate MAPL table (case-insensitive name match)
-      const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh"]);
-      const allEmployees = (empRes.data ?? [])
-        .filter((e: any) => !adminRoles.has(e.role))
-        .map(({ id, full_name }: any) => ({ id, full_name })) as Array<{ id: string; full_name: string }>;
-      const employees = allEmployees.filter(
-        (e) => !MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
-      );
-      const maplEmployees = allEmployees.filter(
-        (e) => MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
-      );
-      const additionalGroups = maplEmployees.length
-        ? [{ title: "MAPL", employees: maplEmployees }]
-        : [];
-
-      // Bound the leave query to the chosen month so we don't ship the whole table
-      const monthStart = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-      const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
-      // A request "touches" this month if start_date <= monthEnd AND (end_date >= monthStart OR end_date is null).
-      // The null branch keeps single-day leaves (no end_date); days outside the month are ignored while building the grid,
-      // so leaves spanning a month boundary are rendered for their in-month portion.
+      // 1) Leave requests touching the chosen month.
+      // Local YYYY-MM-DD (toISOString() shifts India midnight to the previous day,
+      // which dropped every leave starting on the last day of the month).
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const monthStart = `${year}-${pad(month)}-01`;
+      const monthEnd = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+      // Touches the month if start_date <= monthEnd AND (end_date >= monthStart OR end_date is null).
       const overlapFilter = `end_date.gte.${monthStart},end_date.is.null`;
+      let leaveRequests: any[] = [];
       const reqRes = await supabase
         .from("leave_requests")
         .select("employee_id, start_date, end_date, reverted_at, status, type, leave_category, is_half_day, half_day_period")
@@ -811,13 +796,79 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
             .lte("start_date", monthEnd)
             .or(overlapFilter);
           if (fallback.error) throw fallback.error;
-          await exportLeavesToExcel({ year, month, employees, leaveRequests: fallback.data ?? [], additionalGroups });
+          leaveRequests = fallback.data ?? [];
         } else {
           throw reqRes.error;
         }
       } else {
-        await exportLeavesToExcel({ year, month, employees, leaveRequests: reqRes.data ?? [], additionalGroups });
+        leaveRequests = reqRes.data ?? [];
       }
+
+      // People with an approved (not reverted) leave this month must ALWAYS appear,
+      // even if they are an admin or have since been deactivated.
+      const withLeave = new Set(
+        leaveRequests
+          .filter((r: any) => (!r.status || r.status === "approved") && !r.reverted_at)
+          .map((r: any) => r.employee_id as string),
+      );
+
+      // 2) Rows: active non-admin employees + anyone who has a leave this month.
+      const empRes = await supabase
+        .from("profiles")
+        .select("id, full_name, role, is_active")
+        .order("full_name");
+      if (empRes.error) throw empRes.error;
+      const adminRoles = new Set(["admin", "super_admin"]);
+      const allEmployees = (empRes.data ?? [])
+        .filter((e: any) =>
+          withLeave.has(e.id) || (e.is_active !== false && !adminRoles.has(e.role)),
+        )
+        .map(({ id, full_name }: any) => ({ id, full_name: full_name || "(no name)" })) as Array<{ id: string; full_name: string }>;
+
+      // Same person with two accounts → ONE row on the sheet (Excel only; the
+      // accounts stay separate in the app). Key = lower-case name, value = row name.
+      const EXCEL_MERGE: Record<string, string> = {
+        "anu": "Anu V",
+        "anu v": "Anu V",
+      };
+      {
+        const canonicalId: Record<string, string> = {}; // row name → id that keeps the row
+        const remap: Record<string, string> = {};        // other account id → kept id
+        const merged: Array<{ id: string; full_name: string }> = [];
+        for (const e of allEmployees) {
+          const target = EXCEL_MERGE[(e.full_name ?? "").trim().toLowerCase()];
+          if (!target) { merged.push(e); continue; }
+          if (!canonicalId[target]) {
+            canonicalId[target] = e.id;
+            merged.push({ id: e.id, full_name: target });
+          } else {
+            remap[e.id] = canonicalId[target];
+          }
+        }
+        // Profiles not in the row list (e.g. admin duplicate without leave) still merge
+        for (const p of empRes.data ?? []) {
+          const target = EXCEL_MERGE[((p as any).full_name ?? "").trim().toLowerCase()];
+          if (target && canonicalId[target] && (p as any).id !== canonicalId[target]) remap[(p as any).id] = canonicalId[target];
+        }
+        leaveRequests = leaveRequests.map((r: any) =>
+          remap[r.employee_id] ? { ...r, employee_id: remap[r.employee_id] } : r,
+        );
+        allEmployees.splice(0, allEmployees.length, ...merged);
+      }
+
+      // Employees that belong to the separate MAPL table (case-insensitive name match)
+      const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh"]);
+      const employees = allEmployees.filter(
+        (e) => !MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
+      );
+      const maplEmployees = allEmployees.filter(
+        (e) => MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
+      );
+      const additionalGroups = maplEmployees.length
+        ? [{ title: "MAPL", employees: maplEmployees }]
+        : [];
+
+      await exportLeavesToExcel({ year, month, employees, leaveRequests, additionalGroups });
       toast.success("Excel file ready — check your downloads");
       onClose();
     } catch (e: any) {

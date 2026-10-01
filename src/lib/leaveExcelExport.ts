@@ -14,7 +14,7 @@
 //    • Blank cell  → Present
 //    • "L" cell    → Absent (full-day leave fills both F and A)
 //    • Half-day    → "L" in just F (AM / first half) or just A (PM / second half)
-//    • on_duty / permission → treated as Present (employee was at work, no L)
+//    • on_duty → "OD" (green; counts as present)   • permission → Present (blank)
 //    • Reverted leaves (reverted_at IS NOT NULL) are skipped
 //    • Sundays → entire column shaded red so the rest day is visually obvious
 //
@@ -85,12 +85,13 @@ function isHalfDayAfternoon(req: LeaveExportRequest): boolean {
   return p === "PM" || p === "SECOND HALF" || p === "SECOND" || p === "A";
 }
 
-/** Returns the mark for this request: "L" for leave, "W" for WFH, or null to skip */
-function markFor(req: LeaveExportRequest): "L" | "W" | null {
+/** Returns the mark for this request: "L" leave, "W" WFH, "OD" on duty, or null to skip */
+function markFor(req: LeaveExportRequest): "L" | "W" | "OD" | null {
   if (req.reverted_at) return null;
   if (req.status && req.status !== "approved") return null;
-  // on_duty and permission keep the employee marked present
-  if (req.type === "on_duty" || req.leave_category === "on_duty") return null;
+  // On duty = working away from office; shown as OD (counts as present)
+  if (req.type === "on_duty" || req.leave_category === "on_duty") return "OD";
+  // Permission (a few hours off) keeps the employee marked present
   if (req.type === "permission" || req.leave_category === "permission") return null;
   // WFH is present-but-remote — mark distinctly so it isn't read as a leave
   if (req.leave_category === "work_from_home") return "W";
@@ -124,7 +125,7 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   });
   const workingDays = totalDays - dayMeta.filter((m) => m.isSunday).length;
 
-  type Mark = "L" | "W" | null;
+  type Mark = "L" | "W" | "OD" | null;
 
   function buildGrid(emps: LeaveExportEmployee[]) {
     const grid: Record<string, Array<{ f: Mark; a: Mark }>> = {};
@@ -164,7 +165,7 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
   // Column widths
   ws.getColumn(1).width = 5;   // S.No
   ws.getColumn(2).width = 22;  // Name
-  for (let i = 3; i <= totalCols; i++) ws.getColumn(i).width = 3.2;
+  for (let i = 3; i <= totalCols; i++) ws.getColumn(i).width = 3.8;
 
   const sundayFill: ExcelJS.Fill = {
     type: "pattern",
@@ -175,6 +176,11 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
     type: "pattern",
     pattern: "solid",
     fgColor: { argb: "FFEF9A9A" },
+  };
+  const odFill: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFC8E6C9" },
   };
   const wfhFill: ExcelJS.Fill = {
     type: "pattern",
@@ -201,7 +207,7 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
     const subRow = startRow + 1;
     ws.mergeCells(subRow, 1, subRow, totalCols);
     const subCell = ws.getCell(subRow, 1);
-    subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   blank = Present)`;
+    subCell.value = `No.of Working Day - ${workingDays} Days       (Legend:  L = Leave   W = Work From Home   OD = On Duty   blank = Present)`;
     subCell.alignment = { horizontal: "center", vertical: "middle" };
     subCell.font = { bold: true, size: 11 };
     ws.getRow(subRow).height = 18;
@@ -285,6 +291,12 @@ export async function exportLeavesToExcel(args: LeaveExportArgs): Promise<void> 
           if (slot.a) aCell.value = slot.a;
           if (slot.f === "W") fCell.fill = wfhFill;
           if (slot.a === "W") aCell.fill = wfhFill;
+          if (slot.f === "OD") fCell.fill = odFill;
+          if (slot.a === "OD") aCell.fill = odFill;
+          if (slot.f === "OD" || slot.a === "OD") {
+            fCell.font = { size: 8, bold: true };
+            aCell.font = { size: 8, bold: true };
+          }
         }
       }
 
