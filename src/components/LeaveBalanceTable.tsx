@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { mergedName } from "@/lib/personMerge";
 
 const PER_MONTH = 2;
 const PER_YEAR = 24;
@@ -53,20 +54,38 @@ export default function LeaveBalanceTable({ requests, search }: { requests: any[
         .from("profiles")
         .select("id, full_name, role, is_active")
         .order("full_name");
-      return (data ?? []).filter((p: any) => p.is_active !== false && p.role !== "admin" && p.role !== "super_admin");
+      return data ?? [];
     },
   });
 
   const rows = useMemo(() => {
     // count up to the end of the financial year so approved future leave is included too
     const countTo = fy.end;
-    return employees
-      .filter((e: any) => !search || (e.full_name ?? "").toLowerCase().includes(search.toLowerCase()))
-      .map((e: any) => {
+    // One row per person: merged duplicates (e.g. Anu + Anu V) share a row and their
+    // leaves add up — even if one of the accounts is an admin.
+    const people: Array<{ key: string; name: string; ids: Set<string> }> = [];
+    const byMerge: Record<string, { key: string; name: string; ids: Set<string> }> = {};
+    for (const p of employees as any[]) {
+      const target = mergedName(p.full_name);
+      if (target) {
+        if (!byMerge[target]) {
+          byMerge[target] = { key: p.id, name: target, ids: new Set() };
+          people.push(byMerge[target]);
+        }
+        byMerge[target].ids.add(p.id);
+        continue;
+      }
+      if (p.is_active === false || p.role === "admin" || p.role === "super_admin") continue;
+      people.push({ key: p.id, name: p.full_name, ids: new Set([p.id]) });
+    }
+    people.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+    return people
+      .filter((e) => !search || (e.name ?? "").toLowerCase().includes(search.toLowerCase()))
+      .map((e) => {
         let taken = 0;
         let lop = 0;
         for (const r of requests) {
-          if (r.employee_id !== e.id) continue;
+          if (!e.ids.has(r.employee_id)) continue;
           if (r.status !== "approved" || r.reverted_at) continue;
           const cat = r.leave_category ?? r.type;
           if (NOT_PAID_LEAVE.has(cat) || r.type === "on_duty" || r.type === "permission") continue;
@@ -75,7 +94,7 @@ export default function LeaveBalanceTable({ requests, search }: { requests: any[
           else taken += d;
         }
         const balance = earned - taken;
-        return { id: e.id, name: e.full_name, taken, lop, balance, yearLeft: PER_YEAR - taken };
+        return { id: e.key, name: e.name, taken, lop, balance, yearLeft: PER_YEAR - taken };
       });
   }, [employees, requests, search, earned, fy]);
 

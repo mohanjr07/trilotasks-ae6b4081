@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { exportLeavesToExcel } from "@/lib/leaveExcelExport";
 import LeaveBalanceTable from "@/components/LeaveBalanceTable";
+import { PERSON_MERGE } from "@/lib/personMerge";
 
 export default function AdminLeavePage() {
   const { user, profile } = useAuth();
@@ -827,10 +828,7 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
 
       // Same person with two accounts → ONE row on the sheet (Excel only; the
       // accounts stay separate in the app). Key = lower-case name, value = row name.
-      const EXCEL_MERGE: Record<string, string> = {
-        "anu": "Anu V",
-        "anu v": "Anu V",
-      };
+      const EXCEL_MERGE = PERSON_MERGE;
       {
         const canonicalId: Record<string, string> = {}; // row name → id that keeps the row
         const remap: Record<string, string> = {};        // other account id → kept id
