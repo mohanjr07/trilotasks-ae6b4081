@@ -112,6 +112,7 @@ export default function AttendancePage() {
   const [company, setCompany] = useState<Company>("all");
   const byCompany = (q: any) => (company === "all" ? q : q.eq("company", company));
   const [showLink, setShowLink] = useState(false);
+  const [showRange, setShowRange] = useState(false);
 
   const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekEnd = format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd");
@@ -287,10 +288,15 @@ export default function AttendancePage() {
         <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">
           {isAdminView ? "Attendance" : "My Attendance"}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isStrictAdmin && (
             <Button size="sm" variant="outline" onClick={() => setShowLink(true)}>
               <Link2 className="h-4 w-4 mr-1.5" /> Link Machine IDs
+            </Button>
+          )}
+          {isAdminView && (
+            <Button size="sm" variant="outline" onClick={() => setShowRange(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Export date range
             </Button>
           )}
           <Button size="sm" variant="outline" onClick={handleExport}>
@@ -492,6 +498,7 @@ export default function AttendancePage() {
       </div>
 
       {isStrictAdmin && <LinkMachineIdsDialog open={showLink} onOpenChange={setShowLink} />}
+      {isAdminView && <RangeExportModal open={showRange} onClose={() => setShowRange(false)} company={company} />}
     </AnimatedPage>
   );
 }
@@ -609,6 +616,90 @@ function LinkMachineIdsDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <Button onClick={() => save.mutate()} disabled={save.isPending || Object.keys(edits).length === 0}>
             {save.isPending ? "Saving…" : "Save"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Date-range export (admins): every day's punch in/out for each person ──────
+function RangeExportModal({ open, onClose, company }: { open: boolean; onClose: () => void; company: Company }) {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const [from, setFrom] = useState(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  const [to, setTo] = useState(today);
+  const [co, setCo] = useState<Company>(company);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    if (!from || !to || from > to) { toast.error("Pick a valid From and To date"); return; }
+    setBusy(true);
+    try {
+      const all: AttendanceRow[] = [];
+      for (let off = 0; ; off += 1000) {
+        let q = (supabase as any).from("attendance").select("*")
+          .gte("work_date", from).lte("work_date", to)
+          .order("work_date").order("employee_id").range(off, off + 999);
+        if (co !== "all") q = q.eq("company", co);
+        const { data, error } = await q;
+        if (error) throw error;
+        all.push(...((data ?? []) as AttendanceRow[]));
+        if (!data || data.length < 1000) break;
+      }
+      if (all.length === 0) { toast.error("No attendance in that range"); return; }
+      const rows = all
+        .map((r) => ({
+          ...r,
+          name: nameOf(r),
+          date: format(parseISO(r.work_date), "dd-MM-yyyy"),
+          day: format(parseISO(r.work_date), "EEE"),
+          in: fmtTime(r.punch_in),
+          out: fmtTime(r.punch_out),
+        }))
+        .sort((a, b) => a.work_date.localeCompare(b.work_date) || a.name.localeCompare(b.name));
+      const cols: ExportColumn[] = [
+        { header: "Date", key: "date", width: 13 }, { header: "Day", key: "day", width: 7 },
+        { header: "Employee ID", key: "employee_id", width: 12 }, { header: "Name", key: "name", width: 26 },
+        { header: "Company", key: "company", width: 10 },
+        { header: "Punch In", key: "in", width: 12 }, { header: "Punch Out", key: "out", width: 12 },
+        { header: "Hours", key: "total_hours", width: 10 },
+      ];
+      const title = `Attendance — ${format(parseISO(from), "d MMM")} to ${format(parseISO(to), "d MMM yyyy")}${co === "all" ? "" : " (" + co + ")"}`;
+      await exportRowsToExcel(`attendance-${from}-to-${to}${co === "all" ? "" : "-" + co}`, "Attendance", title, cols, rows);
+      toast.success("Excel downloaded");
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Export failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Export date range</DialogTitle>
+          <DialogDescription>Every day's punch in / out for each employee.</DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="text-sm text-ink-secondary">From
+            <Input type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} className="h-9 mt-1" />
+          </label>
+          <label className="text-sm text-ink-secondary">To
+            <Input type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} className="h-9 mt-1" />
+          </label>
+          <label className="text-sm text-ink-secondary col-span-2">Company
+            <select value={co} onChange={(e) => setCo(e.target.value as Company)}
+              className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-ink-primary">
+              <option value="all">All companies</option>
+              <option value="Trilo">Trilo</option>
+              <option value="Mapl">Mapl</option>
+            </select>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={run} disabled={busy}>{busy ? "Exporting…" : "Download Excel"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
