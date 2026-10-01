@@ -855,7 +855,7 @@ function ExportLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
       }
 
       // Employees that belong to the separate MAPL table (case-insensitive name match)
-      const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh"]);
+      const MAPL_NAMES = new Set(["lingesh", "surya barani", "jagadesh", "puspakanth", "pushpakanth"]);
       const employees = allEmployees.filter(
         (e) => !MAPL_NAMES.has((e.full_name ?? "").trim().toLowerCase()),
       );
