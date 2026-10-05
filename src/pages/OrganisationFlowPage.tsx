@@ -63,8 +63,9 @@ export default function OrganisationFlowPage() {
   const [newSubtitle, setNewSubtitle] = useState("");
 
   // Zoom for the chart. Auto-fit mode measures the chart's natural width
-  // and scales it so the whole tree fits the container width — no horizontal
-  // scrollbar. The +/- buttons disable auto-fit for manual zooming.
+  // and scales it so the whole tree fits the container width. The +/- buttons
+  // disable auto-fit for manual zooming; the canvas then scrolls (and can be
+  // dragged) horizontally and vertically.
   const [zoom, setZoom] = useState(1);
   const [autoFit, setAutoFit] = useState(true);
   const [scaledSize, setScaledSize] = useState<{ w: number; h: number } | null>(null);
@@ -286,8 +287,26 @@ export default function OrganisationFlowPage() {
       ) : (
         <div
           ref={scrollRef}
-          className="rounded-xl border border-border bg-muted/20 overflow-auto max-h-[70dvh] md:max-h-none md:overflow-hidden p-4 touch-pan-x touch-pan-y"
+          className="rounded-xl border border-border bg-muted/20 overflow-auto max-h-[70dvh] md:max-h-[78dvh] p-4 touch-pan-x touch-pan-y cursor-grab active:cursor-grabbing"
           style={fullBleed}
+          onPointerDown={(e) => {
+            // Drag the empty canvas with the mouse to pan (nodes/buttons still click normally).
+            if (e.pointerType !== "mouse" || e.button !== 0) return;
+            if ((e.target as HTMLElement).closest("button, input, textarea, a, [role=button]")) return;
+            const el = scrollRef.current;
+            if (!el) return;
+            const start = { x: e.clientX, y: e.clientY, l: el.scrollLeft, t: el.scrollTop };
+            const move = (ev: PointerEvent) => {
+              el.scrollLeft = start.l - (ev.clientX - start.x);
+              el.scrollTop = start.t - (ev.clientY - start.y);
+            };
+            const up = () => {
+              window.removeEventListener("pointermove", move);
+              window.removeEventListener("pointerup", up);
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+          }}
         >
           {/* The wrapper is sized to the *scaled* pixel dimensions so the
               container exactly hugs the chart — no empty space on any side.
