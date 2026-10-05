@@ -93,8 +93,11 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
 
   // Managers can only assign tasks to their own team. Admins see everyone.
   // Employees/interns can assign to anyone — uses an RPC that bypasses RLS on profiles.
-  const isManagerRole = profile?.role === "manager";
-  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern";
+  // People allowed to assign tasks to anyone, whatever their role.
+  const ASSIGN_ANYONE_EMAILS = ["hari@triloautomation.com"];
+  const canAssignAnyone = ASSIGN_ANYONE_EMAILS.includes((user?.email ?? "").toLowerCase());
+  const isManagerRole = profile?.role === "manager" && !canAssignAnyone;
+  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern" || canAssignAnyone;
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list", isManagerRole ? `team:${user?.id}` : "all"],
