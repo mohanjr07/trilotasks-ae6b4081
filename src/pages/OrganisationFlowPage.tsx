@@ -48,6 +48,100 @@ function buildTree(nodes: OrgNode[]): TreeNode[] {
   return roots;
 }
 
+// ── Chart layout ────────────────────────────────────────────────────────
+const CARD_W = 170;   // every card has the same width
+const H_GAP = 28;     // space between neighbouring cards
+const V_GAP = 72;     // space between levels (room for elbows + arrowheads)
+
+function layoutChart(tree: TreeNode[], nodes: OrgNode[], heights: Record<string, number>) {
+  const h = (id: string) => heights[id] ?? 48;
+  const pos = new Map<string, { x: number; y: number; level: number }>();
+
+  // Row heights per level
+  const levelH: number[] = [];
+  const walk = (n: TreeNode, l: number) => {
+    levelH[l] = Math.max(levelH[l] ?? 0, h(n.id));
+    n.children.forEach((c) => walk(c, l + 1));
+  };
+  tree.forEach((r) => walk(r, 0));
+  const levelY: number[] = [];
+  let acc = 0;
+  levelH.forEach((lh, l) => { levelY[l] = acc; acc += lh + V_GAP; });
+
+  // Subtree widths, then place each parent centred over its children
+  const widths = new Map<string, number>();
+  const width = (n: TreeNode): number => {
+    if (widths.has(n.id)) return widths.get(n.id)!;
+    const kids = n.children.reduce((s, c) => s + width(c), 0) + H_GAP * Math.max(0, n.children.length - 1);
+    const w = Math.max(CARD_W, kids);
+    widths.set(n.id, w);
+    return w;
+  };
+  const place = (n: TreeNode, left: number, l: number) => {
+    const w = width(n);
+    pos.set(n.id, { x: left + w / 2, y: levelY[l], level: l });
+    const kids = n.children.reduce((s, c) => s + width(c), 0) + H_GAP * Math.max(0, n.children.length - 1);
+    let cx = left + (w - kids) / 2;
+    n.children.forEach((c) => { place(c, cx, l + 1); cx += width(c) + H_GAP; });
+  };
+  let left = 0;
+  tree.forEach((r) => { place(r, left, 0); left += width(r) + H_GAP * 3; });
+
+  // Boxes with more than one boss sit centred between all of them
+  // (moved together with everything under them), unless that would
+  // overlap another card on the same row.
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const kidsOf = new Map<string, string[]>();
+  nodes.forEach((n) => { if (n.parent_id) kidsOf.set(n.parent_id, [...(kidsOf.get(n.parent_id) ?? []), n.id]); });
+  const subtree = (id: string): string[] => [id, ...(kidsOf.get(id) ?? []).flatMap(subtree)];
+  for (const n of nodes) {
+    const extras = (n.extra_parent_ids ?? []).filter((id) => pos.has(id) && byId.has(id));
+    if (!extras.length || !pos.has(n.id)) continue;
+    const bosses = [n.parent_id, ...extras].filter((id): id is string => !!id && pos.has(id));
+    const targetX = bosses.reduce((s, id) => s + pos.get(id)!.x, 0) / bosses.length;
+    const dx = targetX - pos.get(n.id)!.x;
+    if (Math.abs(dx) < 1) continue;
+    const moving = new Set(subtree(n.id));
+    const clash = [...moving].some((id) => {
+      const p = pos.get(id);
+      if (!p) return false;
+      return [...pos.entries()].some(([oid, o]) =>
+        !moving.has(oid) && o.level === p.level && Math.abs(o.x - (p.x + dx)) < CARD_W + H_GAP / 2);
+    });
+    if (clash) continue;
+    moving.forEach((id) => { const p = pos.get(id); if (p) pos.set(id, { ...p, x: p.x + dx }); });
+  }
+
+  // Normalise so nothing sits left of 0
+  let minX = Infinity, maxX = -Infinity;
+  pos.forEach((p) => { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); });
+  if (!isFinite(minX)) return { pos, edges: [] as string[], width: 0, height: 0 };
+  const shift = CARD_W / 2 - minX;
+  pos.forEach((p, id) => pos.set(id, { ...p, x: p.x + shift }));
+
+  // Reporting lines: down from the boss, rounded elbow, across, down into the child
+  const edges: string[] = [];
+  const line = (fromId: string, toId: string) => {
+    const a = pos.get(fromId), b = pos.get(toId);
+    if (!a || !b) return;
+    const px = a.x, py = a.y + h(fromId);
+    const cx = b.x, cy = b.y - 2;
+    const midY = Math.max(py + 12, b.y - V_GAP / 2);
+    const dist = Math.abs(cx - px);
+    if (dist < 1) { edges.push(`M${px},${py} V${cy}`); return; }
+    const r = Math.min(12, dist / 2, (midY - py) / 2, (cy - midY) / 2);
+    const dir = cx > px ? 1 : -1;
+    edges.push(`M${px},${py} V${midY - r} Q${px},${midY} ${px + dir * r},${midY} H${cx - dir * r} Q${cx},${midY} ${cx},${midY + r} V${cy}`);
+  };
+  nodes.forEach((n) => {
+    if (n.parent_id) line(n.parent_id, n.id);
+    (n.extra_parent_ids ?? []).forEach((pid) => { if (byId.has(pid)) line(pid, n.id); });
+  });
+
+  const height = acc - V_GAP;
+  return { pos, edges, width: maxX - minX + CARD_W, height: Math.max(height, 0) + 4 };
+}
+
 export default function OrganisationFlowPage() {
   const { profile, user } = useAuth();
   const canEdit = profile?.role === "admin" || profile?.role === "super_admin";
@@ -71,9 +165,8 @@ export default function OrganisationFlowPage() {
   const [autoFit, setAutoFit] = useState(true);
   const [scaledSize, setScaledSize] = useState<{ w: number; h: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [linking, setLinking] = useState<TreeNode | null>(null);
+  const [linking, setLinking] = useState<OrgNode | null>(null);
   const [linkDraft, setLinkDraft] = useState<string[]>([]);
-  const [extraPaths, setExtraPaths] = useState<string[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const { data: nodes = [], isLoading } = useQuery<OrgNode[]>({
@@ -181,55 +274,31 @@ export default function OrganisationFlowPage() {
     return blocked;
   };
 
-  // ── Extra "also reports to" connectors ────────────────────────────────
-  // Measured from the rendered cards (in unscaled chart coordinates) and
-  // drawn as an SVG overlay: down from the extra parent, across, and into
-  // the top of the child — like a second elbow line.
+  // ── FigJam-style layout ───────────────────────────────────────────────
+  // Card heights are measured after render (offsetHeight ignores the zoom
+  // transform), then every card gets an absolute x/y and every reporting
+  // line is drawn as one SVG path with rounded elbows and an arrowhead.
+  const [heights, setHeights] = useState<Record<string, number>>({});
   useLayoutEffect(() => {
     const content = contentRef.current;
     if (!content) return;
-    const compute = () => {
-      const base = content.getBoundingClientRect();
-      const z = zoom || 1;
-      const box = (id: string) => {
-        const el = content.querySelector<HTMLElement>(`[data-org-card="${id}"]`);
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { x: (r.left - base.left) / z, y: (r.top - base.top) / z, w: r.width / z, h: r.height / z };
-      };
-      const out: string[] = [];
-      for (const n of nodes) {
-        for (const pid of n.extra_parent_ids ?? []) {
-          const c = box(n.id), p = box(pid);
-          if (!c || !p) continue;
-          const px = p.x + p.w / 2, py = p.y + p.h;
-          const cx = c.x + c.w / 2, cy = c.y;
-          const midY = cy - 20;
-          const r = Math.min(10, Math.abs(cx - px) / 2, Math.abs(midY - py) / 2);
-          const dir = cx > px ? 1 : -1;
-          out.push(
-            Math.abs(cx - px) < 1
-              ? `M${px},${py} V${cy}`
-              : `M${px},${py} V${midY - r} Q${px},${midY} ${px + dir * r},${midY} H${cx - dir * r} Q${cx},${midY} ${cx},${midY + r} V${cy}`,
-          );
-        }
-      }
-      setExtraPaths(out);
-    };
-    compute();
-    const t = setTimeout(compute, 350); // after layout animations settle
-    const ro = new ResizeObserver(() => requestAnimationFrame(compute));
-    ro.observe(content);
-    return () => { clearTimeout(t); ro.disconnect(); };
-  }, [nodes, zoom, editing]);
+    const next: Record<string, number> = {};
+    content.querySelectorAll<HTMLElement>("[data-org-card]").forEach((el) => {
+      next[el.dataset.orgCard!] = el.offsetHeight;
+    });
+    const changed = Object.keys(next).length !== Object.keys(heights).length ||
+      Object.entries(next).some(([k, v]) => heights[k] !== v);
+    if (changed) setHeights(next);
+  });
+  const chart = useMemo(() => layoutChart(tree, nodes, heights), [tree, nodes, heights]);
 
   // ── Handlers ──────────────────────────────────────────────────────────
-  const startEdit = (n: TreeNode) => {
+  const startEdit = (n: OrgNode) => {
     setEditing(n.id);
     setEditTitle(n.title);
     setEditSubtitle(n.subtitle ?? "");
   };
-  const commitEdit = (n: TreeNode) => {
+  const commitEdit = (n: OrgNode) => {
     if (!editTitle.trim()) { setEditing(null); return; }
     if (editTitle === n.title && (editSubtitle || null) === (n.subtitle ?? null)) {
       setEditing(null);
@@ -408,36 +477,53 @@ export default function OrganisationFlowPage() {
                 transition: "transform 120ms ease-out",
               }}
             >
-              {extraPaths.length > 0 && (
-                <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible text-slate-400 dark:text-slate-500" aria-hidden>
-                  {extraPaths.map((d, i) => (
-                    <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth={2} />
+              <div className="relative" style={{ width: chart.width, height: chart.height }}>
+                <svg
+                  className="absolute inset-0 pointer-events-none overflow-visible text-slate-400 dark:text-slate-500"
+                  width={chart.width}
+                  height={chart.height}
+                  aria-hidden
+                >
+                  <defs>
+                    <marker id="org-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
+                    </marker>
+                  </defs>
+                  {chart.edges.map((d, i) => (
+                    <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinejoin="round" markerEnd="url(#org-arrow)" />
                   ))}
                 </svg>
-              )}
-              <div className="flex flex-col items-center gap-16">
-                {tree.map((root) => (
-                <OrgNodeView
-                  key={root.id}
-                  node={root}
-                  canEdit={canEdit}
-                  editing={editing}
-                  editTitle={editTitle}
-                  editSubtitle={editSubtitle}
-                  onEditTitle={setEditTitle}
-                  onEditSubtitle={setEditSubtitle}
-                  onStartEdit={startEdit}
-                  onCommitEdit={commitEdit}
-                  onCancelEdit={() => setEditing(null)}
-                  onDelete={(n) => {
-                    if (confirm(`Delete "${n.title}"? All its children will also be removed.`)) {
-                      deleteNode.mutate(n.id);
-                    }
-                  }}
-                  onAddChild={(n) => setAddingUnder(n.id)}
-                  onLink={(n) => { setLinking(n); setLinkDraft(n.extra_parent_ids ?? []); }}
-                />
-              ))}
+                {nodes.map((n) => {
+                  const p = chart.pos.get(n.id);
+                  if (!p) return null;
+                  return (
+                    <div
+                      key={n.id}
+                      className="absolute"
+                      style={{ left: p.x - CARD_W / 2, top: p.y, width: CARD_W, transition: "left 200ms ease, top 200ms ease" }}
+                    >
+                      <OrgCard
+                        node={n}
+                        canEdit={canEdit}
+                        editing={editing}
+                        editTitle={editTitle}
+                        editSubtitle={editSubtitle}
+                        onEditTitle={setEditTitle}
+                        onEditSubtitle={setEditSubtitle}
+                        onStartEdit={startEdit}
+                        onCommitEdit={commitEdit}
+                        onCancelEdit={() => setEditing(null)}
+                        onDelete={(x) => {
+                          if (confirm(`Delete "${x.title}"? All its children will also be removed.`)) {
+                            deleteNode.mutate(x.id);
+                          }
+                        }}
+                        onAddChild={(x) => setAddingUnder(x.id)}
+                        onLink={(x) => { setLinking(x); setLinkDraft(x.extra_parent_ids ?? []); }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -544,41 +630,32 @@ export default function OrganisationFlowPage() {
   );
 }
 
-// ── Recursive node + subtree renderer ───────────────────────────────────
-function OrgNodeView({
+// ── One card ─────────────────────────────────────────────────────────────
+function OrgCard({
   node, canEdit, editing, editTitle, editSubtitle,
   onEditTitle, onEditSubtitle, onStartEdit, onCommitEdit, onCancelEdit,
   onDelete, onAddChild, onLink,
 }: {
-  node: TreeNode;
+  node: OrgNode;
   canEdit: boolean;
   editing: string | null;
   editTitle: string;
   editSubtitle: string;
   onEditTitle: (v: string) => void;
   onEditSubtitle: (v: string) => void;
-  onStartEdit: (n: TreeNode) => void;
-  onCommitEdit: (n: TreeNode) => void;
+  onStartEdit: (n: OrgNode) => void;
+  onCommitEdit: (n: OrgNode) => void;
   onCancelEdit: () => void;
-  onDelete: (n: TreeNode) => void;
-  onAddChild: (n: TreeNode) => void;
-  onLink: (n: TreeNode) => void;
+  onDelete: (n: OrgNode) => void;
+  onAddChild: (n: OrgNode) => void;
+  onLink: (n: OrgNode) => void;
 }) {
   const isEditing = editing === node.id;
-  const hasChildren = node.children.length > 0;
-  const childCount = node.children.length;
-
-  // Tailwind class applied to every connector line — dark enough to be
-  // clearly visible against the muted chart background in both themes.
-  const LINE = "bg-slate-400 dark:bg-slate-500";
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Node card */}
       <div className="relative group" data-org-card={node.id}>
-        <motion.div
-          layout
-          className="rounded-xl bg-card border-2 border-primary/30 shadow-md px-3 py-2 min-w-[140px] max-w-[200px] text-center hover:border-primary/60 transition-colors"
+        <div
+          className="rounded-xl bg-card border-2 border-primary/30 shadow-md px-3 py-2 w-full text-center hover:border-primary/60 transition-colors"
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -630,7 +707,7 @@ function OrgNodeView({
               )}
             </>
           )}
-        </motion.div>
+        </div>
 
         {/* Hover controls (admin only, not while editing) */}
         {canEdit && !isEditing && (
@@ -670,65 +747,5 @@ function OrgNodeView({
           </button>
         )}
       </div>
-
-      {/* Children block */}
-      {hasChildren && (
-        <>
-          {/* Vertical connector from parent down to the horizontal bar.
-              Generous height so the chart has real vertical presence. */}
-          <div className={`w-0.5 h-10 ${LINE}`} />
-
-          {/* Row of children. The horizontal bar is built from each child's
-              own top half-border: first child gets right-half, last child
-              gets left-half, middle children get full width. This guarantees
-              the bar spans exactly from the first child's centre to the
-              last child's centre, regardless of how wide each subtree is. */}
-          <div className="flex gap-4 items-start">
-            {node.children.map((child, i) => {
-              const isFirst = i === 0;
-              const isLast = i === childCount - 1;
-              const onlyChild = childCount === 1;
-              return (
-                <div key={child.id} className="flex flex-col items-center relative">
-                  {/* Top horizontal half-bars (skipped entirely for only children) */}
-                  {!onlyChild && (
-                    <div className="relative w-full h-10 flex items-start justify-center">
-                      {/* left half */}
-                      {!isFirst && (
-                        <div className={`absolute top-0 left-0 right-1/2 h-0.5 ${LINE}`} />
-                      )}
-                      {/* right half */}
-                      {!isLast && (
-                        <div className={`absolute top-0 left-1/2 right-0 h-0.5 ${LINE}`} />
-                      )}
-                      {/* Upward stub from child's top into the horizontal bar */}
-                      <div className={`w-0.5 h-10 ${LINE}`} />
-                    </div>
-                  )}
-                  {/* For an only child we still need the vertical stub */}
-                  {onlyChild && <div className={`w-0.5 h-10 ${LINE}`} />}
-
-                  <OrgNodeView
-                    node={child}
-                    canEdit={canEdit}
-                    editing={editing}
-                    editTitle={editTitle}
-                    editSubtitle={editSubtitle}
-                    onEditTitle={onEditTitle}
-                    onEditSubtitle={onEditSubtitle}
-                    onStartEdit={onStartEdit}
-                    onCommitEdit={onCommitEdit}
-                    onCancelEdit={onCancelEdit}
-                    onDelete={onDelete}
-                    onAddChild={onAddChild}
-                    onLink={onLink}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
   );
 }
