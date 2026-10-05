@@ -117,11 +117,15 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
           .select("id")
           .eq("manager_id", user!.id);
         const teamIds = [user!.id, ...((teamRows ?? []).map((r: any) => r.id))];
-        const { data: assigneeRows } = await supabase
-          .from("task_assignees")
-          .select("task_id")
-          .in("user_id", teamIds);
-        const taskIds = Array.from(new Set((assigneeRows ?? []).map((a: any) => a.task_id)));
+        // …plus every task the manager created, whoever it's assigned to.
+        const [{ data: assigneeRows }, { data: createdRows }] = await Promise.all([
+          supabase.from("task_assignees").select("task_id").in("user_id", teamIds),
+          supabase.from("tasks").select("id").eq("assigned_by", user!.id),
+        ]);
+        const taskIds = Array.from(new Set([
+          ...(assigneeRows ?? []).map((a: any) => a.task_id),
+          ...(createdRows ?? []).map((t: any) => t.id),
+        ]));
         if (!taskIds.length) return [];
         const { data } = await supabase
           .from("tasks")
