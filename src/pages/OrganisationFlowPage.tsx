@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Pencil, Trash2, Check, X as XIcon, Network, ZoomIn, ZoomOut, Maximize,
+  Plus, Pencil, Trash2, Check, X as XIcon, Network, ZoomIn, ZoomOut, Maximize, Link2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ type OrgNode = {
   title: string;
   subtitle: string | null;
   position: number;
+  extra_parent_ids?: string[] | null; // "also reports to" (drawn as extra lines)
 };
 
 type TreeNode = OrgNode & { children: TreeNode[] };
@@ -70,6 +71,9 @@ export default function OrganisationFlowPage() {
   const [autoFit, setAutoFit] = useState(true);
   const [scaledSize, setScaledSize] = useState<{ w: number; h: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [linking, setLinking] = useState<TreeNode | null>(null);
+  const [linkDraft, setLinkDraft] = useState<string[]>([]);
+  const [extraPaths, setExtraPaths] = useState<string[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const { data: nodes = [], isLoading } = useQuery<OrgNode[]>({
@@ -77,7 +81,7 @@ export default function OrganisationFlowPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organisation_flow_nodes")
-        .select("id, parent_id, title, subtitle, position")
+        .select("*")
         .order("position", { ascending: true });
       if (error) throw error;
       return (data as OrgNode[]) ?? [];
@@ -142,6 +146,82 @@ export default function OrganisationFlowPage() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't delete node."),
   });
+
+  const saveLinks = useMutation({
+    mutationFn: async (args: { id: string; ids: string[] }) => {
+      const { error } = await (supabase as any)
+        .from("organisation_flow_nodes")
+        .update({ extra_parent_ids: args.ids, updated_at: new Date().toISOString() })
+        .eq("id", args.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["organisation-flow"] });
+      setLinking(null);
+      toast.success("Links saved");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't save. Did you run the SQL migration?"),
+  });
+
+  // Nodes that can't be an extra parent of `n`: itself, its main parent, and
+  // anything below it (that would make a loop).
+  const blockedFor = (n: OrgNode) => {
+    const byId = new Map(nodes.map((m) => [m.id, m]));
+    const isUnder = (x: OrgNode) => {
+      let cur: OrgNode | undefined = x;
+      while (cur && cur.parent_id) {
+        if (cur.parent_id === n.id) return true;
+        cur = byId.get(cur.parent_id);
+      }
+      return false;
+    };
+    const blocked = new Set<string>([n.id]);
+    if (n.parent_id) blocked.add(n.parent_id);
+    for (const x of nodes) if (isUnder(x)) blocked.add(x.id);
+    return blocked;
+  };
+
+  // ── Extra "also reports to" connectors ────────────────────────────────
+  // Measured from the rendered cards (in unscaled chart coordinates) and
+  // drawn as an SVG overlay: down from the extra parent, across, and into
+  // the top of the child — like a second elbow line.
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const compute = () => {
+      const base = content.getBoundingClientRect();
+      const z = zoom || 1;
+      const box = (id: string) => {
+        const el = content.querySelector<HTMLElement>(`[data-org-card="${id}"]`);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { x: (r.left - base.left) / z, y: (r.top - base.top) / z, w: r.width / z, h: r.height / z };
+      };
+      const out: string[] = [];
+      for (const n of nodes) {
+        for (const pid of n.extra_parent_ids ?? []) {
+          const c = box(n.id), p = box(pid);
+          if (!c || !p) continue;
+          const px = p.x + p.w / 2, py = p.y + p.h;
+          const cx = c.x + c.w / 2, cy = c.y;
+          const midY = cy - 20;
+          const r = Math.min(10, Math.abs(cx - px) / 2, Math.abs(midY - py) / 2);
+          const dir = cx > px ? 1 : -1;
+          out.push(
+            Math.abs(cx - px) < 1
+              ? `M${px},${py} V${cy}`
+              : `M${px},${py} V${midY - r} Q${px},${midY} ${px + dir * r},${midY} H${cx - dir * r} Q${cx},${midY} ${cx},${midY + r} V${cy}`,
+          );
+        }
+      }
+      setExtraPaths(out);
+    };
+    compute();
+    const t = setTimeout(compute, 350); // after layout animations settle
+    const ro = new ResizeObserver(() => requestAnimationFrame(compute));
+    ro.observe(content);
+    return () => { clearTimeout(t); ro.disconnect(); };
+  }, [nodes, zoom, editing]);
 
   // ── Handlers ──────────────────────────────────────────────────────────
   const startEdit = (n: TreeNode) => {
@@ -328,6 +408,13 @@ export default function OrganisationFlowPage() {
                 transition: "transform 120ms ease-out",
               }}
             >
+              {extraPaths.length > 0 && (
+                <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible text-slate-400 dark:text-slate-500" aria-hidden>
+                  {extraPaths.map((d, i) => (
+                    <path key={i} d={d} fill="none" stroke="currentColor" strokeWidth={2} />
+                  ))}
+                </svg>
+              )}
               <div className="flex flex-col items-center gap-16">
                 {tree.map((root) => (
                 <OrgNodeView
@@ -348,6 +435,7 @@ export default function OrganisationFlowPage() {
                     }
                   }}
                   onAddChild={(n) => setAddingUnder(n.id)}
+                  onLink={(n) => { setLinking(n); setLinkDraft(n.extra_parent_ids ?? []); }}
                 />
               ))}
               </div>
@@ -414,6 +502,44 @@ export default function OrganisationFlowPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* "Also reports to" modal */}
+      {linking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-primary/50 p-4" onClick={() => setLinking(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl p-6">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-heading text-lg font-semibold text-ink-primary">"{linking.title}" also reports to</h2>
+              <button onClick={() => setLinking(null)} className="text-ink-muted hover:text-ink-primary"><XIcon className="h-5 w-5" /></button>
+            </div>
+            <p className="text-xs text-ink-muted mb-3">A line is drawn from each ticked box to this one. Its main position stays where it is.</p>
+            <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-border divide-y divide-border">
+              {(() => {
+                const blocked = blockedFor(linking);
+                return nodes
+                  .filter((x) => !blocked.has(x.id))
+                  .sort((a, b) => a.title.localeCompare(b.title))
+                  .map((x) => (
+                    <label key={x.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
+                      <input
+                        type="checkbox"
+                        checked={linkDraft.includes(x.id)}
+                        onChange={(e) => setLinkDraft((d) => e.target.checked ? [...d, x.id] : d.filter((v) => v !== x.id))}
+                      />
+                      <span className="text-ink-primary">{x.title}</span>
+                      {x.subtitle && <span className="text-xs text-ink-muted">{x.subtitle}</span>}
+                    </label>
+                  ));
+              })()}
+            </div>
+            <div className="flex gap-2 mt-5">
+              <Button variant="outline" onClick={() => setLinking(null)} className="flex-1">Cancel</Button>
+              <Button onClick={() => saveLinks.mutate({ id: linking.id, ids: linkDraft })} disabled={saveLinks.isPending} className="flex-1">
+                {saveLinks.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatedPage>
   );
 }
@@ -422,7 +548,7 @@ export default function OrganisationFlowPage() {
 function OrgNodeView({
   node, canEdit, editing, editTitle, editSubtitle,
   onEditTitle, onEditSubtitle, onStartEdit, onCommitEdit, onCancelEdit,
-  onDelete, onAddChild,
+  onDelete, onAddChild, onLink,
 }: {
   node: TreeNode;
   canEdit: boolean;
@@ -436,6 +562,7 @@ function OrgNodeView({
   onCancelEdit: () => void;
   onDelete: (n: TreeNode) => void;
   onAddChild: (n: TreeNode) => void;
+  onLink: (n: TreeNode) => void;
 }) {
   const isEditing = editing === node.id;
   const hasChildren = node.children.length > 0;
@@ -448,7 +575,7 @@ function OrgNodeView({
   return (
     <div className="flex flex-col items-center">
       {/* Node card */}
-      <div className="relative group">
+      <div className="relative group" data-org-card={node.id}>
         <motion.div
           layout
           className="rounded-xl bg-card border-2 border-primary/30 shadow-md px-3 py-2 min-w-[140px] max-w-[200px] text-center hover:border-primary/60 transition-colors"
@@ -514,6 +641,13 @@ function OrgNodeView({
               title="Edit"
             >
               <Pencil className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => onLink(node)}
+              className="h-6 w-6 rounded-full bg-card border border-border shadow-sm flex items-center justify-center text-ink-secondary hover:text-primary hover:border-primary"
+              title="Also reports to…"
+            >
+              <Link2 className="h-3 w-3" />
             </button>
             <button
               onClick={() => onDelete(node)}
@@ -587,6 +721,7 @@ function OrgNodeView({
                     onCancelEdit={onCancelEdit}
                     onDelete={onDelete}
                     onAddChild={onAddChild}
+                    onLink={onLink}
                   />
                 </div>
               );
