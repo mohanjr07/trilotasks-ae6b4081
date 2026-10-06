@@ -269,12 +269,12 @@ export function emptyFormData(schema: FormSchema): FormData {
 
 // ── Who signs ───────────────────────────────────────────────────────────────
 export const APPROVER_EMAIL = "hari@triloautomation.com";
-// Asset Submission and Expense Tracking are approved by Anu instead of Hari
-// (keep in sync with submit_form_request in the database).
+// Who approves each form (keep in sync with submit_form_request in the database):
+//   Asset Submission, Expense Tracking → Anu;  Quality Check Drawing → Harish;  everything else → Hari
 export function approverFor(title: string): { email: string; name: string } {
-  return /asset|expense/i.test(title)
-    ? { email: "anu@triloautomation.com", name: "Anu" }
-    : { email: APPROVER_EMAIL, name: "Hari" };
+  if (/asset|expense/i.test(title)) return { email: "anu@triloautomation.com", name: "Anu" };
+  if (/quality\s*check/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };
+  return { email: APPROVER_EMAIL, name: "Hari" };
 }
 export const AUTHORIZER_NAMES = ["Saravanan", "Jaisoorya"];
 
