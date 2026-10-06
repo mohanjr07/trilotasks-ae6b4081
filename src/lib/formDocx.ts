@@ -20,7 +20,15 @@ type Rule = {
   mode?: "after" | "underscores";
 };
 type TableRule = { match: RegExp; table: string; cols: Array<string | null>; serial?: number };
-type DocxMap = { rules: Rule[]; tables?: TableRule[]; expenseTotals?: boolean; signatures: "fill" | "append" };
+type DocxMap = {
+  rules: Rule[];
+  tables?: TableRule[];
+  expenseTotals?: boolean;
+  signatures: "fill" | "append";
+  sigAnchor?: RegExp;                      // put the signature table in place of this paragraph
+  sigLabels?: [string, string, string];    // column titles of the signature table
+  spareRows?: number;                      // unused item rows to drop to keep the form on one page
+};
 
 const dmy = (v?: string | null) => (v && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10).split("-").reverse().join("-") : v ?? "");
 const stamp = (iso?: string | null) => (iso ? format(new Date(iso), "dd-MM-yyyy, h:mm a") : "");
@@ -108,6 +116,7 @@ const MAPS: Record<string, DocxMap> = {
     ],
     tables: [{ match: /Local\s+Disc/i, table: "files", cols: ["#", "description", "local", "drive"] }],
     signatures: "append",
+    spareRows: 5,
   },
   expense_claim: {
     rules: [
@@ -123,6 +132,9 @@ const MAPS: Record<string, DocxMap> = {
     tables: [{ match: /Category.*Vendor/i, table: "expenses", cols: ["date", "category", "description", "vendor", "mode", "bill_no", "amount", "gst", "total"] }],
     expenseTotals: true,
     signatures: "append",
+    sigAnchor: /Employee\s+Signature/i,
+    sigLabels: ["Employee (Requested by)", "Reporting Manager (Approved by)", "Finance / Accounts (Authorized by)"],
+    spareRows: 4,
   },
 };
 
@@ -183,6 +195,8 @@ function insertAfterLabel(p: Element, re: RegExp, value: string) {
       const before = t.slice(0, at);
       const needsSep = !/[\s]$/.test(before) && !/:$/.test(before) ? ": " : /:$/.test(before) ? " " : "";
       const ins = `${needsSep}${value}`;
+      // lines laid out with tab characters (e.g. "To <tab><tab>… Date:") — drop one tab per ~6 characters added
+      removeTabs(p, Math.ceil(ins.length / 6));
       nodes[i].textContent = before + ins + t.slice(at);
       preserve(nodes[i]);
       // consume following spaces (keep at least 3 before the next word)
@@ -191,7 +205,8 @@ function insertAfterLabel(p: Element, re: RegExp, value: string) {
       const rest = full.slice(end);
       const pad = (rest.match(/^\s*/)?.[0].length ?? 0);
       const hasMore = rest.trim().length > 0;
-      budget = hasMore ? Math.max(0, Math.min(budget, pad - 3)) : 0;
+      // a space is ~2.5x narrower than a letter/digit, so remove more padding than characters added
+      budget = hasMore ? Math.max(0, Math.min(Math.ceil(ins.length * 2.5), pad - 3)) : 0;
       while (budget > 0 && j < nodes.length) {
         const s = nodes[j].textContent ?? "";
         let cut = 0;
@@ -203,6 +218,12 @@ function insertAfterLabel(p: Element, re: RegExp, value: string) {
       // Label at the end of a space-padded line (e.g. "            Date:"):
       // take the room from the padding BEFORE the label so the line doesn't wrap.
       if (!hasMore) {
+        // drop trailing padding after the value (it can push the line to wrap)
+        for (let q = i; q < nodes.length; q++) {
+          const tq = nodes[q].textContent ?? "";
+          if (q === i) nodes[q].textContent = tq.slice(0, at + ins.length) + tq.slice(at + ins.length).replace(/\s+$/, "");
+          else nodes[q].textContent = tq.replace(/^\s+$/, "");
+        }
         // find the node/offset where the label itself starts
         let acc = 0, si = 0, so = 0;
         for (let q = 0; q < nodes.length; q++) {
@@ -210,13 +231,19 @@ function insertAfterLabel(p: Element, re: RegExp, value: string) {
           if (m.index < acc + len || q === nodes.length - 1) { si = q; so = m.index - acc; break; }
           acc += len;
         }
-        trimSpacesBefore(nodes, nodes[si], so, ins.length + 12);
+        trimSpacesBefore(nodes, nodes[si], so, (p.parentNode as Element)?.localName === "tc" ? Math.ceil(ins.length * 1.5) : Math.ceil(ins.length * 2.5) + 4);
       }
       return true;
     }
     pos += t.length;
   }
   return false;
+}
+
+/** Remove up to `count` runs that hold only a tab character (last ones first). */
+function removeTabs(p: Element, count: number) {
+  const tabRuns = all(p, "r").filter((r) => all(r, "tab").length && !textOf(r).length);
+  for (let q = tabRuns.length - 1; q >= 0 && count > 0; q--, count--) tabRuns[q].parentNode?.removeChild(tabRuns[q]);
 }
 
 /** Remove up to `count` spaces from the whitespace that sits just before
@@ -285,7 +312,7 @@ function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, v
   }
 }
 
-function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema) {
+function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema, spare = 0) {
   const rows = allRows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   const tbl = all(doc, "tbl").find((t) => rule.match.test(textOf(t)));
   if (!tbl) return;
@@ -302,6 +329,16 @@ function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string,
     last.parentNode!.insertBefore(copy, last.nextSibling);
     data = [...data, copy];
   }
+  // Make room for the added signature table: drop up to `spare` unused empty rows at the end
+  if (spare > 0) {
+    let removed = 0;
+    for (let q = data.length - 1; q >= rows.length && removed < spare; q--) {
+      if (textOf(data[q]).replace(/^\s*\d+\s*/, "").trim()) break;
+      data[q].parentNode!.removeChild(data[q]);
+      removed++;
+    }
+    data = data.slice(0, data.length - removed);
+  }
   rows.forEach((r, i) => {
     const tcs = kids(data[i], "tc");
     rule.cols.forEach((key, ci) => {
@@ -315,7 +352,7 @@ function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string,
   return tbl;
 }
 
-function signatureTable(doc: Document, c: Ctx) {
+function signatureTable(doc: Document, c: Ctx, labels: [string, string, string] = ["Requested by", "Approved by", "Authorized by"]) {
   const border = () => ["top", "left", "bottom", "right", "insideH", "insideV"].map((b) => el(doc, b, { val: "single", sz: "6", space: "0", color: "000000" }));
   const cell = (text: string, bold = false, shade = false) => {
     const tcPr = el(doc, "tcPr", {}, [el(doc, "tcW", { w: "3200", type: "dxa" })]);
@@ -327,7 +364,7 @@ function signatureTable(doc: Document, c: Ctx) {
   const tbl = el(doc, "tbl", {}, [
     el(doc, "tblPr", {}, [el(doc, "tblW", { w: "5000", type: "pct" }), el(doc, "tblBorders", {}, border())]),
     el(doc, "tblGrid", {}, [el(doc, "gridCol", { w: "3200" }), el(doc, "gridCol", { w: "3200" }), el(doc, "gridCol", { w: "3200" })]),
-    el(doc, "tr", {}, [cell("Requested by", true, true), cell("Approved by", true, true), cell("Authorized by", true, true)]),
+    el(doc, "tr", {}, [cell(labels[0], true, true), cell(labels[1], true, true), cell(labels[2], true, true)]),
     el(doc, "tr", {}, [
       cell(`${c.names[r.requested_by] ?? ""}\n${stamp(r.submitted_at)}`),
       cell(`${c.names[r.approver_id] ?? "Hari"}\n${approverStatus(r)}`),
@@ -374,7 +411,7 @@ export async function buildFilledDocx(
       applyRule(doc, used, rule, f?.type === "date" ? dmy(raw) : raw);
     }
     if (!isHeader) {
-      for (const t of map.tables ?? []) fillTable(doc, t, ctx.d.tables?.[t.table] ?? [], schema);
+      for (const t of map.tables ?? []) fillTable(doc, t, ctx.d.tables?.[t.table] ?? [], schema, map.spareRows ?? (map.signatures === "append" ? 3 : 0));
       if (map.expenseTotals) {
         const tbl = all(doc, "tbl").find((t) => /Category.*Vendor/i.test(textOf(t)));
         const totalRow = tbl && kids(tbl, "tr").find((tr) => /TOTAL/.test(textOf(tr)));
@@ -399,11 +436,27 @@ export async function buildFilledDocx(
       const sectPr = kids(body, "sectPr")[0] ?? null;
       const add = (n: Node) => body.insertBefore(n, sectPr);
       if (map.signatures === "append") {
-        add(noteParagraph(doc, " ", "000000"));
-        add(signatureTable(doc, ctx));
+        // drop empty paragraphs at the end of the form so the table doesn't spill onto a new page
+        let prev = sectPr ? sectPr.previousElementSibling : body.lastElementChild;
+        while (prev && prev.localName === "p" && !textOf(prev).trim() && !all(prev, "drawing").length && !all(prev, "pict").length && !all(prev, "sectPr").length) {
+          const before = prev.previousElementSibling;
+          body.removeChild(prev);
+          prev = before;
+        }
+        const anchor = map.sigAnchor ? kids(body, "p").find((x) => map.sigAnchor!.test(textOf(x))) : undefined;
+        const tbl = signatureTable(doc, ctx, map.sigLabels);
+        if (anchor) {
+          body.replaceChild(tbl, anchor);
+        } else {
+          add(noteParagraph(doc, " ", "000000"));
+          add(tbl);
+        }
+        // Word expects a paragraph after a table
+        if (!tbl.nextElementSibling || tbl.nextElementSibling.localName !== "p") {
+          body.insertBefore(el(doc, "p", {}, [el(doc, "pPr", {}, [el(doc, "spacing", { before: "0", after: "0" })])]), tbl.nextElementSibling);
+        }
       }
       if (req.status === "rejected" && req.reject_reason) add(noteParagraph(doc, `Rejected: ${req.reject_reason}`));
-      add(noteParagraph(doc, "Digitally generated from TaskFlow — approvals recorded electronically with date and time.", "666666"));
     }
     zip.file(part, ser.serializeToString(doc));
   }
