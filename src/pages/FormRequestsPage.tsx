@@ -1,4 +1,4 @@
-// Form approvals: requesters track their forms; Hari approves; Saravanan /
+// Form approvals: requesters track their forms; Hari (Anu for asset/expense) approves; Saravanan /
 // Jaisoorya authorize. Opens straight to a request from a notification
 // (/form-requests?id=…).
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -85,7 +85,7 @@ export default function FormRequestsPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Form Approvals</h1>
-          <p className="text-sm text-ink-muted">Requested → Approved by Hari → Authorized</p>
+          <p className="text-sm text-ink-muted">Requested → Approved (Hari, or Anu for Asset / Expense) → Authorized</p>
         </div>
         <Button asChild variant="outline" size="sm" className="gap-1.5">
           <Link to="/production-forms"><FileStack className="h-4 w-4" /> New request</Link>

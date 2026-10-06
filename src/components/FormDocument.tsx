@@ -2,7 +2,7 @@
 // the PDF. Always rendered black-on-white (like paper), even in dark mode.
 import { forwardRef } from "react";
 import { format } from "date-fns";
-import { columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
+import { approverFor, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
 
 export type FormRequestRow = {
   id: string;
@@ -174,7 +174,7 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
               <div style={{ fontSize: 11, color: "#444", marginTop: 6 }}>{fmt(request.submitted_at)}</div>
             </td>
             <td style={cell}>
-              <div style={{ fontWeight: 700 }}>{names[request.approver_id] ?? "Hari"}</div>
+              <div style={{ fontWeight: 700 }}>{names[request.approver_id] ?? approverFor(request.form_title).name}</div>
               {request.approved_at ? stamp("done", request.approved_at) : rejectedByApprover ? stamp("rejected", request.rejected_at) : stamp("waiting")}
             </td>
             <td style={cell}>

@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { format } from "date-fns";
 import { loadDocxZip, setWordBookmarkText, type WordFieldLocator } from "@/lib/productionForms";
-import { columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
+import { approverFor, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
 import type { FormRequestRow } from "@/components/FormDocument";
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -367,7 +367,7 @@ function signatureTable(doc: Document, c: Ctx, labels: [string, string, string] 
     el(doc, "tr", {}, [cell(labels[0], true, true), cell(labels[1], true, true), cell(labels[2], true, true)]),
     el(doc, "tr", {}, [
       cell(`${c.names[r.requested_by] ?? ""}\n${stamp(r.submitted_at)}`),
-      cell(`${c.names[r.approver_id] ?? "Hari"}\n${approverStatus(r)}`),
+      cell(`${c.names[r.approver_id] ?? approverFor(r.form_title).name}\n${approverStatus(r)}`),
       cell(`${c.names[r.authorizer_id] ?? ""}\n${authorizerStatus(r)}`),
     ]),
   ]);
@@ -428,7 +428,7 @@ export async function buildFilledDocx(
           const tcs = kids(tr, "tc");
           const label = textOf(tcs[0] ?? tr);
           if (/Requested by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.requested_by] ?? ""); tcs[2] && setCellText(tcs[2], `Submitted\n${stamp(req.submitted_at)}`); }
-          if (/Approved by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.approver_id] ?? "Hari"); tcs[2] && setCellText(tcs[2], approverStatus(req)); }
+          if (/Approved by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.approver_id] ?? approverFor(req.form_title).name); tcs[2] && setCellText(tcs[2], approverStatus(req)); }
           if (/Authorized by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.authorizer_id] ?? ""); tcs[2] && setCellText(tcs[2], authorizerStatus(req)); }
         }
       }

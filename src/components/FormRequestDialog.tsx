@@ -1,5 +1,5 @@
 // Fill in a form digitally and send it for approval (or edit + resubmit a
-// rejected one). Requested by = the logged-in user, Approved by = Hari,
+// rejected one). Requested by = the logged-in user, Approved by = Hari (Anu for Asset Submission / Expense Tracking),
 // Authorized by = chosen from the dropdown.
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { approverFor, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -102,7 +102,7 @@ export default function FormRequestDialog({
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["form-requests"] });
       qc.invalidateQueries({ queryKey: ["production-forms"] });
-      toast.success(existing ? "Resubmitted to Hari for approval" : "Sent to Hari for approval");
+      toast.success(`${existing ? "Resubmitted" : "Sent"} to ${approverFor(title).name} for approval`);
       onSubmitted?.(id);
       onClose();
     },
@@ -284,7 +284,7 @@ export default function FormRequestDialog({
             </div>
             <div>
               <p className="text-xs text-ink-muted">Approved by</p>
-              <p className="text-sm font-semibold text-ink-primary">Hari</p>
+              <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
             </div>
             <div>
               <label htmlFor="authorizer" className="text-xs text-ink-muted">Authorized by *</label>
