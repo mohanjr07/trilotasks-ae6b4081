@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { approverFor, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { approverFor, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -102,7 +102,9 @@ export default function FormRequestDialog({
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["form-requests"] });
       qc.invalidateQueries({ queryKey: ["production-forms"] });
-      toast.success(`${existing ? "Resubmitted" : "Sent"} to ${approverFor(title).name} for approval`);
+      toast.success(needsApproval(title)
+        ? `${existing ? "Resubmitted" : "Sent"} to ${approverFor(title).name} for approval`
+        : `${existing ? "Resubmitted" : "Sent"} to ${authorizers.find((a) => a.id === authorizer)?.full_name ?? "the authorizer"} for authorization`);
       onSubmitted?.(id);
       onClose();
     },
@@ -196,7 +198,7 @@ export default function FormRequestDialog({
                 id: existing?.id ?? "draft", form_id: (existing?.form_id ?? form?.id)!, form_title: title,
                 reference_value: existing?.reference_value ?? nextRef, data,
                 requested_by: existing?.requested_by ?? user?.id ?? "", approver_id: existing?.approver_id ?? "",
-                authorizer_id: authorizer, status: "pending_approval", approved_at: null, authorized_at: null,
+                authorizer_id: authorizer, status: needsApproval(title) ? "pending_approval" : "pending_authorization", approved_at: null, authorized_at: null,
                 rejected_by: null, rejected_at: null, reject_reason: null,
                 submitted_at: new Date().toISOString(), created_at: new Date().toISOString(),
               }}
@@ -220,7 +222,7 @@ export default function FormRequestDialog({
                     <div key={i} className="rounded-lg border border-border p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-xs font-semibold text-ink-muted">{t.serial ? `#${i + 1}` : `Row ${i + 1}`}</span>
-                        {rows.length > 1 && (
+                        {rows.length > 1 && !t.fixedRows && (
                           <button type="button" onClick={() => removeRow(t.key, i)} className="text-ink-muted hover:text-destructive" title="Remove row">
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -235,7 +237,9 @@ export default function FormRequestDialog({
                         {t.columns.map((c) => (
                           <div key={c.key} className="min-w-0">
                             <label className="mb-1 block text-[11px] font-medium text-ink-muted truncate" title={c.label}>{c.label}</label>
-                            {c.compute ? (
+                            {c.readOnly ? (
+                              <div className="min-h-9 flex items-center rounded-md bg-muted px-3 py-1.5 text-sm text-ink-primary">{r[c.key] || "—"}</div>
+                            ) : c.compute ? (
                               <div className="h-9 flex items-center rounded-md bg-muted px-3 text-sm text-ink-primary">{c.compute(r) || "—"}</div>
                             ) : c.type === "select" ? (
                               <select value={r[c.key] ?? ""} onChange={(e) => setCell(t.key, i, c.key, e.target.value)}
@@ -258,10 +262,12 @@ export default function FormRequestDialog({
                     {t.columns.filter((c) => t.totals!.includes(c.key)).map((c) => `${c.label}: ${money(columnTotal(rows, c))}`).join("  ·  ")}
                   </p>
                 ) : null}
-                <button type="button" onClick={() => addRow(t.key, t.columns.map((c) => c.key))}
-                  className="mt-2 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-                  <Plus className="h-4 w-4" /> Add row
-                </button>
+                {!t.fixedRows && (
+                  <button type="button" onClick={() => addRow(t.key, t.columns.map((c) => c.key))}
+                    className="mt-2 flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+                    <Plus className="h-4 w-4" /> Add row
+                  </button>
+                )}
               </div>
             );
           })}
@@ -277,15 +283,17 @@ export default function FormRequestDialog({
           ))}
 
           {/* Sign-off */}
-          <div className="rounded-lg border border-border bg-muted/30 p-4 grid gap-3 sm:grid-cols-3">
+          <div className={`rounded-lg border border-border bg-muted/30 p-4 grid gap-3 ${needsApproval(title) ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <div>
               <p className="text-xs text-ink-muted">Requested by</p>
               <p className="text-sm font-semibold text-ink-primary">{(existing && names[existing.requested_by]) || profile?.full_name || "You"}</p>
             </div>
-            <div>
-              <p className="text-xs text-ink-muted">Approved by</p>
-              <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
-            </div>
+            {needsApproval(title) && (
+              <div>
+                <p className="text-xs text-ink-muted">Approved by</p>
+                <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
+              </div>
+            )}
             <div>
               <label htmlFor="authorizer" className="text-xs text-ink-muted">Authorized by *</label>
               <select id="authorizer" value={authorizer} onChange={(e) => setAuthorizer(e.target.value)}
@@ -299,7 +307,7 @@ export default function FormRequestDialog({
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={submit.isPending} className="gap-1.5">
-              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : existing ? "Resubmit for approval" : "Send for approval"}
+              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : `${existing ? "Resubmit" : "Send"} for ${needsApproval(title) ? "approval" : "authorization"}`}
             </Button>
           </div>
         </form>

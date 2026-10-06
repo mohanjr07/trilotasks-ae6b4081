@@ -2,7 +2,7 @@
 // the PDF. Always rendered black-on-white (like paper), even in dark mode.
 import { forwardRef } from "react";
 import { format } from "date-fns";
-import { approverFor, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
+import { approverFor, needsApproval, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
 
 export type FormRequestRow = {
   id: string;
@@ -11,7 +11,7 @@ export type FormRequestRow = {
   reference_value: string | null;
   data: FormData;
   requested_by: string;
-  approver_id: string;
+  approver_id: string | null;
   authorizer_id: string;
   status: "pending_approval" | "pending_authorization" | "authorized" | "rejected";
   approved_at: string | null;
@@ -162,9 +162,9 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 22 }}>
         <thead>
           <tr>
-            <th style={{ ...head, width: "33%" }}>Requested by</th>
-            <th style={{ ...head, width: "33%" }}>Approved by</th>
-            <th style={{ ...head, width: "34%" }}>Authorized by</th>
+            <th style={{ ...head, width: needsApproval(request.form_title) ? "33%" : "50%" }}>Requested by</th>
+            {needsApproval(request.form_title) && <th style={{ ...head, width: "33%" }}>Approved by</th>}
+            <th style={{ ...head }}>Authorized by</th>
           </tr>
         </thead>
         <tbody>
@@ -173,10 +173,12 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
               <div style={{ fontWeight: 700 }}>{names[request.requested_by] ?? "—"}</div>
               <div style={{ fontSize: 11, color: "#444", marginTop: 6 }}>{fmt(request.submitted_at)}</div>
             </td>
-            <td style={cell}>
-              <div style={{ fontWeight: 700 }}>{names[request.approver_id] ?? approverFor(request.form_title).name}</div>
-              {request.approved_at ? stamp("done", request.approved_at) : rejectedByApprover ? stamp("rejected", request.rejected_at) : stamp("waiting")}
-            </td>
+            {needsApproval(request.form_title) && (
+              <td style={cell}>
+                <div style={{ fontWeight: 700 }}>{names[request.approver_id] ?? approverFor(request.form_title).name}</div>
+                {request.approved_at ? stamp("done", request.approved_at) : rejectedByApprover ? stamp("rejected", request.rejected_at) : stamp("waiting")}
+              </td>
+            )}
             <td style={cell}>
               <div style={{ fontWeight: 700 }}>{names[request.authorizer_id] ?? "—"}</div>
               {request.authorized_at ? stamp("done", request.authorized_at, "✓ AUTHORIZED")

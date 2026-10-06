@@ -23,6 +23,7 @@ export type TableColumn = {
   type?: "text" | "number" | "date" | "select";
   options?: string[];
   width?: string;          // e.g. "30%" in the printed copy
+  readOnly?: boolean;      // fixed text (e.g. the document name in a checklist)
   compute?: (row: Record<string, string>) => string; // read-only, worked out from the row
 };
 
@@ -33,6 +34,7 @@ export type FormTable = {
   minRows?: number;        // rows shown when the form opens
   serial?: boolean;        // auto "S.No" column
   totals?: string[];       // number columns summed in a TOTAL row
+  fixedRows?: Array<Record<string, string>>; // a fixed list (checklist) — no adding / removing rows
 };
 
 export type FormSchema = {
@@ -45,6 +47,7 @@ export type FormSchema = {
   heading?: string;           // title printed on the copy (defaults to the form title)
   notes?: string[];           // fixed text printed on the copy (declarations etc.)
   summary?: (d: FormData) => Array<{ label: string; value: string }>; // worked-out lines (net amount…)
+  noApproval?: boolean;       // goes straight to the authorizer (no "Approved by" step)
 };
 
 export type FormData = {
@@ -249,6 +252,38 @@ export const FORM_SCHEMAS: FormSchema[] = [
       "I hereby declare that the above expenses were incurred wholly and exclusively for official purposes and that the details furnished above are true and correct to the best of my knowledge. Original bills/invoices are attached.",
     ],
   },
+  {
+    key: "vendor_registration",
+    title: "Vendor Registration Form",
+    heading: "VENDOR REGISTRATION FORM",
+    match: /vendor\s*registration/i,
+    noApproval: true,
+    fields: [
+      { key: "supplier_name", label: "Business Name of Supplier", type: "text", required: true, wide: true },
+      { key: "address", label: "Full Address", type: "textarea", required: true, wide: true },
+      { key: "contact", label: "Business person's contact details (Name, designation, email, mobile)", type: "textarea", required: true, wide: true },
+      { key: "expertise", label: "Core business expertise", type: "text", wide: true },
+      { key: "additional_place", label: "Additional place of Business", type: "text", wide: true },
+      { key: "payment_terms", label: "Terms of payment", type: "text" },
+      { key: "credit_period", label: "Credit Period", type: "text", placeholder: "e.g. 30 days" },
+      { key: "referred_by", label: "Referred Person name", type: "text", wide: true },
+    ],
+    tables: [{
+      key: "checklist", label: "Checklist of Documents to be Submitted", serial: true,
+      fixedRows: [
+        "Company registration Proof (CIN)", "GST Certificate", "Other GST Certificate (Optional)", "Company Pan card",
+        "Cancelled Cheque", "Company Address Proof", "Udyog Aadhar (MSME)", "Directors Pan card (if Available)",
+        "Certificates (ISO, Dealership or if any)", "ESIC and EPFO registration details (if Available)",
+        "Business Category (e.g., Packing, Interiors, Raw Materials, IT Services, Sales and Service, Manufacturing, Trading)",
+        "Authorized Person contacts details",
+      ].map((doc) => ({ doc, description: "", remarks: "" })),
+      columns: [
+        { key: "doc", label: "Document", readOnly: true, width: "40%" },
+        { key: "description", label: "Description", width: "35%" },
+        { key: "remarks", label: "Supplier Remarks", type: "select", options: ["Yes", "No", "Not Applicable"] },
+      ],
+    }],
+  },
 ];
 
 export function schemaForTitle(title: string): FormSchema {
@@ -262,6 +297,7 @@ export function emptyFormData(schema: FormSchema): FormData {
   for (const f of [...schema.fields, ...(schema.footerFields ?? [])]) fields[f.key] = f.type === "date" ? iso : "";
   const tables: FormData["tables"] = {};
   for (const t of schema.tables ?? []) {
+    if (t.fixedRows) { tables[t.key] = t.fixedRows.map((r) => ({ ...r })); continue; }
     tables[t.key] = Array.from({ length: t.minRows ?? 1 }, () => Object.fromEntries(t.columns.map((c) => [c.key, ""])));
   }
   return { fields, tables };
@@ -275,6 +311,10 @@ export function approverFor(title: string): { email: string; name: string } {
   if (/asset|expense/i.test(title)) return { email: "anu@triloautomation.com", name: "Anu" };
   if (/quality\s*check/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };
   return { email: APPROVER_EMAIL, name: "Hari" };
+}
+/** false for forms that skip the "Approved by" step (Vendor Registration). */
+export function needsApproval(title: string): boolean {
+  return !schemaForTitle(title).noApproval;
 }
 export const AUTHORIZER_NAMES = ["Saravanan", "Jaisoorya"];
 

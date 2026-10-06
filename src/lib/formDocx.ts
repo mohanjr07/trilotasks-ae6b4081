@@ -19,7 +19,7 @@ type Rule = {
   part?: "body" | "header";
   mode?: "after" | "underscores";
 };
-type TableRule = { match: RegExp; table: string; cols: Array<string | null>; serial?: number };
+type TableRule = { match: RegExp; table: string; cols: Array<string | null>; serial?: number; compact?: boolean };
 type DocxMap = {
   rules: Rule[];
   tables?: TableRule[];
@@ -135,6 +135,21 @@ const MAPS: Record<string, DocxMap> = {
     sigAnchor: /Employee\s+Signature/i,
     sigLabels: ["Employee (Requested by)", "Reporting Manager (Approved by)", "Finance / Accounts (Authorized by)"],
     spareRows: 4,
+  },
+  vendor_registration: {
+    rules: [
+      { label: /Business\s+Name\s+of\s+Supplier\s*:/, field: "supplier_name" },
+      { label: /Full\s+Address\s*:/, field: "address" },
+      { label: /Business\s+persons?\s+contact\s+details\s*:?(\s*\([^)]*\))?/, field: "contact" },
+      { label: /Core\s+business\s+expertise\s*:/, field: "expertise" },
+      { label: /Additional\s+place\s+of\s+Business\s*:/, field: "additional_place" },
+      { label: /Terms\s+of\s+payment\s*:/, field: "payment_terms" },
+      { label: /Credit\s+Period\s*:/, field: "credit_period" },
+      { label: /Referred\s+Person\s+name\s*:/, field: "referred_by" },
+    ],
+    tables: [{ match: /Check\s+List\s+of\s+Documents/i, table: "checklist", cols: ["#", null, null, "description", "remarks"], compact: true }],
+    signatures: "append",
+    spareRows: 0,
   },
 };
 
@@ -349,13 +364,21 @@ function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string,
       setCellText(tcs[ci], col?.type === "date" ? dmy(v) : v);
     });
   });
+  // tighter cell padding so the added signature block still fits on the page
+  if (rule.compact) {
+    for (const mar of all(tbl, "tcMar")) {
+      for (const side of kids(mar, "top").concat(kids(mar, "bottom"))) side.setAttributeNS(W, "w:w", "30");
+    }
+  }
   return tbl;
 }
 
 function signatureTable(doc: Document, c: Ctx, labels: [string, string, string] = ["Requested by", "Approved by", "Authorized by"]) {
+  const twoStep = !!c.schema.noApproval;   // no "Approved by" column (Vendor Registration)
+  const w = twoStep ? "4800" : "3200";
   const border = () => ["top", "left", "bottom", "right", "insideH", "insideV"].map((b) => el(doc, b, { val: "single", sz: "6", space: "0", color: "000000" }));
   const cell = (text: string, bold = false, shade = false) => {
-    const tcPr = el(doc, "tcPr", {}, [el(doc, "tcW", { w: "3200", type: "dxa" })]);
+    const tcPr = el(doc, "tcPr", {}, [el(doc, "tcW", { w, type: "dxa" })]);
     if (shade) tcPr.appendChild(el(doc, "shd", { val: "clear", color: "auto", fill: "EEF2FF" }));
     const rPr = el(doc, "rPr", {}, [el(doc, "sz", { val: "20" })]);
     return el(doc, "tc", {}, [tcPr, el(doc, "p", {}, [el(doc, "pPr", {}, [el(doc, "spacing", { before: "60", after: "60" })]), makeRun(doc, text, rPr, bold)])]);
@@ -363,11 +386,11 @@ function signatureTable(doc: Document, c: Ctx, labels: [string, string, string] 
   const r = c.req;
   const tbl = el(doc, "tbl", {}, [
     el(doc, "tblPr", {}, [el(doc, "tblW", { w: "5000", type: "pct" }), el(doc, "tblBorders", {}, border())]),
-    el(doc, "tblGrid", {}, [el(doc, "gridCol", { w: "3200" }), el(doc, "gridCol", { w: "3200" }), el(doc, "gridCol", { w: "3200" })]),
-    el(doc, "tr", {}, [cell(labels[0], true, true), cell(labels[1], true, true), cell(labels[2], true, true)]),
+    el(doc, "tblGrid", {}, (twoStep ? [w, w] : [w, w, w]).map((x) => el(doc, "gridCol", { w: x }))),
+    el(doc, "tr", {}, (twoStep ? [labels[0], labels[2]] : labels).map((l) => cell(l, true, true))),
     el(doc, "tr", {}, [
       cell(`${c.names[r.requested_by] ?? ""}\n${stamp(r.submitted_at)}`),
-      cell(`${c.names[r.approver_id] ?? approverFor(r.form_title).name}\n${approverStatus(r)}`),
+      ...(twoStep ? [] : [cell(`${(r.approver_id && c.names[r.approver_id]) || approverFor(r.form_title).name}\n${approverStatus(r)}`)]),
       cell(`${c.names[r.authorizer_id] ?? ""}\n${authorizerStatus(r)}`),
     ]),
   ]);
