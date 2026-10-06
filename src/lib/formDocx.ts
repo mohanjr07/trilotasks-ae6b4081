@@ -200,11 +200,58 @@ function insertAfterLabel(p: Element, re: RegExp, value: string) {
         if (k < s.length && !/\s/.test(s[k])) break;
         j++; k = 0;
       }
+      // Label at the end of a space-padded line (e.g. "            Date:"):
+      // take the room from the padding BEFORE the label so the line doesn't wrap.
+      if (!hasMore) {
+        // find the node/offset where the label itself starts
+        let acc = 0, si = 0, so = 0;
+        for (let q = 0; q < nodes.length; q++) {
+          const len = (q === i ? t.length : (nodes[q].textContent ?? "").length);
+          if (m.index < acc + len || q === nodes.length - 1) { si = q; so = m.index - acc; break; }
+          acc += len;
+        }
+        trimSpacesBefore(nodes, nodes[si], so, ins.length + 12);
+      }
       return true;
     }
     pos += t.length;
   }
   return false;
+}
+
+/** Remove up to `count` spaces from the whitespace that sits just before
+ *  position `at` of text node `node` (walking back across earlier nodes). */
+function trimSpacesBefore(nodes: Element[], node: Element, at: number, count: number) {
+  let idx = nodes.indexOf(node);
+  let k = at;
+  let left = count;
+  while (left > 0 && idx >= 0) {
+    const t = nodes[idx].textContent ?? "";
+    let e = Math.min(k, t.length);
+    let st = e;
+    while (st > 0 && /\s/.test(t[st - 1]) && e - st < left) st--;
+    if (e > st) { nodes[idx].textContent = t.slice(0, st) + t.slice(e); left -= e - st; }
+    if (st > 0) break;            // reached real text
+    idx--; k = Infinity;
+  }
+}
+
+/** Header lines are aligned with long runs of spaces; give the running number
+ *  some room so it stays on its line in every viewer. */
+function tidyRefLine(doc: Document, bookmarkName: string, count = 10) {
+  const start = all(doc, "bookmarkStart").find((b) => b.getAttributeNS(W, "name") === bookmarkName || b.getAttribute("w:name") === bookmarkName);
+  if (!start) return;
+  const p = start.parentNode as Element;
+  if (!p || p.localName !== "p") return;
+  const nodes = textNodes(p);
+  // text nodes that come before the bookmark
+  const before = nodes.filter((n) => start.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_PRECEDING);
+  if (!before.length) return;
+  const last = before[before.length - 1];
+  const total = before.map((n) => n.textContent ?? "").join("");
+  const trailing = total.match(/\s*$/)?.[0].length ?? 0;
+  if (trailing <= 2) return;
+  trimSpacesBefore(nodes, last, (last.textContent ?? "").length, Math.min(count, trailing - 2));
 }
 
 function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, value: string) {
@@ -318,6 +365,7 @@ export async function buildFilledDocx(
     if (!map) { zip.file(part, xml); continue; }
     const doc = parser.parseFromString(xml, "application/xml");
     const isHeader = part !== "word/document.xml";
+    if (isHeader && locator && (locator.part ?? "word/document.xml") === part) tidyRefLine(doc, locator.name);
     const used = new Map<Element, Set<string>>();
     for (const rule of map.rules) {
       if ((rule.part ?? "body") === "header" ? !isHeader : isHeader) continue;
