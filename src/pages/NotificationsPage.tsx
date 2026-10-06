@@ -10,15 +10,18 @@ import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const iconColors: Record<string, string> = {
   task: "bg-accent-light text-primary",
   leave: "bg-warning-light text-warning",
   system: "bg-muted text-ink-muted",
   payment: "bg-success-light text-success",
+  form: "bg-success-light text-success",
 };
 
 export default function NotificationsPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("all");
@@ -34,7 +37,7 @@ export default function NotificationsPage() {
 
   const filtered = notifications.filter((n: any) => {
     if (filter === "unread") return !n.is_read;
-    if (filter === "task" || filter === "leave" || filter === "system" || filter === "payment") return n.type === filter;
+    if (filter === "task" || filter === "leave" || filter === "system" || filter === "payment" || filter === "form") return n.type === filter;
     return true;
   });
 
@@ -69,7 +72,7 @@ export default function NotificationsPage() {
   });
 
   const unreadCount = notifications.filter((n: any) => !n.is_read).length;
-  const tabs = ["all", "unread", "task", "leave", "payment", "system"];
+  const tabs = ["all", "unread", "task", "leave", "payment", "form", "system"];
 
   return (
     <AnimatedPage>
@@ -113,7 +116,10 @@ export default function NotificationsPage() {
               <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
                 {(items as any[]).map((n) => (
                   <motion.div key={n.id} variants={staggerItem}
-                    onClick={() => !n.is_read && markRead.mutate(n.id)}
+                    onClick={() => {
+                      if (!n.is_read) markRead.mutate(n.id);
+                      if (n.type === "form" && n.reference_id) navigate(`/form-requests?id=${n.reference_id}`);
+                    }}
                     className={`flex items-start gap-3 rounded-card p-4 cursor-pointer transition-colors ${
                       !n.is_read ? "bg-card shadow-card border-l-2 border-l-primary" : "bg-muted/50 hover:bg-muted"
                     }`}>

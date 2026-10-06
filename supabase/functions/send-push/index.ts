@@ -104,6 +104,7 @@ const routeFor = (type: string | null) =>
   type === "task" ? "/notifications"
   : type === "leave" ? "/notifications"
   : type === "payment" ? "/payments"
+  : type === "form" ? "/form-requests"
   : "/notifications";
 
 Deno.serve(async (req) => {
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
       .update({ push_sent: true })
       .eq("id", id)
       .or("push_sent.is.null,push_sent.eq.false")
-      .select("id, user_id, title, body, type");
+      .select("id, user_id, title, body, type, reference_id");
     if (error) throw error;
     const n = rows?.[0];
     if (!n) return json({ ok: true, skipped: "not_found_or_already_sent" });
@@ -145,7 +146,7 @@ Deno.serve(async (req) => {
 
     let sent = 0;
     const dead: string[] = [];
-    const route = routeFor(n.type);
+    const route = n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : routeFor(n.type);
 
     // iPhones
     const iosTokens = tokens.filter((t) => t.platform === "ios");

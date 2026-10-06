@@ -24,6 +24,7 @@ const iconColors: Record<string, string> = {
   task: "bg-accent-light text-primary",
   leave: "bg-warning-light text-warning",
   system: "bg-muted text-ink-muted",
+  form: "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
 };
 
 // Fire a native desktop notification via whichever channel is available:
@@ -124,7 +125,7 @@ export default function NotificationBell() {
           const n = payload.new as any;
           const title = n.title ?? "TaskFlow";
           const body = n.body ?? "";
-          const route = "/notifications";
+          const route = n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : "/notifications";
 
           // In-app toast (always shown when the window is visible).
           toast(title, { description: body });
@@ -218,6 +219,10 @@ export default function NotificationBell() {
                     key={n.id}
                     onClick={() => {
                       if (!n.is_read) markRead.mutate(n.id);
+                      if (n.type === "form" && n.reference_id) {
+                        setOpen(false);
+                        navigate(`/form-requests?id=${n.reference_id}`);
+                      }
                     }}
                     className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 ${
                       !n.is_read ? "bg-accent-light/30 border-l-2 border-l-primary" : ""

@@ -33,6 +33,7 @@ import InternDashboard from "@/pages/InternDashboard";
 import ProjectsPage from "@/pages/ProjectsPage";
 import OrganisationFlowPage from "@/pages/OrganisationFlowPage";
 import ProductionFormsPage from "@/pages/ProductionFormsPage";
+import FormRequestsPage from "@/pages/FormRequestsPage";
 import CompletedTasksPage from "@/pages/CompletedTasksPage";
 import AssetsPage from "@/pages/AssetsPage";
 import PeoplePage from "@/pages/PeoplePage";
@@ -89,6 +90,7 @@ const App = () => (
               {/* Production Forms — visible to every signed-in role; upload/delete
                   are admin-only, enforced both in the UI and via DB RLS. */}
               <Route path="/production-forms" element={<ProductionFormsPage />} />
+              <Route path="/form-requests" element={<FormRequestsPage />} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={["admin"]}><UsersPage /></ProtectedRoute>} />
               <Route path="/team" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><Navigate to="/users" replace /></ProtectedRoute>} />
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint,
+  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -26,6 +26,7 @@ const adminNav: NavItem[] = [
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
+  { label: "Form Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Users", path: "/users", icon: Users },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Teams", path: "/teams", icon: Video },
@@ -49,6 +50,7 @@ const managerNav: NavItem[] = [
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
+  { label: "Form Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Teams", path: "/teams", icon: Video },
@@ -72,6 +74,7 @@ const employeeNav: NavItem[] = [
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
+  { label: "Form Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Teams", path: "/my-teams", icon: Video },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -92,6 +95,7 @@ const internNav: NavItem[] = [
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
+  { label: "Form Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Notes", path: "/notes", icon: StickyNote },
   { label: "Birthdays", path: "/birthdays", icon: Cake },

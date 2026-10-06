@@ -15,7 +15,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileSpreadsheet, FileText, Plus, Trash2, FolderOpen, Loader2, History } from "lucide-react";
+import { FileSpreadsheet, FileText, Plus, Trash2, FolderOpen, Loader2, History, Send, ClipboardCheck } from "lucide-react";
+import { Link } from "react-router-dom";
+import FormRequestDialog from "@/components/FormRequestDialog";
 import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import type { FieldLocator } from "@/lib/productionForms";
@@ -48,6 +50,7 @@ export default function ProductionFormsPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<ProductionForm | null>(null);
   const [deletingForm, setDeletingForm] = useState<ProductionForm | null>(null);
+  const [requestingForm, setRequestingForm] = useState<ProductionForm | null>(null);
 
   const { data: forms = [], isLoading } = useQuery({
     queryKey: ["production_forms"],
@@ -92,16 +95,21 @@ export default function ProductionFormsPage() {
             Word and Excel templates — optionally with a running reference number assigned when someone clicks "Use This".
           </p>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" onClick={() => setLogOpen(true)} className="gap-2 flex-1 sm:flex-none">
-              <History className="h-4 w-4" /> View Log
-            </Button>
-            <Button onClick={() => setUploadOpen(true)} className="gap-2 flex-1 sm:flex-none">
-              <Plus className="h-4 w-4" /> Upload Form
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
+            <Link to="/form-requests"><ClipboardCheck className="h-4 w-4" /> Form Approvals</Link>
+          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={() => setLogOpen(true)} className="gap-2 flex-1 sm:flex-none">
+                <History className="h-4 w-4" /> View Log
+              </Button>
+              <Button onClick={() => setUploadOpen(true)} className="gap-2 flex-1 sm:flex-none">
+                <Plus className="h-4 w-4" /> Upload Form
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {forms.length === 0 ? (
@@ -154,9 +162,14 @@ export default function ProductionFormsPage() {
                   <Badge variant="outline" className="capitalize">{form.file_type}</Badge>
                 </div>
 
-                <Button onClick={() => setEditingForm(form)} className="gap-2 w-full mt-1">
-                  <FolderOpen className="h-4 w-4" /> Open
-                </Button>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <Button onClick={() => setRequestingForm(form)} className="gap-2 w-full">
+                    <Send className="h-4 w-4" /> Fill & Request
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditingForm(form)} className="gap-2 w-full">
+                    <FolderOpen className="h-4 w-4" /> Open
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -170,6 +183,13 @@ export default function ProductionFormsPage() {
       />
 
       {isAdmin && <ProductionFormLogDialog open={logOpen} onClose={() => setLogOpen(false)} />}
+
+      <FormRequestDialog
+        open={!!requestingForm}
+        onClose={() => setRequestingForm(null)}
+        form={requestingForm}
+        onSubmitted={() => queryClient.invalidateQueries({ queryKey: ["production_forms"] })}
+      />
 
       {editingForm && (
         <ProductionFormEditDialog
