@@ -4,7 +4,7 @@
 //  the fill-in screen and the printable / PDF copy.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "select" | "checks";
+export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "select" | "checks" | "lookup";
 
 export type FormField = {
   key: string;
@@ -14,6 +14,7 @@ export type FormField = {
   options?: string[];      // for "select" / "checks" (tick any)
   placeholder?: string;
   wide?: boolean;          // full row on the form / document
+  lookup?: "refs";         // "lookup": pick from running numbers issued on any form (typing still allowed)
 };
 
 export type TableColumn = {
@@ -137,7 +138,8 @@ export const FORM_SCHEMAS: FormSchema[] = [
     title: "MATERIAL IN FORM",
     match: /material\s*in\b/i,
     fields: [
-      { key: "out_ref", label: "Material OUT No / Ref No", type: "text", required: true },
+      { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs", required: true,
+        placeholder: "Pick a reference number" },
       { key: "date", label: "Date", type: "date", required: true },
       { key: "project", label: "Project", type: "text", required: true },
       { key: "purpose", label: "Purpose", type: "text", required: true },

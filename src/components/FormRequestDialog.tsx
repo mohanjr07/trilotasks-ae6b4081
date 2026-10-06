@@ -2,7 +2,7 @@
 // rejected one). Requested by = the logged-in user, Approved by = Hari,
 // Authorized by = chosen from the dropdown.
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Send, Eye, PencilLine } from "lucide-react";
 import FilledFormPreview from "@/components/FilledFormPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,20 @@ export default function FormRequestDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
 
+  // Running numbers already issued on any form (for reference-number fields)
+  const needsMaterialOut = schema.fields.some((f) => f.lookup === "refs");
+  const { data: outRefs = [] } = useQuery({
+    queryKey: ["form-refs"],
+    enabled: open && needsMaterialOut,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("form_refs");
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{ reference_value: string; form_title: string; project: string | null; issued_at: string }>;
+      // Material OUT numbers first (that's what a Material IN usually refers to), then the rest
+      return [...rows.filter((r) => /material\s*out/i.test(r.form_title)), ...rows.filter((r) => !/material\s*out/i.test(r.form_title))];
+    },
+  });
+
   const setField = (k: string, v: string) => setData((d) => ({ ...d, fields: { ...d.fields, [k]: v } }));
   const setCell = (t: string, i: number, k: string, v: string) =>
     setData((d) => ({ ...d, tables: { ...d.tables, [t]: d.tables[t].map((r, j) => (j === i ? { ...r, [k]: v } : r)) } }));
@@ -109,6 +123,26 @@ export default function FormRequestDialog({
         </label>
         {f.type === "textarea" ? (
           <Textarea {...common} rows={3} onChange={(e) => setField(f.key, e.target.value)} />
+        ) : f.type === "lookup" ? (
+          <>
+            <Input {...common} list={`dl-${f.key}`} autoComplete="off"
+              onChange={(e) => {
+                const val = e.target.value;
+                setField(f.key, val);
+                const hit = outRefs.find((r) => r.reference_value === val);
+                if (hit?.project && !String(data.fields.project ?? "").trim()) setField("project", hit.project);
+              }} />
+            <datalist id={`dl-${f.key}`}>
+              {outRefs.map((r) => (
+                <option key={r.reference_value} value={r.reference_value}>
+                  {[r.form_title, r.project, r.issued_at ? new Date(r.issued_at).toLocaleDateString("en-IN") : ""].filter(Boolean).join(" · ")}
+                </option>
+              ))}
+            </datalist>
+            {needsMaterialOut && outRefs.length === 0 && (
+              <p className="mt-1 text-[11px] text-ink-muted">No reference numbers issued yet — you can type one.</p>
+            )}
+          </>
         ) : f.type === "checks" ? (
           <div className="flex flex-wrap gap-2">
             {(f.options ?? []).map((o) => {
