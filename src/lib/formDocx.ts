@@ -238,7 +238,8 @@ function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, v
   }
 }
 
-function fillTable(doc: Document, rule: TableRule, rows: Array<Record<string, string>>, schema: FormSchema) {
+function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema) {
+  const rows = allRows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   const tbl = all(doc, "tbl").find((t) => rule.match.test(textOf(t)));
   if (!tbl) return;
   const trs = kids(tbl, "tr");

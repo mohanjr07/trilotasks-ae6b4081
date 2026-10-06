@@ -43,6 +43,8 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
   const [blob, setBlob] = useState<Blob | null>(null);
   const [failed, setFailed] = useState(false);
   const [officeUrl, setOfficeUrl] = useState<string | null>(null);
+  const [frameLoaded, setFrameLoaded] = useState(false);
+  useEffect(() => setFrameLoaded(false), [officeUrl]);
 
   useImperativeHandle(ref, () => ({
     element: () => (failed || tpl.isError ? fallbackRef.current : hostRef.current),
@@ -97,7 +99,15 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
     <div className="bg-white text-black">
       {(tpl.isLoading || (!officeUrl && !blob)) && <div className="p-10 text-center text-sm text-neutral-500">Loading form…</div>}
       {officeUrl && (
-        <iframe key={officeUrl} src={officeUrl} title="Form" className="w-full h-[58dvh] border-0 bg-white" />
+        <div className="relative">
+          {!frameLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500 bg-white">
+              Opening the form… (a few seconds)
+            </div>
+          )}
+          <iframe key={officeUrl} src={officeUrl} title="Form" onLoad={() => setTimeout(() => setFrameLoaded(true), 1500)}
+            className="w-full h-[58dvh] border-0 bg-white" />
+        </div>
       )}
       <div ref={hostRef} className={officeUrl ? "hidden" : "docx-host"} />
     </div>

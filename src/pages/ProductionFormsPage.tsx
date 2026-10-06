@@ -129,14 +129,14 @@ export default function ProductionFormsPage() {
           {forms.map((form) => (
             <Card key={form.id} className="flex flex-col">
               <CardContent className="p-5 flex flex-col gap-3 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-start justify-between gap-2 min-h-[44px]">
+                  <div className="flex items-start gap-2 min-w-0">
                     {form.file_type === "word" ? (
-                      <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+                      <FileText className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                     ) : (
-                      <FileSpreadsheet className="h-5 w-5 text-green-600 shrink-0" />
+                      <FileSpreadsheet className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
                     )}
-                    <p className="font-medium text-ink-primary truncate">{form.title}</p>
+                    <p className="font-medium text-ink-primary leading-snug line-clamp-2 break-words" title={form.title}>{form.title}</p>
                   </div>
                   {isAdmin && (
                     <button
@@ -153,21 +153,21 @@ export default function ProductionFormsPage() {
                   <p className="text-xs text-ink-muted line-clamp-2">{form.description}</p>
                 )}
 
-                <div className="flex items-center gap-2 mt-auto pt-2">
+                <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 min-h-[34px]">
                   {form.ref_number_enabled && (
-                    <Badge variant="secondary" className="font-mono">
+                    <Badge variant="secondary" className="font-mono whitespace-nowrap">
                       Next: {formatRefNumber(form.ref_prefix, form.ref_padding, form.current_number + 1)}
                     </Badge>
                   )}
                   <Badge variant="outline" className="capitalize">{form.file_type}</Badge>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  <Button onClick={() => setRequestingForm(form)} className="gap-2 w-full">
-                    <Send className="h-4 w-4" /> Fill & Request
+                <div className="flex flex-col gap-2 mt-1">
+                  <Button onClick={() => setRequestingForm(form)} className="gap-2 w-full whitespace-nowrap">
+                    <Send className="h-4 w-4 shrink-0" /> Fill & Request
                   </Button>
                   <Button variant="outline" onClick={() => setEditingForm(form)} className="gap-2 w-full">
-                    <FolderOpen className="h-4 w-4" /> Open
+                    <FolderOpen className="h-4 w-4 shrink-0" /> Open blank form
                   </Button>
                 </div>
               </CardContent>

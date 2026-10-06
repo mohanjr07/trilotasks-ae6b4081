@@ -226,10 +226,15 @@ export default function FormRequestDialog({
                           </button>
                         )}
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-4">
+                      <div
+                        className="grid gap-2 grid-cols-1 sm:[grid-template-columns:var(--cols)] items-end"
+                        style={{ ["--cols" as any]: t.columns.length <= 4
+                          ? ["1.6fr", ...Array(t.columns.length - 1).fill("1fr")].join(" ")
+                          : "repeat(auto-fill, minmax(150px, 1fr))" }}
+                      >
                         {t.columns.map((c) => (
-                          <div key={c.key} className={t.columns.length <= 4 && c === t.columns[0] ? "sm:col-span-2" : ""}>
-                            <label className="mb-1 block text-[11px] font-medium text-ink-muted">{c.label}</label>
+                          <div key={c.key} className="min-w-0">
+                            <label className="mb-1 block text-[11px] font-medium text-ink-muted truncate" title={c.label}>{c.label}</label>
                             {c.compute ? (
                               <div className="h-9 flex items-center rounded-md bg-muted px-3 text-sm text-ink-primary">{c.compute(r) || "—"}</div>
                             ) : c.type === "select" ? (
