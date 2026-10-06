@@ -19,7 +19,9 @@ import type { FormRequestRow } from "@/components/FormDocument";
 import FilledFormPreview, { type FilledFormHandle } from "@/components/FilledFormPreview";
 import { saveFile } from "@/lib/nativeFiles";
 import FormRequestDialog from "@/components/FormRequestDialog";
-import { schemaForTitle, STATUS_LABEL } from "@/lib/formSchemas";
+import { schemaForTitle, STATUS_LABEL, APPROVER_EMAIL, AUTHORIZER_NAMES } from "@/lib/formSchemas";
+
+const REVIEWER_EMAILS = [APPROVER_EMAIL, "anu@triloautomation.com", "harishkanna@triloautomation.com"];
 import { useFormPeople } from "@/lib/useFormPeople";
 
 type TabKey = "waiting" | "mine" | "handled" | "all";
@@ -33,7 +35,7 @@ const statusClass: Record<string, string> = {
 };
 
 export default function FormRequestsPage() {
-  const { user, isAdmin } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const qc = useQueryClient();
   const { names } = useFormPeople();
   const [params, setParams] = useSearchParams();
@@ -77,7 +79,18 @@ export default function FormRequestsPage() {
     (r.approver_id === user?.id && (r.approved_at || (r.status === "rejected" && r.rejected_by === user?.id))) ||
     (r.authorizer_id === user?.id && (r.authorized_at || (r.status === "rejected" && r.rejected_by === user?.id))));
   const isApproverAnywhere = requests.some((r) => r.approver_id === user?.id || r.authorizer_id === user?.id);
-  const activeTab: TabKey = tab ?? (waiting.length ? "waiting" : "mine");
+  // only approvers / authorizers get the "Waiting for me" tab — regular employees just see their own forms
+  const email = (user?.email ?? "").toLowerCase();
+  const firstName = ((profile as any)?.full_name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  const isReviewer = isApproverAnywhere || REVIEWER_EMAILS.includes(email) ||
+    AUTHORIZER_NAMES.some((n) => n.toLowerCase() === firstName);
+  const allowed: TabKey[] = [
+    ...(isReviewer ? ["waiting" as const] : []), "mine",
+    ...(isApproverAnywhere ? ["handled" as const] : []),
+    ...(isAdmin || isApproverAnywhere ? ["all" as const] : []),
+  ];
+  const fallback: TabKey = isReviewer && waiting.length ? "waiting" : "mine";
+  const activeTab: TabKey = tab && allowed.includes(tab) ? tab : fallback;
   const base = activeTab === "waiting" ? waiting : activeTab === "mine" ? mine : activeTab === "handled" ? handled : requests;
   const q = search.trim().toLowerCase();
   const list = base.filter((r) => {
@@ -91,7 +104,7 @@ export default function FormRequestsPage() {
   });
 
   const tabs = [
-    { key: "waiting" as const, label: `Waiting for me${waiting.length ? ` (${waiting.length})` : ""}` },
+    ...(isReviewer ? [{ key: "waiting" as const, label: `Waiting for me${waiting.length ? ` (${waiting.length})` : ""}` }] : []),
     { key: "mine" as const, label: `My forms${mine.length ? ` (${mine.length})` : ""}` },
     ...(isApproverAnywhere ? [{ key: "handled" as const, label: "Approved by me" }] : []),
     ...(isAdmin || isApproverAnywhere ? [{ key: "all" as const, label: "All" }] : []),
@@ -111,7 +124,7 @@ export default function FormRequestsPage() {
     <AnimatedPage>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Form Approvals</h1>
+          <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">{isReviewer || isAdmin ? "Form Approvals" : "My Forms"}</h1>
           <p className="text-sm text-ink-muted">Every form you fill stays under “My forms” — before and after it is authorized.</p>
         </div>
         <Button asChild variant="outline" size="sm" className="gap-1.5">
