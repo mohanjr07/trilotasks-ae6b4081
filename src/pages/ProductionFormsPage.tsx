@@ -97,7 +97,7 @@ export default function ProductionFormsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button asChild variant="outline" className="gap-2 flex-1 sm:flex-none">
-            <Link to="/form-requests"><ClipboardCheck className="h-4 w-4" /> Form Approvals</Link>
+            <Link to="/form-requests?tab=mine"><ClipboardCheck className="h-4 w-4" /> My forms</Link>
           </Button>
           {isAdmin && (
             <>
