@@ -266,6 +266,15 @@ export default function PaymentsPage() {
                     {r.status === "pending_verification" && r.verifier_id && (
                       <span className="truncate">{r.verifier_id === user?.id ? "Waiting for your verification" : `Verifier: ${nameOf(r.verifier_id) ?? "—"}`}</span>
                     )}
+                    {r.verified_at && r.verifier_id && (
+                      <span className="truncate text-success">✓ Verified by {nameOf(r.verifier_id) ?? "—"}</span>
+                    )}
+                    {r.status === "approved" && r.reviewed_by && (
+                      <span className="truncate text-success">✓ Approved by {nameOf(r.reviewed_by) ?? "—"}</span>
+                    )}
+                    {r.status === "rejected" && r.reviewed_by && (
+                      <span className="truncate text-destructive">✗ Rejected by {nameOf(r.reviewed_by) ?? "—"}</span>
+                    )}
                     {r.project?.name && <span className="truncate">{r.project.name}</span>}
                     <span>{format(new Date(r.created_at), "MMM d, yyyy")}</span>
                   </div>
@@ -343,6 +352,17 @@ export default function PaymentsPage() {
                             : selected.status === "pending_verification" ? "Waiting for verification"
                             : selected.status === "rejected" && selected.reviewed_by === selected.verifier_id ? "Rejected" : ""}
                         </span>
+                      </span>
+                    </div>
+                  )}
+                  {(selected.status === "approved" || (selected.status === "rejected" && selected.reviewed_by !== selected.verifier_id)) && selected.reviewed_by && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-ink-muted">{selected.status === "approved" ? "Approved by" : "Rejected by"}</span>
+                      <span className="text-ink-primary font-medium text-right">
+                        {nameOf(selected.reviewed_by) ?? "—"}
+                        {selected.reviewed_at && (
+                          <span className="block text-xs font-normal text-ink-muted">{format(new Date(selected.reviewed_at), "MMM d, h:mm a")}</span>
+                        )}
                       </span>
                     </div>
                   )}
