@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Wallet, Plus, X, Paperclip, FileText, CheckCircle2, XCircle, Clock,
-  ExternalLink, Loader2, Trash2,
+  ExternalLink, Loader2, Trash2, ShieldCheck,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,7 +30,9 @@ type PaymentRequest = {
   amount: number;
   bill_path: string;
   bill_name: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending_verification" | "pending" | "approved" | "rejected";
+  verifier_id: string | null;
+  verified_at: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -52,6 +54,21 @@ export default function PaymentsPage() {
   const [tab, setTab] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [requestOpen, setRequestOpen] = useState(false);
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
+  const [rejectNote, setRejectNote] = useState<string | null>(null); // manager rejecting: reason being typed
+
+  // everyone's names + roles (for the verifier dropdown and labels)
+  const { data: people = [] } = useQuery({
+    queryKey: ["payment-people"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_active_profiles");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; full_name: string; role: string }>;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const nameOf = (id?: string | null) => (id ? people.find((p) => p.id === id)?.full_name : undefined);
+  const managers = people.filter((p) => p.role === "manager" && p.id !== user?.id)
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ["payment-requests", user?.id, canSeeAll],
@@ -60,7 +77,8 @@ export default function PaymentsPage() {
         .from("payment_requests")
         .select("*, requester:profiles!payment_requests_requester_id_fkey(full_name, avatar_url), project:projects(name, color)")
         .order("created_at", { ascending: false });
-      if (!canSeeAll) q = q.eq("requester_id", user!.id);
+      // employees see their own requests + the ones they were asked to verify
+      if (!canSeeAll) q = q.or(`requester_id.eq.${user!.id},verifier_id.eq.${user!.id}`);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as unknown as PaymentRequest[];
@@ -79,13 +97,13 @@ export default function PaymentsPage() {
 
   const stats = useMemo(() => ({
     total: requests.length,
-    pending: requests.filter((r) => r.status === "pending").length,
+    pending: requests.filter((r) => r.status === "pending" || r.status === "pending_verification").length,
     approved: requests.filter((r) => r.status === "approved").length,
     rejected: requests.filter((r) => r.status === "rejected").length,
   }), [requests]);
 
   const filtered = useMemo(
-    () => requests.filter((r) => tab === "all" || r.status === tab),
+    () => requests.filter((r) => tab === "all" || r.status === tab || (tab === "pending" && r.status === "pending_verification")),
     [requests, tab]
   );
 
@@ -115,6 +133,21 @@ export default function PaymentsPage() {
     onError: (e: any) => toast.error("Failed to update: " + (e?.message ?? "")),
   });
 
+  const verifyMutation = useMutation({
+    mutationFn: async ({ id, ok, note }: { id: string; ok: boolean; note?: string }) => {
+      const { error } = await (supabase as any).rpc("verify_payment_request", { p_id: id, p_ok: ok, p_note: note ?? null });
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["payment-requests"] });
+      toast.success(vars.ok ? "Verified — sent to admins for approval" : "Payment request rejected");
+      setRejectNote(null);
+      setSelected(null);
+    },
+    onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
+  });
+  const waitingForMe = requests.filter((r) => r.status === "pending_verification" && r.verifier_id === user?.id).length;
+
   const deleteMutation = useMutation({
     mutationFn: async (r: PaymentRequest) => {
       const { data, error } = await supabase.from("payment_requests").delete().eq("id", r.id).select("id");
@@ -138,7 +171,7 @@ export default function PaymentsPage() {
 
   const tabs = [
     { key: "all" as const, label: "All" },
-    { key: "pending" as const, label: `Pending (${stats.pending})` },
+    { key: "pending" as const, label: `Pending (${stats.pending})${waitingForMe ? ` · ${waitingForMe} to verify` : ""}` },
     { key: "approved" as const, label: "Approved" },
     { key: "rejected" as const, label: "Rejected" },
   ];
@@ -220,8 +253,8 @@ export default function PaymentsPage() {
               className="rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-start gap-3">
-                {canSeeAll && (
-                  <UserAvatar name={r.requester?.full_name ?? ""} avatarUrl={r.requester?.avatar_url} size="sm" />
+                {(canSeeAll || r.requester_id !== user?.id) && (
+                  <UserAvatar name={r.requester?.full_name ?? nameOf(r.requester_id) ?? ""} avatarUrl={r.requester?.avatar_url} size="sm" />
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -229,7 +262,10 @@ export default function PaymentsPage() {
                     <StatusBadge status={r.status} />
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-                    {canSeeAll && <span className="truncate">{r.requester?.full_name}</span>}
+                    {(canSeeAll || r.requester_id !== user?.id) && <span className="truncate">{r.requester?.full_name ?? nameOf(r.requester_id)}</span>}
+                    {r.status === "pending_verification" && r.verifier_id && (
+                      <span className="truncate">{r.verifier_id === user?.id ? "Waiting for your verification" : `Verifier: ${nameOf(r.verifier_id) ?? "—"}`}</span>
+                    )}
                     {r.project?.name && <span className="truncate">{r.project.name}</span>}
                     <span>{format(new Date(r.created_at), "MMM d, yyyy")}</span>
                   </div>
@@ -256,6 +292,7 @@ export default function PaymentsPage() {
         open={requestOpen}
         onClose={() => setRequestOpen(false)}
         projects={projects}
+        managers={managers}
         userId={user?.id ?? ""}
         onDone={() => qc.invalidateQueries({ queryKey: ["payment-requests"] })}
       />
@@ -265,7 +302,7 @@ export default function PaymentsPage() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40" onClick={() => setSelected(null)}
+              className="fixed inset-0 bg-black/40 z-40" onClick={() => { setSelected(null); setRejectNote(null); }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -279,7 +316,7 @@ export default function PaymentsPage() {
                       {format(new Date(selected.created_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
-                  <button onClick={() => setSelected(null)} className="text-ink-muted hover:text-ink-primary shrink-0">
+                  <button onClick={() => { setSelected(null); setRejectNote(null); }} className="text-ink-muted hover:text-ink-primary shrink-0">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
@@ -290,10 +327,23 @@ export default function PaymentsPage() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  {canSeeAll && (
+                  {(canSeeAll || selected.requester_id !== user?.id) && (
                     <div className="flex items-center justify-between">
                       <span className="text-ink-muted">Requested by</span>
-                      <span className="text-ink-primary font-medium">{selected.requester?.full_name ?? "—"}</span>
+                      <span className="text-ink-primary font-medium">{selected.requester?.full_name ?? nameOf(selected.requester_id) ?? "—"}</span>
+                    </div>
+                  )}
+                  {selected.verifier_id && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-ink-muted">Verified by</span>
+                      <span className="text-ink-primary font-medium text-right">
+                        {nameOf(selected.verifier_id) ?? "—"}
+                        <span className="block text-xs font-normal text-ink-muted">
+                          {selected.verified_at ? `✓ Verified ${format(new Date(selected.verified_at), "MMM d, h:mm a")}`
+                            : selected.status === "pending_verification" ? "Waiting for verification"
+                            : selected.status === "rejected" && selected.reviewed_by === selected.verifier_id ? "Rejected" : ""}
+                        </span>
+                      </span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
@@ -318,6 +368,33 @@ export default function PaymentsPage() {
                 >
                   <FileText className="h-4 w-4" /> View attached bill <ExternalLink className="h-3.5 w-3.5" />
                 </button>
+
+                {selected.status === "pending_verification" && selected.verifier_id === user?.id && (
+                  rejectNote === null ? (
+                    <div className="flex gap-3 pt-2">
+                      <Button variant="outline" className="flex-1 gap-1.5" disabled={verifyMutation.isPending}
+                        onClick={() => setRejectNote("")}>
+                        <XCircle className="h-4 w-4" /> Reject
+                      </Button>
+                      <Button className="flex-1 gap-1.5" disabled={verifyMutation.isPending}
+                        onClick={() => verifyMutation.mutate({ id: selected.id, ok: true })}>
+                        <ShieldCheck className="h-4 w-4" /> Verified
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 pt-2">
+                      <Textarea value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} rows={2}
+                        placeholder="Why is this bill being rejected?" autoFocus />
+                      <div className="flex gap-3">
+                        <Button variant="outline" className="flex-1" onClick={() => setRejectNote(null)}>Cancel</Button>
+                        <Button variant="destructive" className="flex-1" disabled={!rejectNote.trim() || verifyMutation.isPending}
+                          onClick={() => verifyMutation.mutate({ id: selected.id, ok: false, note: rejectNote })}>
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                )}
 
                 {isAdmin && selected.status === "pending" && (
                   <div className="flex gap-3 pt-2">
@@ -360,11 +437,12 @@ export default function PaymentsPage() {
 
 // ─── Request Payment Modal ─────────────────────────────────────────────────
 function RequestPaymentModal({
-  open, onClose, projects, userId, onDone,
+  open, onClose, projects, managers, userId, onDone,
 }: {
   open: boolean;
   onClose: () => void;
   projects: { id: string; name: string }[];
+  managers: { id: string; full_name: string }[];
   userId: string;
   onDone: () => void;
 }) {
@@ -372,6 +450,7 @@ function RequestPaymentModal({
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [verifierId, setVerifierId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
@@ -379,12 +458,14 @@ function RequestPaymentModal({
     setPurpose("");
     setAmount("");
     setFile(null);
+    setVerifierId("");
   };
 
   const handleSubmit = async () => {
     if (!purpose.trim()) return toast.error("Enter the purpose of this payment");
     if (!amount || Number(amount) <= 0) return toast.error("Enter a valid amount");
     if (!file) return toast.error("Attach the bill");
+    if (!verifierId) return toast.error("Choose the manager who will verify the bill");
     if (!userId) return toast.error("You must be logged in");
 
     setSubmitting(true);
@@ -403,13 +484,15 @@ function RequestPaymentModal({
         amount: Number(amount),
         bill_path: path,
         bill_name: file.name,
-      });
+        verifier_id: verifierId,
+        status: "pending_verification",
+      } as any);
       if (insErr) {
         await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
         throw insErr;
       }
 
-      toast.success("Payment request sent for approval");
+      toast.success(`Sent to ${managers.find((m) => m.id === verifierId)?.full_name ?? "the manager"} for verification`);
       reset();
       onDone();
       onClose();
@@ -495,6 +578,19 @@ function RequestPaymentModal({
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                     />
                   </label>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-ink-muted mb-1.5 block">Payment verification by *</label>
+                  <Select value={verifierId} onValueChange={setVerifierId}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Choose a manager" /></SelectTrigger>
+                    <SelectContent>
+                      {managers.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-[11px] text-ink-muted">They check the bill first; then it goes to the admins for approval.</p>
                 </div>
               </div>
 

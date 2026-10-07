@@ -7,6 +7,7 @@ const statusConfig: Record<string, { dot: string; bg: string; text: string }> = 
   on_hold: { dot: "bg-warning", bg: "bg-warning-light", text: "text-warning" },
   completed: { dot: "bg-success", bg: "bg-success-light", text: "text-success" },
   pending: { dot: "bg-warning", bg: "bg-warning-light", text: "text-warning" },
+  pending_verification: { dot: "bg-primary", bg: "bg-accent-light", text: "text-primary" },
   approved: { dot: "bg-success", bg: "bg-success-light", text: "text-success" },
   rejected: { dot: "bg-destructive", bg: "bg-destructive-light", text: "text-destructive" },
   reverted: { dot: "bg-ink-muted", bg: "bg-muted", text: "text-ink-muted" },
@@ -14,7 +15,7 @@ const statusConfig: Record<string, { dot: string; bg: string; text: string }> = 
 
 const labels: Record<string, string> = {
   todo: "To Do", in_progress: "In Progress", on_hold: "On Hold",
-  completed: "Completed", pending: "Pending", approved: "Approved", rejected: "Rejected",
+  completed: "Completed", pending: "Pending", pending_verification: "Awaiting verification", approved: "Approved", rejected: "Rejected",
   reverted: "Reverted",
 };
 
