@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Overtime — admins add entries (pick many people at once), managers/admins
-//  verify them, and anu@triloautomation.com is notified of verified entries.
+//  Overtime — admins keep the list of OT members; managers enter overtime for
+//  them (many at once) and every entry is sent to anu@triloautomation.com.
 //  Only admins, managers and Anu can open this page.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from "react";
@@ -50,7 +50,7 @@ export default function OvertimePage() {
   const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const canVerify = isAdmin || profile?.role === "manager";
 
-  const [tab, setTab] = useState<"pending" | "verified" | "all">("pending");
+  const [tab, setTab] = useState<"pending" | "verified" | "all">("all");
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
@@ -154,9 +154,9 @@ export default function OvertimePage() {
         <div>
           <h1 className="font-heading text-xl sm:text-[28px] font-bold text-ink-primary">Overtime</h1>
           <p className="text-sm text-ink-muted mt-0.5">
-            {isAdmin ? "Add overtime, then a manager verifies it — Anu is notified of every verified entry."
-              : canVerify ? "Check the overtime entries and mark them verified — Anu is notified."
-              : "Verified overtime entries from the managers."}
+            {isAdmin ? "Set the OT members, then managers enter their overtime — every entry is sent to Anu."
+              : canVerify ? "Enter overtime for the OT members — it is sent to Anu straight away."
+              : "Overtime entered by the managers."}
           </p>
         </div>
         <div className="flex gap-2">
@@ -170,8 +170,8 @@ export default function OvertimePage() {
               <Users className="h-4 w-4" /> OT members ({members.length})
             </Button>
           )}
-          {isAdmin && (
-            <Button className="gap-1.5" onClick={() => (members.length ? setAddOpen(true) : setMembersOpen(true))}>
+          {canVerify && (
+            <Button className="gap-1.5" onClick={() => (members.length ? setAddOpen(true) : isAdmin ? setMembersOpen(true) : toast.error("No OT members yet — ask an admin to add them."))}>
               <Plus className="h-4 w-4" /> Add overtime
             </Button>
           )}
@@ -179,7 +179,7 @@ export default function OvertimePage() {
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1 border-b border-border">
+        <div className={`flex gap-1 border-b border-border ${pendingCount ? "" : "invisible"}`}>
           {([["pending", `Waiting for verification${pendingCount ? ` (${pendingCount})` : ""}`], ["verified", "Verified"], ["all", "All"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => { setTab(k); setPicked(new Set()); }}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${tab === k ? "border-primary text-primary" : "border-transparent text-ink-muted hover:text-ink-secondary"}`}>
@@ -198,8 +198,8 @@ export default function OvertimePage() {
       ) : byDate.length === 0 ? (
         <EmptyState icon={Timer}
           title={tab === "pending" ? "Nothing waiting for verification" : "No overtime entries"}
-          description={isAdmin
-            ? (members.length ? "Click “Add overtime” to enter overtime for one or more people." : "First add the people dedicated to overtime under “OT members”, then add their overtime.")
+          description={isAdmin && !members.length ? "First add the people dedicated to overtime under “OT members”."
+            : canVerify ? (members.length ? "Click “Add overtime” to enter overtime for one or more people." : "No OT members yet — an admin needs to add them first.")
             : "New entries will appear here."} />
       ) : (
         <div className="space-y-5">
@@ -228,14 +228,14 @@ export default function OvertimePage() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-ink-primary truncate">{nameOf(r.employee_id)}</p>
                         <p className="text-xs text-ink-muted">
-                          Added by {nameOf(r.created_by)}{r.note ? ` · ${r.note}` : ""}
+                          Entered by {nameOf(r.created_by)}{r.note ? ` · ${r.note}` : ""}
                         </p>
                       </div>
                       <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-ink-secondary">{halfLabel(r.half)}</span>
                       <span className="w-16 text-right font-heading text-sm font-bold text-ink-primary">{hours(r.duration_hours)}</span>
                       {r.verified_at ? (
                         <span className="text-xs text-success text-right min-w-[150px]">
-                          ✓ Verified by {nameOf(r.verified_by)}
+                          {r.verified_by === r.created_by ? "✓ Sent to Anu" : `✓ Verified by ${nameOf(r.verified_by)}`}
                           <span className="block text-ink-muted">{format(new Date(r.verified_at), "d MMM, h:mm a")}</span>
                         </span>
                       ) : canVerify ? (
@@ -260,7 +260,7 @@ export default function OvertimePage() {
         </div>
       )}
 
-      {isAdmin && (
+      {canVerify && (
         <AddOvertimeDialog open={addOpen} onClose={() => setAddOpen(false)} people={members} userId={user?.id ?? ""}
           onDone={() => qc.invalidateQueries({ queryKey: ["overtime"] })} />
       )}
@@ -297,12 +297,11 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
     if (!h || h <= 0 || h > 24) return toast.error("Enter the OT duration in hours");
     setSaving(true);
     try {
-      const rows = selected.map((employee_id) => ({
-        work_date: date, employee_id, half, duration_hours: h, note: note.trim() || null, created_by: userId,
-      }));
-      const { error } = await (supabase as any).from("overtime_entries").insert(rows);
+      const { error } = await (supabase as any).rpc("add_overtime", {
+        p_date: date, p_employee_ids: selected, p_half: half, p_hours: h, p_note: note.trim() || null,
+      });
       if (error) throw error;
-      toast.success(`Overtime added for ${selected.length} ${selected.length === 1 ? "person" : "people"} — waiting for verification`);
+      toast.success(`Overtime entered for ${selected.length} ${selected.length === 1 ? "person" : "people"} — sent to Anu`);
       onDone();
       onClose();
     } catch (e: any) {
@@ -362,7 +361,7 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
                     </button>
                   );
                 })}
-                {!shown.length && <p className="px-3 py-2 text-sm text-ink-muted">{people.length ? "No one found" : "No OT members yet — add them under “OT members”."}</p>}
+                {!shown.length && <p className="px-3 py-2 text-sm text-ink-muted">{people.length ? "No one found" : "No OT members yet — an admin adds them under “OT members”."}</p>}
               </div>
             </div>
           </div>
@@ -395,7 +394,7 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="gap-1.5">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {saving ? "Saving…" : `Add${selected.length ? ` for ${selected.length}` : ""}`}
+            {saving ? "Sending…" : `Send to Anu${selected.length ? ` (${selected.length})` : ""}`}
           </Button>
         </div>
       </DialogContent>
