@@ -302,6 +302,7 @@ export default function PaymentsPage() {
         onClose={() => setRequestOpen(false)}
         projects={projects}
         managers={managers}
+        skipVerification={["manager", "admin", "super_admin"].includes(profile?.role ?? "")}
         userId={user?.id ?? ""}
         onDone={() => qc.invalidateQueries({ queryKey: ["payment-requests"] })}
       />
@@ -457,8 +458,9 @@ export default function PaymentsPage() {
 
 // ─── Request Payment Modal ─────────────────────────────────────────────────
 function RequestPaymentModal({
-  open, onClose, projects, managers, userId, onDone,
+  open, onClose, projects, managers, skipVerification, userId, onDone,
 }: {
+  skipVerification: boolean;   // managers / admins: straight to the admins
   open: boolean;
   onClose: () => void;
   projects: { id: string; name: string }[];
@@ -485,7 +487,7 @@ function RequestPaymentModal({
     if (!purpose.trim()) return toast.error("Enter the purpose of this payment");
     if (!amount || Number(amount) <= 0) return toast.error("Enter a valid amount");
     if (!file) return toast.error("Attach the bill");
-    if (!verifierId) return toast.error("Choose the manager who will verify the bill");
+    if (!skipVerification && !verifierId) return toast.error("Choose the manager who will verify the bill");
     if (!userId) return toast.error("You must be logged in");
 
     setSubmitting(true);
@@ -504,15 +506,16 @@ function RequestPaymentModal({
         amount: Number(amount),
         bill_path: path,
         bill_name: file.name,
-        verifier_id: verifierId,
-        status: "pending_verification",
+        verifier_id: skipVerification ? null : verifierId,
+        status: skipVerification ? "pending" : "pending_verification",
       } as any);
       if (insErr) {
         await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
         throw insErr;
       }
 
-      toast.success(`Sent to ${managers.find((m) => m.id === verifierId)?.full_name ?? "the manager"} for verification`);
+      toast.success(skipVerification ? "Payment request sent to the admins for approval"
+        : `Sent to ${managers.find((m) => m.id === verifierId)?.full_name ?? "the manager"} for verification`);
       reset();
       onDone();
       onClose();
@@ -614,6 +617,7 @@ function RequestPaymentModal({
                   </div>
                 </div>
 
+                {!skipVerification && (
                 <div>
                   <label className="text-xs font-medium text-ink-muted mb-1.5 block">Payment verification by *</label>
                   <Select value={verifierId} onValueChange={setVerifierId}>
@@ -626,6 +630,7 @@ function RequestPaymentModal({
                   </Select>
                   <p className="mt-1 text-[11px] text-ink-muted">They check the bill first; then it goes to the admins for approval.</p>
                 </div>
+                )}
               </div>
 
               <Button onClick={handleSubmit} disabled={submitting} className="w-full gap-2">
