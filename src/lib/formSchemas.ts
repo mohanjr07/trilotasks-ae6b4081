@@ -334,7 +334,7 @@ export function approverFor(title: string): { email: string; name: string } {
 /** Forms where the requester picks the approver from a dropdown (names as they start in the profile).
  *  Keep in sync with submit_form_request in the database. */
 export function approverChoices(title: string): string[] | null {
-  if (/quality\s*check/i.test(title)) return ["Harish Kanna", "Saravanan"];
+  if (/quality\s*check|design\s*validation/i.test(title)) return ["Harish Kanna", "Saravanan"];
   return null;
 }
 /** false for forms that skip the "Approved by" step (Vendor Registration). */
