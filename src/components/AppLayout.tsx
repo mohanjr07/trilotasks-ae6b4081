@@ -6,13 +6,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint,
+  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
+import { canSeeOvertime } from "@/pages/OvertimePage";
 type NavItem = { label: string; path: string; icon: typeof LayoutDashboard };
 const adminNav: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -25,6 +26,7 @@ const adminNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Overtime", path: "/overtime", icon: Timer },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Users", path: "/users", icon: Users },
@@ -49,6 +51,7 @@ const managerNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Overtime", path: "/overtime", icon: Timer },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "My Tasks", path: "/my-tasks", icon: ClipboardList },
@@ -125,7 +128,11 @@ export default function AppLayout() {
   const isAdmin = profile?.role === "admin";
   const isManager = profile?.role === "manager";
   const isIntern = profile?.role === "intern";
-  const nav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
+  const baseNav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
+  // Overtime: admins, managers and Anu (whatever her role)
+  const nav = canSeeOvertime(profile as any) && !baseNav.some((n) => n.path === "/overtime")
+    ? baseNav.flatMap((n) => (n.path === "/payments" ? [n, { label: "Overtime", path: "/overtime", icon: Timer }] : [n]))
+    : baseNav;
   const roleKey = isAdmin ? "admin" : isManager ? "manager" : isIntern ? "intern" : "employee";
   const mobileTabs = mobileTabPaths[roleKey]
     .map((p) => nav.find((n) => n.path === p))

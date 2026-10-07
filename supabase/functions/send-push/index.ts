@@ -105,6 +105,7 @@ const routeFor = (type: string | null) =>
   : type === "leave" ? "/notifications"
   : type === "payment" ? "/payments"
   : type === "form" ? "/form-requests"
+  : type === "overtime" ? "/overtime"
   : "/notifications";
 
 Deno.serve(async (req) => {

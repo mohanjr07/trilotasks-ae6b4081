@@ -120,6 +120,7 @@ export default function NotificationsPage() {
                       if (!n.is_read) markRead.mutate(n.id);
                       if (n.type === "form" && n.reference_id) navigate(`/form-requests?id=${n.reference_id}`);
                       else if (n.type === "payment") navigate("/payments");
+                      else if (n.type === "overtime") navigate("/overtime");
                     }}
                     className={`flex items-start gap-3 rounded-card p-4 cursor-pointer transition-colors ${
                       !n.is_read ? "bg-card shadow-card border-l-2 border-l-primary" : "bg-muted/50 hover:bg-muted"
