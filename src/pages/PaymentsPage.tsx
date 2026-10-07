@@ -586,18 +586,32 @@ function RequestPaymentModal({
 
                 <div>
                   <label className="text-xs font-medium text-ink-muted mb-1.5 block">Attach bill *</label>
-                  <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 cursor-pointer hover:bg-muted/40 transition-colors">
-                    <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
-                    <span className="truncate text-ink-secondary">
-                      {file ? file.name : "Tap to choose a photo or PDF of the bill"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      className="hidden"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    />
-                  </label>
+                  <div className="relative">
+                    <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 pr-10 cursor-pointer hover:bg-muted/40 transition-colors">
+                      <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
+                      <span className="truncate text-ink-secondary">
+                        {file ? file.name : "Tap to choose a photo or PDF of the bill"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                      />
+                    </label>
+                    {file && (
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        disabled={submitting}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-muted hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                        title="Remove attachment"
+                        aria-label="Remove attachment"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
