@@ -253,6 +253,25 @@ export const FORM_SCHEMAS: FormSchema[] = [
     ],
   },
   {
+    key: "design_validation",
+    title: "Design Validation Form",
+    heading: "DESIGN VALIDATION FORM",
+    match: /design\s*validation/i,
+    fields: [
+      { key: "project", label: "Project", type: "text", required: true },
+      { key: "timeline", label: "Timeline", type: "text", placeholder: "e.g. 10 Oct – 25 Oct 2026" },
+    ],
+    tables: [{
+      key: "checks", label: "Model verification", serial: true, minRows: 3,
+      columns: [
+        { key: "date", label: "Date", type: "date", width: "16%" },
+        { key: "verification", label: "Model verification", width: "38%" },
+        { key: "remarks", label: "Remarks", width: "28%" },
+        { key: "sign", label: "Sign (name)" },
+      ],
+    }],
+  },
+  {
     key: "vendor_registration",
     title: "Vendor Registration Form",
     heading: "VENDOR REGISTRATION FORM",
@@ -306,10 +325,10 @@ export function emptyFormData(schema: FormSchema): FormData {
 // ── Who signs ───────────────────────────────────────────────────────────────
 export const APPROVER_EMAIL = "hari@triloautomation.com";
 // Who approves each form (keep in sync with submit_form_request in the database):
-//   Asset Submission, Expense Tracking → Anu;  Quality Check Drawing → Harish;  everything else → Hari
+//   Asset Submission, Expense Tracking → Anu;  Quality Check Drawing, Design Validation → Harish;  everything else → Hari
 export function approverFor(title: string): { email: string; name: string } {
   if (/asset|expense/i.test(title)) return { email: "anu@triloautomation.com", name: "Anu" };
-  if (/quality\s*check/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };
+  if (/quality\s*check|design\s*validation/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };
   return { email: APPROVER_EMAIL, name: "Hari" };
 }
 /** Forms where the requester picks the approver from a dropdown (names as they start in the profile).

@@ -136,6 +136,16 @@ const MAPS: Record<string, DocxMap> = {
     sigLabels: ["Employee (Requested by)", "Reporting Manager (Approved by)", "Finance / Accounts (Authorized by)"],
     spareRows: 4,
   },
+  design_validation: {
+    rules: [
+      { part: "header", label: /Date\s*:/, value: submitted },
+      { label: /Project\s*:/, field: "project" },
+      { label: /Timeline\s*:/, field: "timeline" },
+    ],
+    tables: [{ match: /Model\s+verification/i, table: "checks", cols: ["#", "date", "verification", "remarks", "sign"] }],
+    signatures: "append",
+    spareRows: 4,
+  },
   vendor_registration: {
     rules: [
       { label: /Business\s+Name\s+of\s+Supplier\s*:/, field: "supplier_name" },
@@ -187,7 +197,11 @@ function setCellText(tc: Element, text: string) {
   const doc = tc.ownerDocument;
   const ps = kids(tc, "p");
   const firstRun = all(tc, "r")[0];
-  const rPr = firstRun ? kids(firstRun, "rPr")[0] : null;
+  // empty cell → use the paragraph-mark formatting (font/size the template set for typing there)
+  const pPr = ps[0] ? kids(ps[0], "pPr")[0] : undefined;
+  let markRPr = pPr ? (kids(pPr, "rPr")[0]?.cloneNode(true) as Element | undefined) ?? null : null;
+  if (markRPr) Array.from(markRPr.children).forEach((c) => { if (/^(ins|del|moveFrom|moveTo|rPrChange)$/.test(c.localName)) markRPr!.removeChild(c); });
+  const rPr = firstRun ? kids(firstRun, "rPr")[0] : markRPr;
   ps.forEach((p) => Array.from(p.children).forEach((c) => { if (c.localName !== "pPr") p.removeChild(c); }));
   let p = ps[0];
   if (!p) { p = el(doc, "p"); tc.appendChild(p); }
