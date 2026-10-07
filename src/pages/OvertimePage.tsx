@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2 } from "lucide-react";
+import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage from "@/components/AnimatedPage";
@@ -54,6 +54,7 @@ export default function OvertimePage() {
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   const { data: people = [] } = useQuery({
     queryKey: ["ot-people"],
@@ -65,6 +66,17 @@ export default function OvertimePage() {
     enabled: allowed,
     staleTime: 5 * 60 * 1000,
   });
+  // people the admin has dedicated to overtime
+  const { data: memberIds = [] } = useQuery({
+    queryKey: ["ot-members"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("overtime_members").select("employee_id");
+      if (error) throw error;
+      return ((data ?? []) as Array<{ employee_id: string }>).map((m) => m.employee_id);
+    },
+    enabled: allowed,
+  });
+  const members = people.filter((p) => memberIds.includes(p.id));
   const nameOf = (id?: string | null) => (id ? people.find((p) => p.id === id)?.full_name ?? "—" : "—");
 
   const { data: entries = [], isLoading } = useQuery({
@@ -154,7 +166,12 @@ export default function OvertimePage() {
             </Button>
           )}
           {isAdmin && (
-            <Button className="gap-1.5" onClick={() => setAddOpen(true)}>
+            <Button variant="outline" className="gap-1.5" onClick={() => setMembersOpen(true)}>
+              <Users className="h-4 w-4" /> OT members ({members.length})
+            </Button>
+          )}
+          {isAdmin && (
+            <Button className="gap-1.5" onClick={() => (members.length ? setAddOpen(true) : setMembersOpen(true))}>
               <Plus className="h-4 w-4" /> Add overtime
             </Button>
           )}
@@ -181,7 +198,9 @@ export default function OvertimePage() {
       ) : byDate.length === 0 ? (
         <EmptyState icon={Timer}
           title={tab === "pending" ? "Nothing waiting for verification" : "No overtime entries"}
-          description={isAdmin ? "Click “Add overtime” to enter overtime for one or more people." : "New entries will appear here."} />
+          description={isAdmin
+            ? (members.length ? "Click “Add overtime” to enter overtime for one or more people." : "First add the people dedicated to overtime under “OT members”, then add their overtime.")
+            : "New entries will appear here."} />
       ) : (
         <div className="space-y-5">
           {byDate.map(([date, rows]) => {
@@ -242,8 +261,12 @@ export default function OvertimePage() {
       )}
 
       {isAdmin && (
-        <AddOvertimeDialog open={addOpen} onClose={() => setAddOpen(false)} people={people} userId={user?.id ?? ""}
+        <AddOvertimeDialog open={addOpen} onClose={() => setAddOpen(false)} people={members} userId={user?.id ?? ""}
           onDone={() => qc.invalidateQueries({ queryKey: ["overtime"] })} />
+      )}
+      {isAdmin && (
+        <OvertimeMembersDialog open={membersOpen} onClose={() => setMembersOpen(false)} people={people} memberIds={memberIds}
+          onChanged={() => qc.invalidateQueries({ queryKey: ["ot-members"] })} />
       )}
     </AnimatedPage>
   );
@@ -294,7 +317,7 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
       <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add overtime</DialogTitle>
-          <DialogDescription>Pick one or more people — each gets the same half and duration.</DialogDescription>
+          <DialogDescription>Pick one or more OT members — each gets the same half and duration.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -339,7 +362,7 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
                     </button>
                   );
                 })}
-                {!shown.length && <p className="px-3 py-2 text-sm text-ink-muted">No one found</p>}
+                {!shown.length && <p className="px-3 py-2 text-sm text-ink-muted">{people.length ? "No one found" : "No OT members yet — add them under “OT members”."}</p>}
               </div>
             </div>
           </div>
@@ -374,6 +397,89 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {saving ? "Saving…" : `Add${selected.length ? ` for ${selected.length}` : ""}`}
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OvertimeMembersDialog({ open, onClose, people, memberIds, onChanged }: {
+  open: boolean; onClose: () => void; people: Person[]; memberIds: string[]; onChanged: () => void;
+}) {
+  const [find, setFind] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => { if (open) setFind(""); }, [open]);
+
+  const q = find.trim().toLowerCase();
+  const current = people.filter((p) => memberIds.includes(p.id));
+  const others = people.filter((p) => !memberIds.includes(p.id) && (!q || p.full_name.toLowerCase().includes(q)));
+
+  const add = async (id: string) => {
+    setBusy(id);
+    const { error } = await (supabase as any).from("overtime_members").insert({ employee_id: id });
+    setBusy(null);
+    if (error) return toast.error("Could not add: " + error.message);
+    onChanged();
+  };
+  const drop = async (id: string) => {
+    setBusy(id);
+    const { error } = await (supabase as any).from("overtime_members").delete().eq("employee_id", id);
+    setBusy(null);
+    if (error) return toast.error("Could not remove: " + error.message);
+    onChanged();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>OT members</DialogTitle>
+          <DialogDescription>People dedicated to overtime. Only they can be picked when adding overtime.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-ink-muted">Current members ({current.length})</p>
+            {current.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {current.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-accent-light px-2.5 py-1 text-xs font-medium text-primary">
+                    {p.full_name}
+                    <button type="button" disabled={busy === p.id} onClick={() => drop(p.id)} aria-label={`Remove ${p.full_name}`}>
+                      {busy === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-muted">No one yet — add people below.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-ink-muted">Add people</p>
+            <div className="rounded-md border border-input">
+              <div className="relative border-b border-border">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search people"
+                  className="h-9 w-full bg-transparent pl-9 pr-3 text-sm outline-none" />
+              </div>
+              <div className="max-h-60 overflow-y-auto py-1">
+                {others.map((p) => (
+                  <button type="button" key={p.id} disabled={busy === p.id} onClick={() => add(p.id)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-ink-primary hover:bg-muted">
+                    {p.full_name}
+                    {busy === p.id ? <Loader2 className="h-4 w-4 animate-spin text-ink-muted" /> : <Plus className="h-4 w-4 text-primary" />}
+                  </button>
+                ))}
+                {!others.length && <p className="px-3 py-2 text-sm text-ink-muted">No one found</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <Button onClick={onClose}>Done</Button>
         </div>
       </DialogContent>
     </Dialog>
