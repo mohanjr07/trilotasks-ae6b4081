@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { approverFor, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -37,11 +37,14 @@ export default function FormRequestDialog({
   const { profile, user } = useAuth();
   const [preview, setPreview] = useState(false);
   const qc = useQueryClient();
-  const { names, authorizers } = useFormPeople();
+  const { names, authorizers, byNames } = useFormPeople();
   const title = existing?.form_title ?? form?.title ?? "";
+  const approverChoiceNames = approverChoices(title);
+  const approverOptions = approverChoiceNames ? byNames(approverChoiceNames) : null;
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
   const [authorizer, setAuthorizer] = useState("");
+  const [approver, setApprover] = useState("");   // only for forms with an approver dropdown (Quality Check)
 
   useEffect(() => {
     if (!open) return;
@@ -50,10 +53,12 @@ export default function FormRequestDialog({
     if (existing) {
       setData({ fields: { ...base.fields, ...(existing.data?.fields ?? {}) }, tables: { ...base.tables, ...(existing.data?.tables ?? {}) } });
       setAuthorizer(existing.authorizer_id);
+      setApprover(existing.approver_id ?? "");
     } else {
       if ("name" in base.fields && !base.fields.name && profile?.full_name) base.fields.name = profile.full_name;
       setData(base);
       setAuthorizer("");
+      setApprover("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
@@ -84,6 +89,7 @@ export default function FormRequestDialog({
     mutationFn: async () => {
       const missing = [...schema.fields, ...(schema.footerFields ?? [])].find((f) => f.required && !String(data.fields[f.key] ?? "").trim());
       if (missing) throw new Error(`Please fill "${missing.label}"`);
+      if (approverOptions && !approver) throw new Error("Choose who will approve this form");
       if (!authorizer) throw new Error("Choose who will authorize this form");
       // drop completely empty table rows
       const clean: FormData = {
@@ -91,11 +97,11 @@ export default function FormRequestDialog({
         tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
       };
       if (existing) {
-        const { error } = await (supabase as any).rpc("resubmit_form_request", { p_id: existing.id, p_data: clean, p_authorizer: authorizer });
+        const { error } = await (supabase as any).rpc("resubmit_form_request", { p_id: existing.id, p_data: clean, p_authorizer: authorizer, ...(approverOptions ? { p_approver: approver } : {}) });
         if (error) throw error;
         return existing.id;
       }
-      const { data: id, error } = await (supabase as any).rpc("submit_form_request", { p_form_id: form!.id, p_data: clean, p_authorizer: authorizer });
+      const { data: id, error } = await (supabase as any).rpc("submit_form_request", { p_form_id: form!.id, p_data: clean, p_authorizer: authorizer, ...(approverOptions ? { p_approver: approver } : {}) });
       if (error) throw error;
       return id as string;
     },
@@ -103,7 +109,7 @@ export default function FormRequestDialog({
       qc.invalidateQueries({ queryKey: ["form-requests"] });
       qc.invalidateQueries({ queryKey: ["production-forms"] });
       toast.success(needsApproval(title)
-        ? `${existing ? "Resubmitted" : "Sent"} to ${approverFor(title).name} for approval`
+        ? `${existing ? "Resubmitted" : "Sent"} to ${(approverOptions && names[approver]) || approverFor(title).name} for approval`
         : `${existing ? "Resubmitted" : "Sent"} to ${authorizers.find((a) => a.id === authorizer)?.full_name ?? "the authorizer"} for authorization`);
       onSubmitted?.(id);
       onClose();
@@ -197,7 +203,7 @@ export default function FormRequestDialog({
               request={{
                 id: existing?.id ?? "draft", form_id: (existing?.form_id ?? form?.id)!, form_title: title,
                 reference_value: existing?.reference_value ?? nextRef, data,
-                requested_by: existing?.requested_by ?? user?.id ?? "", approver_id: existing?.approver_id ?? "",
+                requested_by: existing?.requested_by ?? user?.id ?? "", approver_id: (approverOptions ? approver : existing?.approver_id) ?? "",
                 authorizer_id: authorizer, status: needsApproval(title) ? "pending_approval" : "pending_authorization", approved_at: null, authorized_at: null,
                 rejected_by: null, rejected_at: null, reject_reason: null,
                 submitted_at: new Date().toISOString(), created_at: new Date().toISOString(),
@@ -290,8 +296,21 @@ export default function FormRequestDialog({
             </div>
             {needsApproval(title) && (
               <div>
-                <p className="text-xs text-ink-muted">Approved by</p>
-                <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
+                {approverOptions ? (
+                  <>
+                    <label htmlFor="approver" className="text-xs text-ink-muted">Approved by *</label>
+                    <select id="approver" value={approver} onChange={(e) => setApprover(e.target.value)}
+                      className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                      <option value="">Choose…</option>
+                      {approverOptions.map((a) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-ink-muted">Approved by</p>
+                    <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
+                  </>
+                )}
               </div>
             )}
             <div>

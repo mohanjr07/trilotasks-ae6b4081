@@ -19,5 +19,8 @@ export function useFormPeople() {
   const authorizers = AUTHORIZER_NAMES
     .map((n) => people.find((p) => p.full_name?.trim().toLowerCase().startsWith(n.toLowerCase())))
     .filter((p): p is Person => !!p);
-  return { people, names, authorizers };
+  const byNames = (list: string[]) => list
+    .map((n) => people.find((p) => p.full_name?.trim().toLowerCase().startsWith(n.toLowerCase())))
+    .filter((p): p is Person => !!p);
+  return { people, names, authorizers, byNames };
 }

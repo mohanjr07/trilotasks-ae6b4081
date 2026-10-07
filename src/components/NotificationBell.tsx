@@ -125,7 +125,7 @@ export default function NotificationBell() {
           const n = payload.new as any;
           const title = n.title ?? "TaskFlow";
           const body = n.body ?? "";
-          const route = n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : "/notifications";
+          const route = n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : n.type === "payment" ? "/payments" : "/notifications";
 
           // In-app toast (always shown when the window is visible).
           toast(title, { description: body });
@@ -222,6 +222,9 @@ export default function NotificationBell() {
                       if (n.type === "form" && n.reference_id) {
                         setOpen(false);
                         navigate(`/form-requests?id=${n.reference_id}`);
+                      } else if (n.type === "payment") {
+                        setOpen(false);
+                        navigate("/payments");
                       }
                     }}
                     className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors hover:bg-muted/50 ${

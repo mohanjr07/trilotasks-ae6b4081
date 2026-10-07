@@ -312,6 +312,12 @@ export function approverFor(title: string): { email: string; name: string } {
   if (/quality\s*check/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };
   return { email: APPROVER_EMAIL, name: "Hari" };
 }
+/** Forms where the requester picks the approver from a dropdown (names as they start in the profile).
+ *  Keep in sync with submit_form_request in the database. */
+export function approverChoices(title: string): string[] | null {
+  if (/quality\s*check/i.test(title)) return ["Harish Kanna", "Saravanan"];
+  return null;
+}
 /** false for forms that skip the "Approved by" step (Vendor Registration). */
 export function needsApproval(title: string): boolean {
   return !schemaForTitle(title).noApproval;
