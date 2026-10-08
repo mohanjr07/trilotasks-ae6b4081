@@ -48,11 +48,13 @@ export type FormSchema = {
   notes?: string[];           // fixed text printed on the copy (declarations etc.)
   summary?: (d: FormData) => Array<{ label: string; value: string }>; // worked-out lines (net amount…)
   noApproval?: boolean;       // goes straight to the authorizer (no "Approved by" step)
+  attachments?: { max: number; label?: string }; // documents the requester can upload with the form
 };
 
 export type FormData = {
   fields: Record<string, string>;
   tables: Record<string, Array<Record<string, string>>>;
+  attachments?: Array<{ path: string; name: string; size?: number }>;
 };
 
 // Used for any form that doesn't have its own definition yet.
@@ -119,6 +121,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
     key: "material_out",
     title: "MATERIAL OUT FORM",
     match: /material\s*out/i,
+    attachments: { max: 3, label: "Documents (DC, invoice, photos)" },
     fields: [
       { key: "to", label: "To", type: "text", required: true },
       { key: "date", label: "Date", type: "date", required: true },
@@ -140,6 +143,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
     key: "material_in",
     title: "MATERIAL IN FORM",
     match: /material\s*in\b/i,
+    attachments: { max: 3, label: "Documents (DC, invoice, photos)" },
     fields: [
       { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs", required: true,
         placeholder: "Pick a reference number" },

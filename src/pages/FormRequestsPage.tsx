@@ -19,6 +19,7 @@ import type { FormRequestRow } from "@/components/FormDocument";
 import FilledFormPreview, { type FilledFormHandle } from "@/components/FilledFormPreview";
 import { saveFile } from "@/lib/nativeFiles";
 import FormRequestDialog from "@/components/FormRequestDialog";
+import { FormAttachmentsList } from "@/components/FormAttachments";
 import { schemaForTitle, STATUS_LABEL, APPROVER_EMAIL, AUTHORIZER_NAMES } from "@/lib/formSchemas";
 
 const REVIEWER_EMAILS = [APPROVER_EMAIL, "anu@triloautomation.com", "harishkanna@triloautomation.com"];
@@ -240,6 +241,8 @@ function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
           <div className="overflow-auto max-h-[60dvh] rounded-lg border border-border bg-neutral-200 p-2">
             <FilledFormPreview ref={previewRef} formId={request.form_id} schema={schema} request={request} names={names} />
           </div>
+
+          <FormAttachmentsList value={(request.data as any)?.attachments} />
 
           {rejecting && (
             <div className="space-y-2">

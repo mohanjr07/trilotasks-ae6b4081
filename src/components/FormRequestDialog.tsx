@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Send, Eye, PencilLine } from "lucide-react";
+import { FormAttachmentsEditor, type FormAttachment } from "@/components/FormAttachments";
 import FilledFormPreview from "@/components/FilledFormPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +44,7 @@ export default function FormRequestDialog({
   const approverOptions = approverChoiceNames ? byNames(approverChoiceNames) : null;
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
+  const [attachments, setAttachments] = useState<FormAttachment[]>([]);
   const [authorizer, setAuthorizer] = useState("");
   const [approver, setApprover] = useState("");   // only for forms with an approver dropdown (Quality Check)
 
@@ -53,12 +55,14 @@ export default function FormRequestDialog({
     if (existing) {
       setData({ fields: { ...base.fields, ...(existing.data?.fields ?? {}) }, tables: { ...base.tables, ...(existing.data?.tables ?? {}) } });
       setAuthorizer(existing.authorizer_id);
+      setAttachments(((existing.data as any)?.attachments ?? []) as FormAttachment[]);
       setApprover(existing.approver_id ?? "");
     } else {
       if ("name" in base.fields && !base.fields.name && profile?.full_name) base.fields.name = profile.full_name;
       setData(base);
       setAuthorizer("");
       setApprover("");
+      setAttachments([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
@@ -93,6 +97,7 @@ export default function FormRequestDialog({
       if (!authorizer) throw new Error("Choose who will authorize this form");
       // drop completely empty table rows
       const clean: FormData = {
+        ...(schema.attachments ? { attachments } : {}),
         fields: data.fields,
         tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
       };
@@ -287,6 +292,11 @@ export default function FormRequestDialog({
               <span>{s.label}</span><span>{s.value}</span>
             </div>
           ))}
+
+          {schema.attachments && (
+            <FormAttachmentsEditor value={attachments} onChange={setAttachments} max={schema.attachments.max}
+              label={schema.attachments.label} userId={user?.id ?? ""} />
+          )}
 
           {/* Sign-off */}
           <div className={`rounded-lg border border-border bg-muted/30 p-4 grid gap-3 ${needsApproval(title) ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
