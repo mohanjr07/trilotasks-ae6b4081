@@ -31,6 +31,8 @@ type Entry = {
   employee_id: string;
   half: "first" | "second";
   duration_hours: number;
+  start_time: string | null;
+  end_time: string | null;
   note: string | null;
   created_by: string;
   created_at: string;
@@ -232,7 +234,10 @@ export default function OvertimePage() {
                         </p>
                       </div>
                       <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-ink-secondary">{halfLabel(r.half)}</span>
-                      <span className="w-16 text-right font-heading text-sm font-bold text-ink-primary">{hours(r.duration_hours)}</span>
+                      {r.start_time && r.end_time && (
+                        <span className="text-xs text-ink-secondary whitespace-nowrap">{fmtTime(r.start_time)} – {fmtTime(r.end_time)}</span>
+                      )}
+                      <span className="w-20 text-right font-heading text-sm font-bold text-ink-primary">{r.start_time && r.end_time ? fmtSpan(spanMin(r.start_time.slice(0, 5), r.end_time.slice(0, 5))) : hours(r.duration_hours)}</span>
                       {r.verified_at ? (
                         <span className="text-xs text-success text-right min-w-[150px]">
                           {r.verified_by === r.created_by ? "✓ Sent to Anu" : `✓ Verified by ${nameOf(r.verified_by)}`}
@@ -272,34 +277,71 @@ export default function OvertimePage() {
   );
 }
 
-function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
-  open: boolean; onClose: () => void; people: Person[]; userId: string; onDone: () => void;
+/** "18:30" → minutes since midnight */
+const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+/** worked minutes between two times (an end before the start means it ran past midnight) */
+const spanMin = (start: string, end: string) => {
+  if (!start || !end) return 0;
+  let d = toMin(end) - toMin(start);
+  if (d <= 0) d += 24 * 60;
+  return d;
+};
+const fmtSpan = (min: number) => (min ? `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m` : "—");
+export const fmtTime = (t?: string | null) => {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
+
+type Row = { half: "first" | "second" | ""; start: string; end: string };
+
+function AddOvertimeDialog({ open, onClose, people, onDone }: {
+  open: boolean; onClose: () => void; people: Person[]; userId?: string; onDone: () => void;
 }) {
   const [date, setDate] = useState(todayIso());
   const [selected, setSelected] = useState<string[]>([]);
-  const [half, setHalf] = useState<"first" | "second" | "">("");
-  const [duration, setDuration] = useState("");
+  const [rows, setRows] = useState<Record<string, Row>>({});
   const [note, setNote] = useState("");
   const [find, setFind] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) { setDate(todayIso()); setSelected([]); setHalf(""); setDuration(""); setNote(""); setFind(""); }
+    if (open) { setDate(todayIso()); setSelected([]); setRows({}); setNote(""); setFind(""); }
   }, [open]);
 
   const shown = people.filter((p) => !find.trim() || p.full_name.toLowerCase().includes(find.trim().toLowerCase()));
-  const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const toggle = (id: string) => {
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+    setRows((r) => (r[id] ? r : { ...r, [id]: { half: "", start: "", end: "" } }));
+  };
+  const setRow = (id: string, patch: Partial<Row>) => setRows((r) => {
+    const next = { ...(r[id] ?? { half: "", start: "", end: "" }), ...patch };
+    // pick the half from the start time unless it was chosen already
+    if (patch.start && !r[id]?.half) next.half = toMin(patch.start) < 13 * 60 ? "first" : "second";
+    return { ...r, [id]: next };
+  });
+  // copy the first person's times to everyone else
+  const copyFirst = () => {
+    const first = rows[selected[0]];
+    if (!first) return;
+    setRows((r) => Object.fromEntries(Object.entries({ ...r }).map(([k, v]) => [k, selected.includes(k) ? { ...first } : v])));
+  };
+
+  const totalMin = selected.reduce((s, id) => s + spanMin(rows[id]?.start ?? "", rows[id]?.end ?? ""), 0);
 
   const save = async () => {
     if (!selected.length) return toast.error("Select at least one name");
-    if (!half) return toast.error("Choose First half or Second half");
-    const h = Number(duration);
-    if (!h || h <= 0 || h > 24) return toast.error("Enter the OT duration in hours");
+    for (const id of selected) {
+      const r = rows[id];
+      const name = people.find((p) => p.id === id)?.full_name ?? "someone";
+      if (!r?.start || !r?.end) return toast.error(`Enter the start and end time for ${name}`);
+      if (!r.half) return toast.error(`Choose First half or Second half for ${name}`);
+      if (spanMin(r.start, r.end) > 16 * 60) return toast.error(`Check the times for ${name} — more than 16 hours`);
+    }
     setSaving(true);
     try {
-      const { error } = await (supabase as any).rpc("add_overtime", {
-        p_date: date, p_employee_ids: selected, p_half: half, p_hours: h, p_note: note.trim() || null,
-      });
+      const entries = selected.map((id) => ({ employee_id: id, half: rows[id].half, start_time: rows[id].start, end_time: rows[id].end }));
+      const { error } = await (supabase as any).rpc("add_overtime_entries", { p_date: date, p_entries: entries, p_note: note.trim() || null });
       if (error) throw error;
       toast.success(`Overtime entered for ${selected.length} ${selected.length === 1 ? "person" : "people"} — sent to Anu`);
       onDone();
@@ -313,10 +355,10 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add overtime</DialogTitle>
-          <DialogDescription>Pick one or more OT members — each gets the same half and duration.</DialogDescription>
+          <DialogDescription>Pick the OT members, then enter each person's start and end time — the hours are worked out for you.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -332,23 +374,13 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
                 <button type="button" onClick={() => setSelected([])} className="text-xs text-primary hover:underline">Clear</button>
               )}
             </div>
-            {selected.length > 0 && (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {selected.map((id) => (
-                  <span key={id} className="inline-flex items-center gap-1 rounded-full bg-accent-light px-2.5 py-1 text-xs font-medium text-primary">
-                    {people.find((p) => p.id === id)?.full_name}
-                    <button type="button" onClick={() => toggle(id)} aria-label="Remove"><X className="h-3 w-3" /></button>
-                  </span>
-                ))}
-              </div>
-            )}
             <div className="rounded-md border border-input">
               <div className="relative border-b border-border">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
                 <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search people"
                   className="h-9 w-full bg-transparent pl-9 pr-3 text-sm outline-none" />
               </div>
-              <div className="max-h-48 overflow-y-auto py-1">
+              <div className="max-h-40 overflow-y-auto py-1">
                 {shown.map((p) => {
                   const on = selected.includes(p.id);
                   return (
@@ -366,23 +398,54 @@ function AddOvertimeDialog({ open, onClose, people, userId, onDone }: {
             </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-muted">Half *</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(["first", "second"] as const).map((h) => (
-                <button type="button" key={h} onClick={() => setHalf(h)}
-                  className={`h-10 rounded-md border text-sm font-medium transition-colors ${half === h ? "border-primary bg-accent-light text-primary" : "border-input text-ink-secondary hover:bg-muted"}`}>
-                  {halfLabel(h)}
-                </button>
-              ))}
+          {selected.length > 0 && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-xs font-medium text-ink-muted">Time for each person *</label>
+                {selected.length > 1 && rows[selected[0]]?.start && rows[selected[0]]?.end && (
+                  <button type="button" onClick={copyFirst} className="text-xs text-primary hover:underline">Same time for everyone</button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {selected.map((id) => {
+                  const r = rows[id] ?? { half: "", start: "", end: "" };
+                  const mins = spanMin(r.start, r.end);
+                  return (
+                    <div key={id} className="rounded-lg border border-border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-ink-primary truncate">{people.find((p) => p.id === id)?.full_name}</span>
+                        <button type="button" onClick={() => toggle(id)} className="text-ink-muted hover:text-destructive" aria-label="Remove">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-ink-muted">Start</label>
+                          <Input type="time" value={r.start} onChange={(e) => setRow(id, { start: e.target.value })} className="h-9" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] text-ink-muted">End</label>
+                          <Input type="time" value={r.end} onChange={(e) => setRow(id, { end: e.target.value })} className="h-9" />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 flex h-9 items-center justify-center rounded-md bg-accent-light px-3 text-sm font-semibold text-primary min-w-[84px]">
+                          {fmtSpan(mins)}
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {(["first", "second"] as const).map((h) => (
+                          <button type="button" key={h} onClick={() => setRow(id, { half: h })}
+                            className={`h-8 rounded-md border text-xs font-medium transition-colors ${r.half === h ? "border-primary bg-accent-light text-primary" : "border-input text-ink-secondary hover:bg-muted"}`}>
+                            {halfLabel(h)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-right text-sm text-ink-secondary">Total: <span className="font-semibold text-ink-primary">{fmtSpan(totalMin)}</span></p>
             </div>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-ink-muted">OT Duration (hours) *</label>
-            <Input type="number" inputMode="decimal" min="0.5" max="24" step="0.5" value={duration}
-              onChange={(e) => setDuration(e.target.value)} placeholder="e.g. 2 or 2.5" className="h-10" />
-          </div>
+          )}
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-muted">Note (optional)</label>
