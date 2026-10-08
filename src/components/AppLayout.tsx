@@ -106,10 +106,10 @@ const internNav: NavItem[] = [
 ];
 // Phone bottom bar: 5 fixed shortcuts per role (full menu is behind ☰ in the header)
 const mobileTabPaths: Record<string, string[]> = {
-  admin: ["/dashboard", "/tasks", "/completed-tasks", "/projects", "/leave"],
-  manager: ["/dashboard", "/tasks", "/completed-tasks", "/projects", "/leave"],
-  employee: ["/my-dashboard", "/my-tasks", "/completed-tasks", "/projects", "/my-leave"],
-  intern: ["/intern-dashboard", "/intern-tasks", "/completed-tasks", "/projects", "/notes"],
+  admin: ["/dashboard", "/tasks", "/payments", "/projects", "/leave"],
+  manager: ["/dashboard", "/tasks", "/payments", "/projects", "/leave"],
+  employee: ["/my-dashboard", "/my-tasks", "/payments", "/projects", "/my-leave"],
+  intern: ["/intern-dashboard", "/intern-tasks", "/payments", "/projects", "/notes"],
 };
 const shortLabel: Record<string, string> = {
   "/my-tasks": "Tasks", "/intern-tasks": "Tasks", "/my-dashboard": "Dashboard",
