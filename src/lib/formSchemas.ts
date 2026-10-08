@@ -145,8 +145,8 @@ export const FORM_SCHEMAS: FormSchema[] = [
     match: /material\s*in\b/i,
     attachments: { max: 3, label: "Documents (DC, invoice, photos)" },
     fields: [
-      { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs", required: true,
-        placeholder: "Pick a reference number" },
+      { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs",
+        placeholder: "Pick a reference number (optional)" },
       { key: "date", label: "Date", type: "date", required: true },
       { key: "project", label: "Project", type: "text", required: true },
       { key: "purpose", label: "Purpose", type: "text", required: true },
