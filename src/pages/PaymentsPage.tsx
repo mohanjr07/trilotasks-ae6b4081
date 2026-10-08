@@ -33,6 +33,8 @@ type PaymentRequest = {
   status: "pending_verification" | "pending" | "approved" | "rejected";
   verifier_id: string | null;
   verified_at: string | null;
+  paid_at?: string | null;
+  paid_by?: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -40,6 +42,8 @@ type PaymentRequest = {
   requester?: { full_name: string; avatar_url: string | null } | null;
   project?: { name: string; color: string } | null;
 };
+
+const PAYER_EMAILS = ["anu@triloautomation.com"];
 
 const formatINR = (n: number) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
@@ -49,9 +53,11 @@ export default function PaymentsPage() {
 
   const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const isAccountant = (profile?.department ?? "").trim().toLowerCase() === "accountant";
-  const canSeeAll = isAdmin || isAccountant;
+  // Anu pays out approved requests and marks them paid
+  const isPayer = PAYER_EMAILS.includes((profile?.email ?? "").toLowerCase());
+  const canSeeAll = isAdmin || isAccountant || isPayer;
 
-  const [tab, setTab] = useState<"all" | "pending" | "approved" | "rejected">("all");
+  const [tab, setTab] = useState<"all" | "pending" | "approved" | "rejected" | "topay">("all");
   const [requestOpen, setRequestOpen] = useState(false);
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
   const [rejectNote, setRejectNote] = useState<string | null>(null); // manager rejecting: reason being typed
@@ -103,7 +109,8 @@ export default function PaymentsPage() {
   }), [requests]);
 
   const filtered = useMemo(
-    () => requests.filter((r) => tab === "all" || r.status === tab || (tab === "pending" && r.status === "pending_verification")),
+    () => requests.filter((r) => tab === "all" || r.status === tab || (tab === "pending" && r.status === "pending_verification")
+      || (tab === "topay" && r.status === "approved" && !r.paid_at)),
     [requests, tab]
   );
 
@@ -146,6 +153,19 @@ export default function PaymentsPage() {
     },
     onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
   });
+  const paidMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("mark_payment_paid", { p_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["payment-requests"] });
+      toast.success("Marked as paid — everyone involved has been notified");
+      setSelected(null);
+    },
+    onError: (e: any) => toast.error("Could not update: " + (e?.message ?? "")),
+  });
+
   const waitingForMe = requests.filter((r) => r.status === "pending_verification" && r.verifier_id === user?.id).length;
 
   const deleteMutation = useMutation({
@@ -174,6 +194,8 @@ export default function PaymentsPage() {
     { key: "pending" as const, label: `Pending (${stats.pending})${waitingForMe ? ` · ${waitingForMe} to verify` : ""}` },
     { key: "approved" as const, label: "Approved" },
     { key: "rejected" as const, label: "Rejected" },
+    ...(isPayer || isAdmin || isAccountant
+      ? [{ key: "topay" as const, label: `To pay (${requests.filter((r) => r.status === "approved" && !r.paid_at).length})` }] : []),
   ];
 
   return (
@@ -260,6 +282,11 @@ export default function PaymentsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-ink-primary truncate">{r.purpose}</p>
                     <StatusBadge status={r.status} />
+                    {r.paid_at ? (
+                      <span className="inline-flex items-center rounded-full bg-success-light px-2.5 py-0.5 text-xs font-semibold text-success">₹ Paid</span>
+                    ) : r.status === "approved" ? (
+                      <span className="inline-flex items-center rounded-full bg-warning-light px-2.5 py-0.5 text-xs font-medium text-warning">Payment pending</span>
+                    ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
                     {(canSeeAll || r.requester_id !== user?.id) && <span className="truncate">{r.requester?.full_name ?? nameOf(r.requester_id)}</span>}
@@ -271,6 +298,9 @@ export default function PaymentsPage() {
                     )}
                     {r.status === "approved" && r.reviewed_by && (
                       <span className="truncate text-success">✓ Approved by {nameOf(r.reviewed_by) ?? "—"}</span>
+                    )}
+                    {r.paid_at && (
+                      <span className="truncate text-success">✓ Paid by {nameOf(r.paid_by) ?? "Accounts"}</span>
                     )}
                     {r.status === "rejected" && r.reviewed_by && (
                       <span className="truncate text-destructive">✗ Rejected by {nameOf(r.reviewed_by) ?? "—"}</span>
@@ -375,6 +405,21 @@ export default function PaymentsPage() {
                     <span className="text-ink-muted">Status</span>
                     <StatusBadge status={selected.status} />
                   </div>
+                  {selected.status === "approved" && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-ink-muted">Payment</span>
+                      {selected.paid_at ? (
+                        <span className="text-right font-medium text-success">
+                          ✓ Payment done
+                          <span className="block text-xs font-normal text-ink-muted">
+                            by {nameOf(selected.paid_by) ?? "Accounts"} · {format(new Date(selected.paid_at), "MMM d, h:mm a")}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-right font-medium text-warning">Not paid yet</span>
+                      )}
+                    </div>
+                  )}
                   {selected.review_note && (
                     <div className="pt-1">
                       <span className="text-ink-muted">Note: </span>
@@ -389,6 +434,13 @@ export default function PaymentsPage() {
                 >
                   <FileText className="h-4 w-4" /> View attached bill <ExternalLink className="h-3.5 w-3.5" />
                 </button>
+
+                {isPayer && selected.status === "approved" && !selected.paid_at && (
+                  <Button className="w-full gap-1.5 bg-success hover:bg-success/90 text-white" disabled={paidMutation.isPending}
+                    onClick={() => { if (window.confirm(`Mark ${formatINR(selected.amount)} for "${selected.purpose}" as paid?`)) paidMutation.mutate(selected.id); }}>
+                    <CheckCircle2 className="h-4 w-4" /> {paidMutation.isPending ? "Saving…" : "Payment done"}
+                  </Button>
+                )}
 
                 {selected.status === "pending_verification" && selected.verifier_id === user?.id && (
                   rejectNote === null ? (
