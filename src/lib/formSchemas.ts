@@ -108,6 +108,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
     title: "Material Request Form",
     heading: "MATERIAL REQUISITION",
     match: /material\s*request/i,
+    attachments: { max: 3, label: "Quotations (PDF / photos)" },
     fields: [
       { key: "date", label: "Date", type: "date", required: true },
       { key: "project_title", label: "Project Title", type: "text", required: true },
