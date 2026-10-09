@@ -147,6 +147,30 @@ export const FORM_SCHEMAS: FormSchema[] = [
     }],
   },
   {
+    // must come before Material IN / Quality Check Drawing so its title matches here first
+    key: "material_in_qc",
+    title: "MATERIAL IN Quality Check Form",
+    heading: "MATERIAL IN QUALITY CHECK FORM",
+    match: /material\s*in\s*quality\s*check/i,
+    attachments: { max: 3, label: "Documents / photos" },
+    fields: [
+      { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs",
+        placeholder: "Pick a reference number (optional)" },
+      { key: "date", label: "Date", type: "date", required: true },
+      { key: "project", label: "Project", type: "text", required: true },
+      { key: "purpose", label: "Purpose", type: "text", required: true },
+    ],
+    tables: [{
+      key: "items", label: "Items", serial: true, minRows: 3,
+      columns: [
+        { key: "item", label: "Item name", width: "32%" },
+        { key: "status", label: "Verification Status", type: "select", options: ["OK", "Not OK", "Pending"], width: "22%" },
+        { key: "quality", label: "Quality Check", type: "select", options: ["Accepted", "Rejected", "Rework"], width: "22%" },
+        { key: "sign", label: "Sign (name)" },
+      ],
+    }],
+  },
+  {
     key: "material_in",
     title: "MATERIAL IN FORM",
     match: /material\s*in\b/i,

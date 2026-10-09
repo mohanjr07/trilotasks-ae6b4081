@@ -68,6 +68,18 @@ const MAPS: Record<string, DocxMap> = {
     tables: [{ match: /Item\s+no.*Make/i, table: "items", cols: ["#", "item_no", "make", "specification"] }],
     signatures: "append",
   },
+  material_in_qc: {
+    rules: [
+      { part: "header", label: /Date\s*:/, value: submitted },
+      { label: /Ref\s*No\s*:/, field: "out_ref" },
+      { label: /Date\s*:/, field: "date" },
+      { label: /Project\s*:/, field: "project" },
+      { label: /Purpose\s*:/, field: "purpose" },
+    ],
+    tables: [{ match: /Item\s+name.*Quality\s+Check/i, table: "items", cols: ["#", "item", "status", "quality", "sign"] }],
+    signatures: "append",
+    spareRows: 4,
+  },
   material_in: {
     rules: [
       { part: "header", label: /Date\s*:/, value: submitted },
