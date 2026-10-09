@@ -169,7 +169,7 @@ export default function FormRequestsPage() {
               className="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-muted/40">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-ink-primary truncate">
-                  {r.form_title}{r.reference_value ? ` · ${r.reference_value}` : ""}
+                  {r.form_title}{r.reference_value ? ` · ${r.reference_value}` : ""}{r.revision ? ` · Rev ${String(r.revision).padStart(2, "0")}` : ""}
                 </p>
                 <p className="text-xs text-ink-muted">
                   {names[r.requested_by] ?? "—"} · {format(new Date(r.submitted_at), "d MMM yyyy, h:mm a")} · Authorizer: {names[r.authorizer_id] ?? "—"}
@@ -185,7 +185,7 @@ export default function FormRequestsPage() {
 
       {selected && (
         <RequestViewer request={selected} names={names} canDecide={myTurn(selected)}
-          canResubmit={selected.status === "rejected" && selected.requested_by === user?.id}
+          canResubmit={selected.status !== "authorized" && selected.requested_by === user?.id}
           onClose={close} />
       )}
     </AnimatedPage>
@@ -234,7 +234,7 @@ function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
       <Dialog open onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="sm:max-w-4xl max-h-[94dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>{request.form_title}{request.reference_value ? ` · ${request.reference_value}` : ""}</DialogTitle>
+            <DialogTitle>{request.form_title}{request.reference_value ? ` · ${request.reference_value}` : ""}{request.revision ? ` · Rev ${String(request.revision).padStart(2, "0")}` : ""}</DialogTitle>
             <DialogDescription>{STATUS_LABEL[request.status]}</DialogDescription>
           </DialogHeader>
 
@@ -257,7 +257,7 @@ function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
             </Button>
             {canResubmit && (
               <Button variant="outline" onClick={() => setEditing(true)} className="gap-1.5">
-                <Pencil className="h-4 w-4" /> Edit & resubmit
+                <Pencil className="h-4 w-4" /> {request.status === "rejected" ? "Edit & resubmit" : "Edit"}
               </Button>
             )}
             {canDecide && !rejecting && (

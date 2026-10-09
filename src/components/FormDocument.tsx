@@ -9,6 +9,7 @@ export type FormRequestRow = {
   form_id: string;
   form_title: string;
   reference_value: string | null;
+  revision?: number | null;
   data: FormData;
   requested_by: string;
   approver_id: string | null;

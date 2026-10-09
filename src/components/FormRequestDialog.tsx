@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { toast } from "sonner";
 import { approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
@@ -177,7 +178,12 @@ export default function FormRequestDialog({
             {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         ) : (
-          <Input {...common} type={f.type} onChange={(e) => setField(f.key, e.target.value)} />
+          f.type === "text" ? (
+            // long text wraps onto the next line inside the same box
+            <AutoTextarea {...common} minHeight={40} onChange={(e) => setField(f.key, e.target.value)} />
+          ) : (
+            <Input {...common} type={f.type} onChange={(e) => setField(f.key, e.target.value)} />
+          )
         )}
       </div>
     );
@@ -187,9 +193,9 @@ export default function FormRequestDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[92dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{existing ? "Edit & resubmit" : "Fill & request approval"} — {title}</DialogTitle>
+          <DialogTitle>{existing ? (existing.status === "rejected" ? "Edit & resubmit" : "Edit form") : "Fill & request approval"} — {title}</DialogTitle>
           <DialogDescription>
-            {existing?.reference_value ? `Ref No ${existing.reference_value}` : nextRef ? `Ref No will be ${nextRef} (assigned when you submit)` : "Fill the form and send it for approval."}
+            {existing?.reference_value ? `Ref No ${existing.reference_value} · saving makes it Rev ${String((existing.revision ?? 0) + 1).padStart(2, "0")} and sends it for approval again` : existing ? `Saving makes it Rev ${String((existing.revision ?? 0) + 1).padStart(2, "0")} and sends it for approval again` : nextRef ? `Ref No will be ${nextRef} (assigned when you submit)` : "Fill the form and send it for approval."}
           </DialogDescription>
         </DialogHeader>
 
@@ -240,7 +246,7 @@ export default function FormRequestDialog({
                         )}
                       </div>
                       <div
-                        className="grid gap-2 grid-cols-1 sm:[grid-template-columns:var(--cols)] items-end"
+                        className="grid gap-2 grid-cols-1 sm:[grid-template-columns:var(--cols)] items-start"
                         style={{ ["--cols" as any]: t.columns.length <= 4
                           ? ["1.6fr", ...Array(t.columns.length - 1).fill("1fr")].join(" ")
                           : "repeat(auto-fill, minmax(150px, 1fr))" }}
@@ -259,8 +265,12 @@ export default function FormRequestDialog({
                                 {(c.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
                               </select>
                             ) : (
-                              <Input value={r[c.key] ?? ""} type={c.type ?? "text"} inputMode={c.type === "number" ? "decimal" : undefined}
-                                onChange={(e) => setCell(t.key, i, c.key, e.target.value)} className="h-9" />
+                              (c.type ?? "text") === "text" ? (
+                                <AutoTextarea value={r[c.key] ?? ""} onChange={(e) => setCell(t.key, i, c.key, e.target.value)} />
+                              ) : (
+                                <Input value={r[c.key] ?? ""} type={c.type} inputMode={c.type === "number" ? "decimal" : undefined}
+                                  onChange={(e) => setCell(t.key, i, c.key, e.target.value)} className="h-9" />
+                              )
                             )}
                           </div>
                         ))}

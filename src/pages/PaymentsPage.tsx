@@ -35,6 +35,8 @@ type PaymentRequest = {
   verified_at: string | null;
   paid_at?: string | null;
   paid_by?: string | null;
+  receipt_path?: string | null;
+  receipt_name?: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -61,6 +63,8 @@ export default function PaymentsPage() {
   const [requestOpen, setRequestOpen] = useState(false);
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
   const [rejectNote, setRejectNote] = useState<string | null>(null); // manager rejecting: reason being typed
+  const [paying, setPaying] = useState(false);                       // Anu: receipt picker open
+  const [receipt, setReceipt] = useState<File | null>(null);
 
   // everyone's names + roles (for the verifier dropdown and labels)
   const { data: people = [] } = useQuery({
@@ -155,10 +159,19 @@ export default function PaymentsPage() {
   });
   const paidMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).rpc("mark_payment_paid", { p_id: id });
-      if (error) throw error;
+      if (!receipt) throw new Error("Upload the payment receipt");
+      const path = `receipts/${id}/${Date.now()}_${receipt.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, receipt, { contentType: receipt.type || undefined, upsert: false });
+      if (upErr) throw upErr;
+      const { error } = await (supabase as any).rpc("mark_payment_paid", { p_id: id, p_receipt_path: path, p_receipt_name: receipt.name });
+      if (error) {
+        await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+        throw error;
+      }
     },
     onSuccess: () => {
+      setPaying(false);
+      setReceipt(null);
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       toast.success("Marked as paid — everyone involved has been notified");
       setSelected(null);
@@ -342,7 +355,7 @@ export default function PaymentsPage() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40" onClick={() => { setSelected(null); setRejectNote(null); }}
+              className="fixed inset-0 bg-black/40 z-40" onClick={() => { setSelected(null); setRejectNote(null); setPaying(false); setReceipt(null); }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -356,7 +369,7 @@ export default function PaymentsPage() {
                       {format(new Date(selected.created_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
-                  <button onClick={() => { setSelected(null); setRejectNote(null); }} className="text-ink-muted hover:text-ink-primary shrink-0">
+                  <button onClick={() => { setSelected(null); setRejectNote(null); setPaying(false); setReceipt(null); }} className="text-ink-muted hover:text-ink-primary shrink-0">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
@@ -435,11 +448,48 @@ export default function PaymentsPage() {
                   <FileText className="h-4 w-4" /> View attached bill <ExternalLink className="h-3.5 w-3.5" />
                 </button>
 
+                {selected.receipt_path && (
+                  <button
+                    onClick={() => openBill(selected.receipt_path!)}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-success/40 bg-success-light px-4 py-2.5 text-sm font-medium text-success hover:opacity-90 transition-opacity"
+                  >
+                    <FileText className="h-4 w-4" /> View payment receipt <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
                 {isPayer && selected.status === "approved" && !selected.paid_at && (
-                  <Button className="w-full gap-1.5 bg-success hover:bg-success/90 text-white" disabled={paidMutation.isPending}
-                    onClick={() => { if (window.confirm(`Mark ${formatINR(selected.amount)} for "${selected.purpose}" as paid?`)) paidMutation.mutate(selected.id); }}>
-                    <CheckCircle2 className="h-4 w-4" /> {paidMutation.isPending ? "Saving…" : "Payment done"}
-                  </Button>
+                  !paying ? (
+                    <Button className="w-full gap-1.5 bg-success hover:bg-success/90 text-white" onClick={() => setPaying(true)}>
+                      <CheckCircle2 className="h-4 w-4" /> Payment done
+                    </Button>
+                  ) : (
+                    <div className="space-y-2 rounded-lg border border-border p-3">
+                      <p className="text-xs font-medium text-ink-muted">Upload the payment receipt *</p>
+                      <div className="relative">
+                        <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 pr-10 cursor-pointer hover:bg-muted/40 transition-colors">
+                          <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
+                          <span className="truncate text-ink-secondary">{receipt ? receipt.name : "Tap to choose a photo or PDF of the receipt"}</span>
+                          <input type="file" accept="image/*,.pdf" className="hidden"
+                            onChange={(e) => { setReceipt(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                        </label>
+                        {receipt && (
+                          <button type="button" onClick={() => setReceipt(null)} aria-label="Remove receipt"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-muted hover:text-destructive hover:bg-destructive/10">
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" className="flex-1" disabled={paidMutation.isPending}
+                          onClick={() => { setPaying(false); setReceipt(null); }}>Cancel</Button>
+                        <Button className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-white" disabled={!receipt || paidMutation.isPending}
+                          onClick={() => paidMutation.mutate(selected.id)}>
+                          {paidMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          {paidMutation.isPending ? "Saving…" : "Confirm payment"}
+                        </Button>
+                      </div>
+                    </div>
+                  )
                 )}
 
                 {selected.status === "pending_verification" && selected.verifier_id === user?.id && (

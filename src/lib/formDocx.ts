@@ -310,6 +310,31 @@ function tidyRefLine(doc: Document, bookmarkName: string, count = 10) {
   trimSpacesBefore(nodes, last, (last.textContent ?? "").length, Math.min(count, trailing - 2));
 }
 
+/** Change the revision digits in "Rev : 00" / "Rev. No: 01" (text may be split over several runs). */
+function setRevision(doc: Document, rev: number) {
+  const re = /(Rev(?:ision)?\.?\s*(?:No\.?)?\s*[:.\-]?\s*)(\d{1,3})/i;
+  for (const p of all(doc, "p")) {
+    const nodes = textNodes(p);
+    const full = nodes.map((n) => n.textContent ?? "").join("");
+    const m = re.exec(full);
+    if (!m) continue;
+    const start = m.index + m[1].length;
+    const end = start + m[2].length;
+    const value = String(rev).padStart(m[2].length, "0");
+    let pos = 0, placed = false;
+    for (const n of nodes) {
+      const t = n.textContent ?? "";
+      const a = Math.max(start - pos, 0), b = Math.min(end - pos, t.length);
+      if (a < t.length && b > 0 && a < b) {
+        n.textContent = t.slice(0, a) + (placed ? "" : value) + t.slice(b);
+        preserve(n);
+        placed = true;
+      }
+      pos += t.length;
+    }
+  }
+}
+
 function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, value: string) {
   for (const p of all(doc, "p")) {
     const done = used.get(p) ?? new Set<string>();
@@ -436,8 +461,13 @@ export async function buildFilledDocx(
     if (locator && req.reference_value && (locator.part ?? "word/document.xml") === part) {
       try { xml = setWordBookmarkText(xml, locator.name, req.reference_value); } catch { /* bookmark missing */ }
     }
-    if (!map) { zip.file(part, xml); continue; }
+    if (!map) {
+      if (req.revision) { const d = parser.parseFromString(xml, "application/xml"); setRevision(d, req.revision); xml = ser.serializeToString(d); }
+      zip.file(part, xml); continue;
+    }
     const doc = parser.parseFromString(xml, "application/xml");
+    // every edit by the requester bumps the revision shown in the header ("Rev : 01", "Rev : 02"…)
+    if (req.revision) setRevision(doc, req.revision);
     const isHeader = part !== "word/document.xml";
     if (isHeader && locator && (locator.part ?? "word/document.xml") === part) tidyRefLine(doc, locator.name);
     const used = new Map<Element, Set<string>>();

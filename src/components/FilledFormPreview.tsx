@@ -51,7 +51,7 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
     wordBlob: () => blob,
   }), [failed, tpl.isError, blob]);
 
-  const key = JSON.stringify([request.data, request.status, request.approved_at, request.authorized_at, request.rejected_at, request.reference_value, names[request.requested_by]]);
+  const key = JSON.stringify([request.data, request.revision, request.status, request.approved_at, request.authorized_at, request.rejected_at, request.reference_value, names[request.requested_by]]);
   useEffect(() => {
     if (!tpl.data || !hostRef.current) return;
     let cancelled = false;
