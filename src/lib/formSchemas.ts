@@ -264,6 +264,27 @@ export const FORM_SCHEMAS: FormSchema[] = [
     ],
   },
   {
+    key: "quote_comparison",
+    title: "Quote Comparison Form",
+    heading: "QUOTE COMPARISON FORM",
+    match: /quote\s*compar/i,
+    fields: [
+      { key: "date", label: "Date", type: "date", required: true },
+      { key: "project", label: "Project", type: "text", required: true },
+      { key: "purpose", label: "Purpose", type: "text", required: true, wide: true },
+    ],
+    tables: [{
+      key: "items", label: "Items & quotes", serial: true, minRows: 3,
+      columns: [
+        { key: "item", label: "Item name", width: "34%" },
+        { key: "price1", label: "Price 1", type: "number", width: "20%" },
+        { key: "price2", label: "Price 2", type: "number", width: "20%" },
+        { key: "price3", label: "Price 3", type: "number" },
+      ],
+    }],
+    attachments: { max: 3, label: "Quotations (PDF / photos)" },
+  },
+  {
     key: "design_validation",
     title: "Design Validation Form",
     heading: "DESIGN VALIDATION FORM",

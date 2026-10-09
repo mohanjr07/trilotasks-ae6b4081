@@ -136,6 +136,17 @@ const MAPS: Record<string, DocxMap> = {
     sigLabels: ["Employee (Requested by)", "Reporting Manager (Approved by)", "Finance / Accounts (Authorized by)"],
     spareRows: 4,
   },
+  quote_comparison: {
+    rules: [
+      { part: "header", label: /Date\s*:/, value: submitted },
+      { label: /^\s*Date\s*:/, field: "date" },
+      { label: /Project\s*:/, field: "project" },
+      { label: /Purpose\s*:/, field: "purpose" },
+    ],
+    tables: [{ match: /Item\s+name.*Price/i, table: "items", cols: ["#", "item", "price1", "price2", "price3"] }],
+    signatures: "append",
+    spareRows: 4,
+  },
   design_validation: {
     rules: [
       { part: "header", label: /Date\s*:/, value: submitted },
