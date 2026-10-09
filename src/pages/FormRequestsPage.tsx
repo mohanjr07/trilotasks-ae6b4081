@@ -176,7 +176,10 @@ export default function FormRequestsPage() {
                 </p>
               </div>
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[r.status]}`}>
-                {myTurn(r) ? "Your action needed" : STATUS_LABEL[r.status]}
+                {myTurn(r) ? "Your action needed"
+                  : schemaForTitle(r.form_title).reviewer && r.status === "pending_authorization" ? `Waiting for ${schemaForTitle(r.form_title).reviewer!.name}`
+                  : schemaForTitle(r.form_title).reviewer && r.status === "authorized" ? "Approved"
+                  : STATUS_LABEL[r.status]}
               </span>
             </button>
           ))}
@@ -253,7 +256,7 @@ function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onCl
         <DialogContent className="sm:max-w-4xl max-h-[94dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>{request.form_title}{request.reference_value ? ` · ${request.reference_value}` : ""}{request.revision ? ` · Rev ${String(request.revision).padStart(2, "0")}` : ""}</DialogTitle>
-            <DialogDescription>{STATUS_LABEL[request.status]}</DialogDescription>
+            <DialogDescription>{schema.reviewer && request.status === "pending_authorization" ? `Waiting for approval by ${schema.reviewer.name}` : schema.reviewer && request.status === "authorized" ? "Approved" : STATUS_LABEL[request.status]}</DialogDescription>
           </DialogHeader>
 
           <div className="overflow-auto max-h-[60dvh] rounded-lg border border-border bg-neutral-200 p-2">
@@ -293,7 +296,7 @@ function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onCl
                   <X className="h-4 w-4" /> Reject
                 </Button>
                 <Button onClick={() => decide.mutate(true)} disabled={decide.isPending} className="gap-1.5 bg-green-600 hover:bg-green-700">
-                  <Check className="h-4 w-4" /> {isApproverStep ? "Approve" : "Authorize"}
+                  <Check className="h-4 w-4" /> {isApproverStep || schema.reviewer ? "Approve" : "Authorize"}
                 </Button>
               </>
             )}

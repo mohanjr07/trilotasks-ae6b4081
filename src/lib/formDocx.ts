@@ -39,7 +39,7 @@ const approverStatus = (r: FormRequestRow) =>
   : r.status === "rejected" && r.rejected_by === r.approver_id ? `✗ Rejected\n${stamp(r.rejected_at)}`
   : "Pending";
 const authorizerStatus = (r: FormRequestRow) =>
-  r.authorized_at ? `✓ Authorized\n${stamp(r.authorized_at)}`
+  r.authorized_at ? `✓ ${/vendor\s*registration/i.test(r.form_title) ? "Approved" : "Authorized"}\n${stamp(r.authorized_at)}`
   : r.status === "rejected" && r.rejected_by === r.authorizer_id ? `✗ Rejected\n${stamp(r.rejected_at)}`
   : "Pending";
 
@@ -180,6 +180,7 @@ const MAPS: Record<string, DocxMap> = {
       { label: /Credit\s+Period\s*:/, field: "credit_period" },
       { label: /Referred\s+Person\s+name\s*:/, field: "referred_by" },
     ],
+    sigLabels: ["Requested by", "", "Approved by"],
     tables: [{ match: /Check\s+List\s+of\s+Documents/i, table: "checklist", cols: ["#", null, null, "description", "remarks"], compact: true }],
     signatures: "append",
     spareRows: 0,

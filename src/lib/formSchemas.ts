@@ -48,6 +48,7 @@ export type FormSchema = {
   notes?: string[];           // fixed text printed on the copy (declarations etc.)
   summary?: (d: FormData) => Array<{ label: string; value: string }>; // worked-out lines (net amount…)
   noApproval?: boolean;       // goes straight to the authorizer (no "Approved by" step)
+  reviewer?: { email: string; name: string }; // single fixed person who approves it (no authorizer dropdown)
   attachments?: { max: number; label?: string }; // documents the requester can upload with the form
 };
 
@@ -333,6 +334,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
     heading: "VENDOR REGISTRATION FORM",
     match: /vendor\s*registration/i,
     noApproval: true,
+    reviewer: { email: "anu@triloautomation.com", name: "Anu" },   // only Anu approves — no authorization
     fields: [
       { key: "supplier_name", label: "Business Name of Supplier", type: "text", required: true, wide: true },
       { key: "address", label: "Full Address", type: "textarea", required: true, wide: true },

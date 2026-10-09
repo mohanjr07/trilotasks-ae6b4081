@@ -98,7 +98,7 @@ export default function FormRequestDialog({
       const missing = [...schema.fields, ...(schema.footerFields ?? [])].find((f) => f.required && !String(data.fields[f.key] ?? "").trim());
       if (missing) throw new Error(`Please fill "${missing.label}"`);
       if (approverOptions && !approver) throw new Error("Choose who will approve this form");
-      if (!authorizer) throw new Error("Choose who will authorize this form");
+      if (!authorizer && !schema.reviewer) throw new Error("Choose who will authorize this form");
       // drop completely empty table rows
       const clean: FormData = {
         ...(schema.attachments ? { attachments } : {}),
@@ -107,11 +107,11 @@ export default function FormRequestDialog({
         tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
       };
       if (existing) {
-        const { error } = await (supabase as any).rpc("resubmit_form_request", { p_id: existing.id, p_data: clean, p_authorizer: authorizer, ...(approverOptions ? { p_approver: approver } : {}) });
+        const { error } = await (supabase as any).rpc("resubmit_form_request", { p_id: existing.id, p_data: clean, p_authorizer: authorizer || null, ...(approverOptions ? { p_approver: approver } : {}) });
         if (error) throw error;
         return existing.id;
       }
-      const { data: id, error } = await (supabase as any).rpc("submit_form_request", { p_form_id: form!.id, p_data: clean, p_authorizer: authorizer, ...(approverOptions ? { p_approver: approver } : {}) });
+      const { data: id, error } = await (supabase as any).rpc("submit_form_request", { p_form_id: form!.id, p_data: clean, p_authorizer: authorizer || null, ...(approverOptions ? { p_approver: approver } : {}) });
       if (error) throw error;
       return id as string;
     },
@@ -120,6 +120,7 @@ export default function FormRequestDialog({
       qc.invalidateQueries({ queryKey: ["production-forms"] });
       toast.success(needsApproval(title)
         ? `${existing ? "Resubmitted" : "Sent"} to ${(approverOptions && names[approver]) || approverFor(title).name} for approval`
+        : schema.reviewer ? `${existing ? "Resubmitted" : "Sent"} to ${schema.reviewer.name} for approval`
         : `${existing ? "Resubmitted" : "Sent"} to ${authorizers.find((a) => a.id === authorizer)?.full_name ?? "the authorizer"} for authorization`);
       onSubmitted?.(id);
       onClose();
@@ -347,20 +348,27 @@ export default function FormRequestDialog({
                 )}
               </div>
             )}
-            <div>
-              <label htmlFor="authorizer" className="text-xs text-ink-muted">Authorized by *</label>
-              <select id="authorizer" value={authorizer} onChange={(e) => setAuthorizer(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                <option value="">Choose…</option>
-                {authorizers.map((a) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
-              </select>
-            </div>
+            {schema.reviewer ? (
+              <div>
+                <p className="text-xs text-ink-muted">Approved by</p>
+                <p className="text-sm font-semibold text-ink-primary">{schema.reviewer.name}</p>
+              </div>
+            ) : (
+              <div>
+                <label htmlFor="authorizer" className="text-xs text-ink-muted">Authorized by *</label>
+                <select id="authorizer" value={authorizer} onChange={(e) => setAuthorizer(e.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                  <option value="">Choose…</option>
+                  {authorizers.map((a) => <option key={a.id} value={a.id}>{a.full_name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={submit.isPending} className="gap-1.5">
-              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : `${existing ? "Resubmit" : "Send"} for ${needsApproval(title) ? "approval" : "authorization"}`}
+              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : `${existing ? "Resubmit" : "Send"} for ${needsApproval(title) || schema.reviewer ? "approval" : "authorization"}`}
             </Button>
           </div>
         </form>
