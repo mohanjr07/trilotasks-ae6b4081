@@ -192,8 +192,24 @@ function makeRun(doc: Document, text: string, rPr?: Element | null, bold = false
   return r;
 }
 
+/** Long words with no spaces (e.g. part numbers, "|||||") get invisible break points
+ *  so they wrap inside the cell instead of stretching the column. */
+const softWrap = (t: string) => t.replace(/(\S{18})(?=\S)/g, "$1\u200B");
+
+/** Keep the template's column widths: text wraps inside a cell instead of widening it. */
+function fixTableLayout(tbl: Element) {
+  const doc = tbl.ownerDocument;
+  let pr = kids(tbl, "tblPr")[0];
+  if (!pr) { pr = el(doc, "tblPr"); tbl.insertBefore(pr, tbl.firstChild); }
+  if (kids(pr, "tblLayout").length) { kids(pr, "tblLayout")[0].setAttributeNS(W, "w:type", "fixed"); return; }
+  const layout = el(doc, "tblLayout", { type: "fixed" });
+  const before = kids(pr, "tblCellMar")[0] ?? kids(pr, "tblLook")[0] ?? kids(pr, "tblCaption")[0] ?? kids(pr, "tblDescription")[0] ?? null;
+  pr.insertBefore(layout, before);
+}
+
 /** Replace a table cell's text, keeping its paragraph & font formatting. */
-function setCellText(tc: Element, text: string) {
+function setCellText(tc: Element, rawText: string) {
+  const text = softWrap(rawText);
   const doc = tc.ownerDocument;
   const ps = kids(tc, "p");
   const firstRun = all(tc, "r")[0];
@@ -510,6 +526,7 @@ export async function buildFilledDocx(
           if (/Authorized by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.authorizer_id] ?? ""); tcs[2] && setCellText(tcs[2], authorizerStatus(req)); }
         }
       }
+      for (const tbl of all(doc, "tbl")) fixTableLayout(tbl);
       const body = all(doc, "body")[0];
       const sectPr = kids(body, "sectPr")[0] ?? null;
       const add = (n: Node) => body.insertBefore(n, sectPr);
