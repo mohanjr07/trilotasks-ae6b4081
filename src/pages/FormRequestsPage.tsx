@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Check, X, Download, Pencil, FileStack, ClipboardCheck } from "lucide-react";
+import { Check, X, Download, Pencil, FileStack, ClipboardCheck, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage from "@/components/AnimatedPage";
@@ -186,13 +186,16 @@ export default function FormRequestsPage() {
       {selected && (
         <RequestViewer request={selected} names={names} canDecide={myTurn(selected)}
           canResubmit={selected.status !== "authorized" && selected.requested_by === user?.id}
+          canDelete={profile?.role === "admin" || profile?.role === "super_admin" ||
+            (selected.requested_by === user?.id && selected.status !== "authorized")}
           onClose={close} />
       )}
     </AnimatedPage>
   );
 }
 
-function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
+function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onClose }: {
+  canDelete: boolean;
   request: FormRequestRow;
   names: Record<string, string>;
   canDecide: boolean;
@@ -219,6 +222,21 @@ function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
       setReason("");
     },
     onError: (e: any) => toast.error(e?.message ?? "Couldn't save your decision"),
+  });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await (supabase as any).rpc("delete_form_request", { p_id: request.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["form-requests"] });
+      qc.invalidateQueries({ queryKey: ["production-forms"] }); qc.invalidateQueries({ queryKey: ["production_forms"] });
+      qc.invalidateQueries({ queryKey: ["production_form_opens_log"] });
+      toast.success("Form deleted — the running number has been updated");
+      onClose();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't delete the form"),
   });
 
   const isApproverStep = request.status === "pending_approval";
@@ -252,6 +270,15 @@ function RequestViewer({ request, names, canDecide, canResubmit, onClose }: {
           )}
 
           <div className="flex flex-wrap justify-end gap-2">
+            {canDelete && (
+              <Button variant="outline" className="gap-1.5 text-destructive hover:text-destructive mr-auto" disabled={remove.isPending}
+                onClick={() => {
+                  if (window.confirm(`Delete ${request.form_title}${request.reference_value ? ` (${request.reference_value})` : ""}? This cannot be undone. If it is the latest number, that number will be used again for the next form.`))
+                    remove.mutate();
+                }}>
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            )}
             <Button variant="outline" onClick={word} className="gap-1.5">
               <Download className="h-4 w-4" /> Download Word
             </Button>

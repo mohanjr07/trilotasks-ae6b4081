@@ -159,7 +159,22 @@ export function setWordBookmarkText(documentXml: string, bookmarkName: string, v
     newSpan = `<w:r><w:t xml:space="preserve">${escaped}</w:t></w:r>${span}`;
   }
 
-  return documentXml.slice(0, afterStartIdx) + newSpan + documentXml.slice(endIdxAbs);
+  // Template leftovers typed just after the bookmark (e.g. "00" or "R0" from "TRILO/MIF/000R0")
+  // would otherwise be printed after the real number — drop those runs.
+  let tail = documentXml.slice(endIdxAbs);
+  const endTag = /^<w:bookmarkEnd\b[^>]*\/?>/.exec(tail);
+  if (endTag) {
+    let rest = tail.slice(endTag[0].length);
+    const leftover = /^(?:<w:proofErr\b[^>]*\/>)?<w:r\b[^>]*>(?:<w:rPr>[\s\S]*?<\/w:rPr>)?<w:t\b[^>]*>(\d*(?:R\d{1,2})?)<\/w:t><\/w:r>/;
+    for (let guard = 0; guard < 4; guard++) {
+      const m = leftover.exec(rest);
+      if (!m || !m[1]) break;
+      rest = rest.slice(m[0].length);
+    }
+    tail = endTag[0] + rest;
+  }
+
+  return documentXml.slice(0, afterStartIdx) + newSpan + tail;
 }
 
 function escapeRegExp(s: string): string {

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -16,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, History } from "lucide-react";
+import { Loader2, History, Trash2 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
 type Props = {
@@ -35,6 +37,25 @@ type LogRow = {
 
 export default function ProductionFormLogDialog({ open, onClose }: Props) {
   const [formFilter, setFormFilter] = useState<string>("all");
+  const qc = useQueryClient();
+  const { profile } = useAuth();
+  const canDelete = profile?.role === "admin" || profile?.role === "super_admin";
+  const del = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("delete_form_log", { p_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["production_form_opens_log"] });
+      qc.invalidateQueries({ queryKey: ["production-forms"] }); qc.invalidateQueries({ queryKey: ["production_forms"] });
+      qc.invalidateQueries({ queryKey: ["form-requests"] });
+      toast.success("Entry deleted — the running number has been updated");
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Couldn't delete"),
+  });
+  const confirmDel = (row: { id: string; reference_value: string }) => {
+    if (window.confirm(`Delete ${row.reference_value}? Any form request with this number is deleted too. If it is the latest number, it will be used again for the next form.`)) del.mutate(row.id);
+  };
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["production_form_opens_log"],
@@ -120,7 +141,14 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
                     <span className="text-[11px] text-ink-muted">{new Date(row.opened_at).toLocaleString()}</span>
                   </div>
                   <p className="mt-1 text-sm text-ink-primary truncate">{row.production_forms?.title ?? "—"}</p>
-                  <p className="text-xs text-ink-muted truncate">{row.profiles?.full_name ?? "Unknown"}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-ink-muted truncate">{row.profiles?.full_name ?? "Unknown"}</p>
+                    {canDelete && (
+                      <button onClick={() => confirmDel(row)} disabled={del.isPending} className="rounded p-1 text-ink-muted hover:text-destructive" aria-label="Delete entry">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -131,6 +159,7 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
                   <th className="py-2 pr-3 font-medium">Form</th>
                   <th className="py-2 pr-3 font-medium">Used By</th>
                   <th className="py-2 pr-3 font-medium">When</th>
+                  {canDelete && <th className="py-2 font-medium" />}
                 </tr>
               </thead>
               <tbody>
@@ -146,6 +175,14 @@ export default function ProductionFormLogDialog({ open, onClose }: Props) {
                     <td className="py-2 pr-3 text-ink-muted whitespace-nowrap">
                       {new Date(row.opened_at).toLocaleString()}
                     </td>
+                    {canDelete && (
+                      <td className="py-2 text-right">
+                        <button onClick={() => confirmDel(row)} disabled={del.isPending} title="Delete entry"
+                          className="rounded p-1.5 text-ink-muted hover:text-destructive hover:bg-destructive/10" aria-label="Delete entry">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
