@@ -29,7 +29,7 @@ type Entry = {
   id: string;
   work_date: string;
   employee_id: string;
-  half: "first" | "second";
+  half: "first" | "second" | "full" | "other";
   duration_hours: number;
   start_time: string | null;
   end_time: string | null;
@@ -41,7 +41,9 @@ type Entry = {
 };
 type Person = { id: string; full_name: string; role: string };
 
-const halfLabel = (h: string) => (h === "first" ? "First half" : "Second half");
+const halfLabel = (h: string) =>
+  h === "full" ? "Full day" : h === "other" ? "Other time" : h === "first" ? "First half" : "Second half";
+const FULL_DAY_MIN = 9 * 60;   // a full day of overtime counts as 9 hours
 const hours = (n: number) => `${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })} h`;
 const todayIso = () => format(new Date(), "yyyy-MM-dd");
 
@@ -293,7 +295,8 @@ export const fmtTime = (t?: string | null) => {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 };
 
-type Row = { half: "first" | "second" | ""; start: string; end: string };
+type Row = { half: "full" | "other" | ""; start: string; end: string };
+const rowMin = (r?: Row) => (!r ? 0 : r.half === "full" ? FULL_DAY_MIN : r.half === "other" ? spanMin(r.start, r.end) : 0);
 
 function AddOvertimeDialog({ open, onClose, people, onDone }: {
   open: boolean; onClose: () => void; people: Person[]; userId?: string; onDone: () => void;
@@ -316,8 +319,6 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
   };
   const setRow = (id: string, patch: Partial<Row>) => setRows((r) => {
     const next = { ...(r[id] ?? { half: "", start: "", end: "" }), ...patch };
-    // pick the half from the start time unless it was chosen already
-    if (patch.start && !r[id]?.half) next.half = toMin(patch.start) < 13 * 60 ? "first" : "second";
     return { ...r, [id]: next };
   });
   // copy the first person's times to everyone else
@@ -327,20 +328,26 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
     setRows((r) => Object.fromEntries(Object.entries({ ...r }).map(([k, v]) => [k, selected.includes(k) ? { ...first } : v])));
   };
 
-  const totalMin = selected.reduce((s, id) => s + spanMin(rows[id]?.start ?? "", rows[id]?.end ?? ""), 0);
+  const totalMin = selected.reduce((s, id) => s + rowMin(rows[id]), 0);
 
   const save = async () => {
     if (!selected.length) return toast.error("Select at least one name");
     for (const id of selected) {
       const r = rows[id];
       const name = people.find((p) => p.id === id)?.full_name ?? "someone";
-      if (!r?.start || !r?.end) return toast.error(`Enter the start and end time for ${name}`);
-      if (!r.half) return toast.error(`Choose First half or Second half for ${name}`);
-      if (spanMin(r.start, r.end) > 16 * 60) return toast.error(`Check the times for ${name} — more than 16 hours`);
+      if (!r?.half) return toast.error(`Choose Full day or Other time for ${name}`);
+      if (r.half === "other") {
+        if (!r.start || !r.end) return toast.error(`Enter the start and end time for ${name}`);
+        if (spanMin(r.start, r.end) > 16 * 60) return toast.error(`Check the times for ${name} — more than 16 hours`);
+      }
     }
     setSaving(true);
     try {
-      const entries = selected.map((id) => ({ employee_id: id, half: rows[id].half, start_time: rows[id].start, end_time: rows[id].end }));
+      const entries = selected.map((id) => ({
+        employee_id: id, half: rows[id].half,
+        start_time: rows[id].half === "other" ? rows[id].start : null,
+        end_time: rows[id].half === "other" ? rows[id].end : null,
+      }));
       const { error } = await (supabase as any).rpc("add_overtime_entries", { p_date: date, p_entries: entries, p_note: note.trim() || null });
       if (error) throw error;
       toast.success(`Overtime entered for ${selected.length} ${selected.length === 1 ? "person" : "people"} — sent to Anu`);
@@ -358,7 +365,7 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
       <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add overtime</DialogTitle>
-          <DialogDescription>Pick the OT members, then enter each person's start and end time — the hours are worked out for you.</DialogDescription>
+          <DialogDescription>Pick the OT members, then choose Full day or Other time for each person — for other time enter the start and end, the hours are worked out for you.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -402,14 +409,14 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="text-xs font-medium text-ink-muted">Time for each person *</label>
-                {selected.length > 1 && rows[selected[0]]?.start && rows[selected[0]]?.end && (
+                {selected.length > 1 && rows[selected[0]]?.half && (rows[selected[0]].half === "full" || (rows[selected[0]].start && rows[selected[0]].end)) && (
                   <button type="button" onClick={copyFirst} className="text-xs text-primary hover:underline">Same time for everyone</button>
                 )}
               </div>
               <div className="space-y-2">
                 {selected.map((id) => {
                   const r = rows[id] ?? { half: "", start: "", end: "" };
-                  const mins = spanMin(r.start, r.end);
+                  const mins = rowMin(r);
                   return (
                     <div key={id} className="rounded-lg border border-border p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -418,7 +425,22 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
                           <X className="h-4 w-4" />
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                        <div>
+                          <label className="mb-1 block text-[11px] text-ink-muted">Overtime</label>
+                          <select value={r.half} onChange={(e) => setRow(id, { half: e.target.value as Row["half"] })}
+                            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                            <option value="">Choose…</option>
+                            <option value="full">Full day</option>
+                            <option value="other">Other time</option>
+                          </select>
+                        </div>
+                        <div className="flex h-9 items-center justify-center rounded-md bg-accent-light px-3 text-sm font-semibold text-primary min-w-[84px]">
+                          {fmtSpan(mins)}
+                        </div>
+                      </div>
+                      {r.half === "other" && (
+                      <div className="mt-2 grid grid-cols-2 gap-2">
                         <div>
                           <label className="mb-1 block text-[11px] text-ink-muted">Start</label>
                           <Input type="time" value={r.start} onChange={(e) => setRow(id, { start: e.target.value })} className="h-9" />
@@ -427,18 +449,8 @@ function AddOvertimeDialog({ open, onClose, people, onDone }: {
                           <label className="mb-1 block text-[11px] text-ink-muted">End</label>
                           <Input type="time" value={r.end} onChange={(e) => setRow(id, { end: e.target.value })} className="h-9" />
                         </div>
-                        <div className="col-span-2 sm:col-span-1 flex h-9 items-center justify-center rounded-md bg-accent-light px-3 text-sm font-semibold text-primary min-w-[84px]">
-                          {fmtSpan(mins)}
-                        </div>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {(["first", "second"] as const).map((h) => (
-                          <button type="button" key={h} onClick={() => setRow(id, { half: h })}
-                            className={`h-8 rounded-md border text-xs font-medium transition-colors ${r.half === h ? "border-primary bg-accent-light text-primary" : "border-input text-ink-secondary hover:bg-muted"}`}>
-                            {halfLabel(h)}
-                          </button>
-                        ))}
-                      </div>
+                      )}
                     </div>
                   );
                 })}
