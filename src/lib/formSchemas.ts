@@ -109,7 +109,6 @@ export const FORM_SCHEMAS: FormSchema[] = [
     heading: "MATERIAL REQUISITION",
     match: /material\s*request/i,
     fields: [
-      { key: "to", label: "To", type: "text", required: true },
       { key: "date", label: "Date", type: "date", required: true },
       { key: "project_title", label: "Project Title", type: "text", required: true },
       { key: "project_no", label: "Project No.", type: "text" },

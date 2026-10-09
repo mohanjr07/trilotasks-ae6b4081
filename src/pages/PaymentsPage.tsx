@@ -347,7 +347,8 @@ export default function PaymentsPage() {
         onClose={() => setRequestOpen(false)}
         projects={projects}
         managers={managers}
-        skipVerification={["manager", "admin", "super_admin"].includes(profile?.role ?? "")}
+        fixedVerifier={(profile?.email ?? "").toLowerCase() === "production@triloautomation.com" ? "Hari" : null}
+        skipVerification={(profile?.email ?? "").toLowerCase() !== "production@triloautomation.com" && ["manager", "admin", "super_admin"].includes(profile?.role ?? "")}
         userId={user?.id ?? ""}
         onDone={() => qc.invalidateQueries({ queryKey: ["payment-requests"] })}
       />
@@ -562,8 +563,9 @@ export default function PaymentsPage() {
 
 // ─── Request Payment Modal ─────────────────────────────────────────────────
 function RequestPaymentModal({
-  open, onClose, projects, managers, skipVerification, userId, onDone,
+  open, onClose, projects, managers, skipVerification, fixedVerifier, userId, onDone,
 }: {
+  fixedVerifier?: string | null;   // production@ → always verified by Hari (set by the database)
   skipVerification: boolean;   // managers / admins: straight to the admins
   open: boolean;
   onClose: () => void;
@@ -591,7 +593,7 @@ function RequestPaymentModal({
     if (!purpose.trim()) return toast.error("Enter the purpose of this payment");
     if (!amount || Number(amount) <= 0) return toast.error("Enter a valid amount");
     if (!file) return toast.error("Attach the bill");
-    if (!skipVerification && !verifierId) return toast.error("Choose the manager who will verify the bill");
+    if (!skipVerification && !fixedVerifier && !verifierId) return toast.error("Choose the manager who will verify the bill");
     if (!userId) return toast.error("You must be logged in");
 
     setSubmitting(true);
@@ -610,7 +612,8 @@ function RequestPaymentModal({
         amount: Number(amount),
         bill_path: path,
         bill_name: file.name,
-        verifier_id: skipVerification ? null : verifierId,
+        // production@: the database sets Hari as the verifier
+        verifier_id: skipVerification || fixedVerifier ? null : verifierId,
         status: skipVerification ? "pending" : "pending_verification",
       } as any);
       if (insErr) {
@@ -618,7 +621,7 @@ function RequestPaymentModal({
         throw insErr;
       }
 
-      toast.success(skipVerification ? "Payment request sent to the admins for approval"
+      toast.success(fixedVerifier ? `Sent to ${fixedVerifier} for approval` : skipVerification ? "Payment request sent to the admins for approval"
         : `Sent to ${managers.find((m) => m.id === verifierId)?.full_name ?? "the manager"} for verification`);
       reset();
       onDone();
@@ -721,7 +724,14 @@ function RequestPaymentModal({
                   </div>
                 </div>
 
-                {!skipVerification && (
+                {fixedVerifier && (
+                <div>
+                  <label className="text-xs font-medium text-ink-muted mb-1.5 block">Approval by</label>
+                  <div className="h-10 flex items-center rounded-md border border-input bg-muted/40 px-3 text-sm font-medium text-ink-primary">{fixedVerifier}</div>
+                  <p className="mt-1 text-[11px] text-ink-muted">{fixedVerifier} approves it first, then it goes to the admins for authorization.</p>
+                </div>
+                )}
+                {!skipVerification && !fixedVerifier && (
                 <div>
                   <label className="text-xs font-medium text-ink-muted mb-1.5 block">Payment verification by *</label>
                   <Select value={verifierId} onValueChange={setVerifierId}>
