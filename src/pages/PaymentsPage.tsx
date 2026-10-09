@@ -18,7 +18,7 @@ import StatCard from "@/components/StatCard";
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { openExternal } from "@/lib/nativeFiles";
+import { openFileLink } from "@/lib/nativeFiles";
 
 const BUCKET = "payment-bills";
 
@@ -120,9 +120,11 @@ export default function PaymentsPage() {
 
   const openBill = async (path: string) => {
     try {
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60);
-      if (error) throw error;
-      await openExternal(data.signedUrl);
+      await openFileLink(async () => {
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300);
+        if (error) throw error;
+        return data.signedUrl;
+      });
     } catch (e: any) {
       toast.error("Could not open the bill: " + (e?.message ?? ""));
     }

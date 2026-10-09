@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Paperclip, X, FileText, Loader2, ExternalLink, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { openExternal } from "@/lib/nativeFiles";
+import { openFileLink } from "@/lib/nativeFiles";
 import { toast } from "sonner";
 
 export type FormAttachment = { path: string; name: string; size?: number };
@@ -13,9 +13,11 @@ const MAX_MB = 15;
 
 export async function openAttachment(a: FormAttachment) {
   try {
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(a.path, 120);
-    if (error) throw error;
-    await openExternal(data.signedUrl);
+    await openFileLink(async () => {
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(a.path, 300);
+      if (error) throw error;
+      return data.signedUrl;
+    });
   } catch (e: any) {
     toast.error("Could not open the document: " + (e?.message ?? ""));
   }

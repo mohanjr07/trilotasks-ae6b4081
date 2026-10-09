@@ -17,7 +17,7 @@ import {
 import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { saveFromUrl, openExternal } from "@/lib/nativeFiles";
+import { saveFromUrl, openFileLink } from "@/lib/nativeFiles";
 import { isNativeApp } from "@/lib/platform";
 
 const BUCKET = "user-documents";
@@ -191,11 +191,11 @@ export default function DocumentsPage() {
 
   const handleView = async (doc: UserDoc) => {
     try {
-      const { data, error } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(doc.file_path, 60);
-      if (error) throw error;
-      await openExternal(data.signedUrl);
+      await openFileLink(async () => {
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(doc.file_path, 300);
+        if (error) throw error;
+        return data.signedUrl;
+      });
     } catch (e: any) {
       toast.error("Could not open file: " + (e?.message ?? ""));
     }

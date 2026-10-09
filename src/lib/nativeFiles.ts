@@ -52,6 +52,31 @@ export async function saveFromUrl(url: string, fileName: string): Promise<void> 
 }
 
 /** Open a link or file for viewing. On the phone app: in-app browser tab. */
+/**
+ * Open a file whose link has to be fetched first (signed storage URL).
+ * Safari / iPhone home-screen apps block a new tab opened *after* an await, so the
+ * tab is opened straight away on the tap and pointed at the file once the link is ready.
+ */
+export async function openFileLink(getUrl: () => Promise<string>): Promise<void> {
+  const { Browser } = plugins();
+  if (isNativeApp && Browser) {
+    await Browser.open({ url: await getUrl() });
+    return;
+  }
+  const win = window.open("", "_blank");
+  if (win) {
+    try { win.document.title = "Opening…"; win.document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px;color:#555">Opening the file…</p>'; } catch { /* ignore */ }
+  }
+  try {
+    const url = await getUrl();
+    if (win && !win.closed) win.location.href = url;
+    else window.location.href = url;   // pop-ups blocked → open it here
+  } catch (e) {
+    if (win && !win.closed) win.close();
+    throw e;
+  }
+}
+
 export async function openExternal(url: string): Promise<void> {
   const { Browser } = plugins();
   if (isNativeApp && Browser) {
