@@ -55,7 +55,14 @@ export type FormData = {
   fields: Record<string, string>;
   tables: Record<string, Array<Record<string, string>>>;
   attachments?: Array<{ path: string; name: string; size?: number }>;
+  headings?: Record<string, Record<string, string>>;   // renamed column headings, per table
 };
+
+/** Column heading as typed by the requester (falls back to the form's own heading). */
+export function headingOf(d: FormData | null | undefined, table: string, col: { key: string; label: string }) {
+  const h = d?.headings?.[table]?.[col.key];
+  return h && h.trim() ? h : col.label;
+}
 
 // Used for any form that doesn't have its own definition yet.
 export const GENERIC_SCHEMA: FormSchema = {

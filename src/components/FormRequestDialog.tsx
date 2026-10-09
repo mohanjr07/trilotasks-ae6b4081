@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { toast } from "sonner";
-import { approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { headingOf, approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -54,7 +54,8 @@ export default function FormRequestDialog({
     setPreview(false);
     const base = emptyFormData(schema);
     if (existing) {
-      setData({ fields: { ...base.fields, ...(existing.data?.fields ?? {}) }, tables: { ...base.tables, ...(existing.data?.tables ?? {}) } });
+      setData({ fields: { ...base.fields, ...(existing.data?.fields ?? {}) }, tables: { ...base.tables, ...(existing.data?.tables ?? {}) },
+        ...((existing.data as any)?.headings ? { headings: (existing.data as any).headings } : {}) });
       setAuthorizer(existing.authorizer_id);
       setAttachments(((existing.data as any)?.attachments ?? []) as FormAttachment[]);
       setApprover(existing.approver_id ?? "");
@@ -87,6 +88,8 @@ export default function FormRequestDialog({
     setData((d) => ({ ...d, tables: { ...d.tables, [t]: d.tables[t].map((r, j) => (j === i ? { ...r, [k]: v } : r)) } }));
   const addRow = (t: string, cols: string[]) =>
     setData((d) => ({ ...d, tables: { ...d.tables, [t]: [...(d.tables[t] ?? []), Object.fromEntries(cols.map((c) => [c, ""]))] } }));
+  const setHeading = (t: string, k: string, v: string) =>
+    setData((d) => ({ ...d, headings: { ...(d.headings ?? {}), [t]: { ...(d.headings?.[t] ?? {}), [k]: v } } }));
   const removeRow = (t: string, i: number) =>
     setData((d) => ({ ...d, tables: { ...d.tables, [t]: d.tables[t].filter((_, j) => j !== i) } }));
 
@@ -99,6 +102,7 @@ export default function FormRequestDialog({
       // drop completely empty table rows
       const clean: FormData = {
         ...(schema.attachments ? { attachments } : {}),
+        ...(data.headings ? { headings: data.headings } : {}),
         fields: data.fields,
         tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
       };
@@ -234,6 +238,16 @@ export default function FormRequestDialog({
             return (
               <div key={t.key}>
                 <p className="mb-2 text-sm font-semibold text-ink-primary">{t.label}</p>
+                {/* column headings can be renamed — they change on the Word form too */}
+                <div className="mb-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
+                  <p className="mb-2 text-[11px] font-medium text-ink-muted">Column headings (tap to rename)</p>
+                  <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+                    {t.columns.map((c) => (
+                      <Input key={c.key} value={data.headings?.[t.key]?.[c.key] ?? c.label} aria-label={`Heading for ${c.label}`}
+                        onChange={(e) => setHeading(t.key, c.key, e.target.value)} className="h-8 text-xs font-medium" />
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-3">
                   {rows.map((r, i) => (
                     <div key={i} className="rounded-lg border border-border p-3">
@@ -253,7 +267,7 @@ export default function FormRequestDialog({
                       >
                         {t.columns.map((c) => (
                           <div key={c.key} className="min-w-0">
-                            <label className="mb-1 block text-[11px] font-medium text-ink-muted truncate" title={c.label}>{c.label}</label>
+                            <label className="mb-1 block text-[11px] font-medium text-ink-muted truncate" title={headingOf(data, t.key, c)}>{headingOf(data, t.key, c)}</label>
                             {c.readOnly ? (
                               <div className="min-h-9 flex items-center rounded-md bg-muted px-3 py-1.5 text-sm text-ink-primary">{r[c.key] || "—"}</div>
                             ) : c.compute ? (
@@ -280,7 +294,7 @@ export default function FormRequestDialog({
                 </div>
                 {t.totals?.length ? (
                   <p className="mt-2 text-sm text-ink-secondary">
-                    {t.columns.filter((c) => t.totals!.includes(c.key)).map((c) => `${c.label}: ${money(columnTotal(rows, c))}`).join("  ·  ")}
+                    {t.columns.filter((c) => t.totals!.includes(c.key)).map((c) => `${headingOf(data, t.key, c)}: ${money(columnTotal(rows, c))}`).join("  ·  ")}
                   </p>
                 ) : null}
                 {!t.fixedRows && (

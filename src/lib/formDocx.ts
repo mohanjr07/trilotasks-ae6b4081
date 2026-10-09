@@ -366,7 +366,8 @@ function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, v
   }
 }
 
-function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema, spare = 0) {
+function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema, spare = 0,
+  headings?: Record<string, Record<string, string>>) {
   const rows = allRows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   const tbl = all(doc, "tbl").find((t) => rule.match.test(textOf(t)));
   if (!tbl) return;
@@ -375,6 +376,16 @@ function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string,
   let data = trs.slice(headerIdx + 1).filter((tr) => !/TOTAL/.test(textOf(tr)));
   if (!data.length) return;
   const cols = schema.tables?.find((t) => t.key === rule.table)?.columns ?? [];
+  // headings the requester renamed → write them into the header row
+  const renamed = headings?.[rule.table];
+  if (renamed && headerIdx >= 0) {
+    const htcs = kids(trs[headerIdx], "tc");
+    rule.cols.forEach((key, ci) => {
+      const v = key && key !== "#" ? renamed[key]?.trim() : "";
+      const col = cols.find((c) => c.key === key);
+      if (v && htcs[ci] && v !== col?.label) setCellText(htcs[ci], v);
+    });
+  }
   // add rows if needed (copies of the last empty row)
   while (data.length < rows.length) {
     const last = data[data.length - 1];
@@ -478,7 +489,7 @@ export async function buildFilledDocx(
       applyRule(doc, used, rule, f?.type === "date" ? dmy(raw) : raw);
     }
     if (!isHeader) {
-      for (const t of map.tables ?? []) fillTable(doc, t, ctx.d.tables?.[t.table] ?? [], schema, map.spareRows ?? (map.signatures === "append" ? 3 : 0));
+      for (const t of map.tables ?? []) fillTable(doc, t, ctx.d.tables?.[t.table] ?? [], schema, map.spareRows ?? (map.signatures === "append" ? 3 : 0), ctx.d.headings);
       if (map.expenseTotals) {
         const tbl = all(doc, "tbl").find((t) => /Category.*Vendor/i.test(textOf(t)));
         const totalRow = tbl && kids(tbl, "tr").find((tr) => /TOTAL/.test(textOf(tr)));
