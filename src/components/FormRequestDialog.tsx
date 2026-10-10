@@ -41,7 +41,9 @@ export default function FormRequestDialog({
   const qc = useQueryClient();
   const { names, authorizers, byNames } = useFormPeople();
   const title = existing?.form_title ?? form?.title ?? "";
-  const approverChoiceNames = approverChoices(title);
+  // managers skip the "Approved by" step — their forms go straight to authorization
+  const approvalStep = needsApproval(title) && profile?.role !== "manager";
+  const approverChoiceNames = approvalStep ? approverChoices(title) : null;
   const approverOptions = approverChoiceNames ? byNames(approverChoiceNames) : null;
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
@@ -118,7 +120,7 @@ export default function FormRequestDialog({
     onSuccess: (id) => {
       qc.invalidateQueries({ queryKey: ["form-requests"] });
       qc.invalidateQueries({ queryKey: ["production-forms"] });
-      toast.success(needsApproval(title)
+      toast.success(approvalStep
         ? `${existing ? "Resubmitted" : "Sent"} to ${(approverOptions && names[approver]) || approverFor(title).name} for approval`
         : schema.reviewer ? `${existing ? "Resubmitted" : "Sent"} to ${schema.reviewer.name} for approval`
         : `${existing ? "Resubmitted" : "Sent"} to ${authorizers.find((a) => a.id === authorizer)?.full_name ?? "the authorizer"} for authorization`);
@@ -219,8 +221,8 @@ export default function FormRequestDialog({
               request={{
                 id: existing?.id ?? "draft", form_id: (existing?.form_id ?? form?.id)!, form_title: title,
                 reference_value: existing?.reference_value ?? nextRef, data,
-                requested_by: existing?.requested_by ?? user?.id ?? "", approver_id: (approverOptions ? approver : existing?.approver_id) ?? "",
-                authorizer_id: authorizer, status: needsApproval(title) ? "pending_approval" : "pending_authorization", approved_at: null, authorized_at: null,
+                requested_by: existing?.requested_by ?? user?.id ?? "", approver_id: approvalStep ? ((approverOptions ? approver : existing?.approver_id) ?? "") : (null as any),
+                authorizer_id: authorizer, status: approvalStep ? "pending_approval" : "pending_authorization", approved_at: null, authorized_at: null,
                 rejected_by: null, rejected_at: null, reject_reason: null,
                 submitted_at: new Date().toISOString(), created_at: new Date().toISOString(),
               }}
@@ -324,12 +326,12 @@ export default function FormRequestDialog({
           )}
 
           {/* Sign-off */}
-          <div className={`rounded-lg border border-border bg-muted/30 p-4 grid gap-3 ${needsApproval(title) ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          <div className={`rounded-lg border border-border bg-muted/30 p-4 grid gap-3 ${approvalStep ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <div>
               <p className="text-xs text-ink-muted">Requested by</p>
               <p className="text-sm font-semibold text-ink-primary">{(existing && names[existing.requested_by]) || profile?.full_name || "You"}</p>
             </div>
-            {needsApproval(title) && (
+            {approvalStep && (
               <div>
                 {approverOptions ? (
                   <>
@@ -368,7 +370,7 @@ export default function FormRequestDialog({
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={submit.isPending} className="gap-1.5">
-              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : `${existing ? "Resubmit" : "Send"} for ${needsApproval(title) || schema.reviewer ? "approval" : "authorization"}`}
+              <Send className="h-4 w-4" /> {submit.isPending ? "Sending…" : `${existing ? "Resubmit" : "Send"} for ${approvalStep || schema.reviewer ? "approval" : "authorization"}`}
             </Button>
           </div>
         </form>

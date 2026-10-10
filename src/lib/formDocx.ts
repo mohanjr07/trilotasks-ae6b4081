@@ -464,7 +464,8 @@ function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string,
 }
 
 function signatureTable(doc: Document, c: Ctx, labels: [string, string, string] = ["Requested by", "Approved by", "Authorized by"]) {
-  const twoStep = !!c.schema.noApproval;   // no "Approved by" column (Vendor Registration)
+  // no "Approved by" column: Vendor Registration, or forms raised by a manager (straight to authorization)
+  const twoStep = !!c.schema.noApproval || !c.req.approver_id;
   const w = twoStep ? "4800" : "3200";
   const border = () => ["top", "left", "bottom", "right", "insideH", "insideV"].map((b) => el(doc, b, { val: "single", sz: "6", space: "0", color: "000000" }));
   const cell = (text: string, bold = false, shade = false) => {
@@ -546,7 +547,10 @@ export async function buildFilledDocx(
           const tcs = kids(tr, "tc");
           const label = textOf(tcs[0] ?? tr);
           if (/Requested by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.requested_by] ?? ""); tcs[2] && setCellText(tcs[2], `Submitted\n${stamp(req.submitted_at)}`); }
-          if (/Approved by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.approver_id] ?? approverFor(req.form_title).name); tcs[2] && setCellText(tcs[2], approverStatus(req)); }
+          if (/Approved by/i.test(label)) {
+            if (!req.approver_id) { tcs[1] && setCellText(tcs[1], "—"); tcs[2] && setCellText(tcs[2], "Not required"); }
+            else { tcs[1] && setCellText(tcs[1], names[req.approver_id] ?? approverFor(req.form_title).name); tcs[2] && setCellText(tcs[2], approverStatus(req)); }
+          }
           if (/Authorized by/i.test(label)) { tcs[1] && setCellText(tcs[1], names[req.authorizer_id] ?? ""); tcs[2] && setCellText(tcs[2], authorizerStatus(req)); }
         }
       }

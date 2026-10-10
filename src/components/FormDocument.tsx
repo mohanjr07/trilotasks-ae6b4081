@@ -163,8 +163,8 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 22 }}>
         <thead>
           <tr>
-            <th style={{ ...head, width: needsApproval(request.form_title) ? "33%" : "50%" }}>Requested by</th>
-            {needsApproval(request.form_title) && <th style={{ ...head, width: "33%" }}>Approved by</th>}
+            <th style={{ ...head, width: (needsApproval(request.form_title) && !!request.approver_id) ? "33%" : "50%" }}>Requested by</th>
+            {(needsApproval(request.form_title) && !!request.approver_id) && <th style={{ ...head, width: "33%" }}>Approved by</th>}
             <th style={{ ...head }}>Authorized by</th>
           </tr>
         </thead>
@@ -174,7 +174,7 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
               <div style={{ fontWeight: 700 }}>{names[request.requested_by] ?? "—"}</div>
               <div style={{ fontSize: 11, color: "#444", marginTop: 6 }}>{fmt(request.submitted_at)}</div>
             </td>
-            {needsApproval(request.form_title) && (
+            {(needsApproval(request.form_title) && !!request.approver_id) && (
               <td style={cell}>
                 <div style={{ fontWeight: 700 }}>{names[request.approver_id] ?? approverFor(request.form_title).name}</div>
                 {request.approved_at ? stamp("done", request.approved_at) : rejectedByApprover ? stamp("rejected", request.rejected_at) : stamp("waiting")}
