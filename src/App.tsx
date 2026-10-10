@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AutoRefresh from "@/components/AutoRefresh";
 import { BrowserRouter, HashRouter, Route, Routes, Navigate } from "react-router-dom";
 
 // When running inside the Electron desktop build, the app is loaded over
@@ -49,8 +50,12 @@ import NotFound from "@/pages/NotFound";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      // auto refresh on every device: on-screen data is refreshed every 5 seconds
+      // (paused while the app is in the background), and again when it comes back
+      refetchInterval: 5000,
+      refetchIntervalInBackground: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
   },
 });
@@ -68,6 +73,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner position="bottom-right" />
+      <AutoRefresh />
       <Router>
         <AuthProvider>
           <Routes>
