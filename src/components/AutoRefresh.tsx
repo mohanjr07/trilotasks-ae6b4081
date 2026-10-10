@@ -69,7 +69,8 @@ export default function AutoRefresh() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== "visible") return;
-      qc.invalidateQueries();
+      // refresh data — but not Word templates (re-downloading them would restart an open form preview)
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "form-template" });
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);

@@ -28,6 +28,11 @@ function useTemplate(formId: string) {
     },
     staleTime: 30 * 60 * 1000,
     retry: 1,
+    // the Word template never changes while it's open — don't auto-refresh it
+    // (a re-download would rebuild the copy and restart the viewer every few seconds)
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -90,7 +95,7 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tpl.data, key]);
+  }, [tpl.dataUpdatedAt, key]);
 
   if (tpl.isError || failed) {
     return <FormDocument ref={fallbackRef} schema={schema} request={request} names={names} />;
