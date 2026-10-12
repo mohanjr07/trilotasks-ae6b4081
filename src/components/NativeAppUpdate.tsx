@@ -30,6 +30,8 @@ async function fetchLatest(): Promise<Latest | null> {
 export default function NativeAppUpdate() {
   const [latest, setLatest] = useState<Latest | null>(null);
   const [started, setStarted] = useState(false);
+  const [pct, setPct] = useState<number | null>(null);      // in-app download progress
+  const [err, setErr] = useState("");
   const isAndroid = isNativeApp && /android/i.test(navigator.userAgent);
 
   useEffect(() => {
@@ -60,9 +62,22 @@ export default function NativeAppUpdate() {
   // a notification and hands it to the installer. The plain-http form of our own
   // address counts as different; the site immediately redirects it to https.
   const externalUrl = apkUrl.startsWith(PUBLIC_SITE) ? apkUrl.replace(/^https:/, "http:") : apkUrl;
-  const startUpdate = () => {
-    setStarted(true);
-    window.location.href = externalUrl;
+  const updater = (window as any).Capacitor?.Plugins?.AppUpdater;   // built into app 1.2.0+
+  const viaChrome = () => { setStarted(true); window.location.href = externalUrl; };
+  const startUpdate = async () => {
+    if (!updater) return viaChrome();
+    // download inside the app, then Android's "Update this app?" screen opens by itself
+    setErr(""); setPct(0);
+    const sub = await updater.addListener("progress", (e: { percent: number }) => setPct(e.percent));
+    try {
+      await updater.update({ url: apkUrl });
+      setPct(100);
+    } catch (e: any) {
+      setPct(null);
+      setErr(String(e?.message ?? e));
+    } finally {
+      sub?.remove?.();
+    }
   };
   const tryInApp = () => { openExternal(apkUrl).catch(() => { window.location.href = apkUrl; }); };
   const later = () => {
@@ -79,7 +94,29 @@ export default function NativeAppUpdate() {
             TaskFlow {latest.versionName} is ready.{latest.notes ? ` ${latest.notes}` : ""}
           </DialogDescription>
         </DialogHeader>
-        {started ? (
+        {updater && (pct !== null || err) ? (
+          <div className="space-y-2 rounded-md bg-muted/40 p-3 text-xs text-ink-secondary">
+            {err ? (
+              <>
+                <p className="font-semibold text-destructive">{err}</p>
+                <p>
+                  <button type="button" onClick={startUpdate} className="font-medium text-primary underline">Try again</button>
+                  {" · "}
+                  <button type="button" onClick={viaChrome} className="font-medium text-primary underline">Download in Chrome</button>
+                </p>
+              </>
+            ) : pct === 100 ? (
+              <p>Tap <b>Update</b> on the Android screen to finish. If it asked for permission, allow <b>“Allow from this source”</b> and come back.</p>
+            ) : (
+              <>
+                <p className="font-semibold text-ink-primary">Downloading… {pct !== null && pct >= 0 ? `${pct}%` : ""}</p>
+                <div className="h-2 overflow-hidden rounded-full bg-border">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${Math.max(pct ?? 0, 3)}%` }} />
+                </div>
+              </>
+            )}
+          </div>
+        ) : started ? (
           <div className="space-y-2 rounded-md bg-muted/40 p-3 text-xs text-ink-secondary">
             <p className="font-semibold text-ink-primary">Downloading in Chrome…</p>
             <p>1. Watch the notification bar. If Chrome asks <i>“Download anyway?”</i>, tap <b>Download</b>.</p>
@@ -94,12 +131,12 @@ export default function NativeAppUpdate() {
           </div>
         ) : (
           <p className="text-xs text-ink-muted">
-            Tap Update — Chrome downloads the new app, then tap <b>Install</b> when Android asks. Your data and login stay as they are.
+            Tap Update — the new app downloads, then tap <b>{updater ? "Update" : "Install"}</b> when Android asks. Your data and login stay as they are.
           </p>
         )}
         <div className="flex justify-end gap-2 pt-2">
           {!latest.force && <Button variant="outline" onClick={later}>{started ? "Close" : "Later"}</Button>}
-          {!started && (
+          {!started && pct === null && !err && (
             <Button className="gap-1.5" onClick={startUpdate}>
               <Download className="h-4 w-4" /> Update
             </Button>
