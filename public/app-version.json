@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
+  "versionCode": 3,
+  "versionName": "1.2.0",
   "apk": "/download/TaskFlow.apk",
-  "notes": "",
+  "notes": "Updates now install straight from the app.",
   "force": false
 }
