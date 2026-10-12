@@ -17,7 +17,8 @@
     "electron:build": "npm run build && electron-builder --win --x64 --publish never",
     "electron:build:portable": "npm run build && electron-builder --win portable --x64 --publish never",
     "electron:build:mac": "npm run build && electron-builder --mac --x64 --arm64 --publish never",
-    "deploy:functions": "bash scripts/deploy-functions.sh"
+    "deploy:functions": "bash scripts/deploy-functions.sh",
+    "release:android": "node scripts/android-release.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -17,5 +17,6 @@
         "alert"
       ]
     }
-  }
+  },
+  "appendUserAgent": "TaskFlowApp/2"
 }

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AutoRefresh from "@/components/AutoRefresh";
+import NativeAppUpdate from "@/components/NativeAppUpdate";
 import { BrowserRouter, HashRouter, Route, Routes, Navigate } from "react-router-dom";
 
 // When running inside the Electron desktop build, the app is loaded over
@@ -74,6 +75,7 @@ const App = () => (
     <TooltipProvider>
       <Sonner position="bottom-right" />
       <AutoRefresh />
+      <NativeAppUpdate />
       <Router>
         <AuthProvider>
           <Routes>
