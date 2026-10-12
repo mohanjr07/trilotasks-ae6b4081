@@ -29,6 +29,7 @@ async function fetchLatest(): Promise<Latest | null> {
 
 export default function NativeAppUpdate() {
   const [latest, setLatest] = useState<Latest | null>(null);
+  const [started, setStarted] = useState(false);
   const isAndroid = isNativeApp && /android/i.test(navigator.userAgent);
 
   useEffect(() => {
@@ -53,6 +54,17 @@ export default function NativeAppUpdate() {
 
   if (!latest) return null;
   const apkUrl = latest.apk.startsWith("http") ? latest.apk : `${PUBLIC_SITE}${latest.apk}?v=${latest.versionCode}`;
+  // The app's own web view can't download files, and the in-app browser tab often
+  // stalls on a 20 MB APK. A link to a *different* address than the app's makes
+  // Android open it in the phone's real browser (Chrome), which downloads it with
+  // a notification and hands it to the installer. The plain-http form of our own
+  // address counts as different; the site immediately redirects it to https.
+  const externalUrl = apkUrl.startsWith(PUBLIC_SITE) ? apkUrl.replace(/^https:/, "http:") : apkUrl;
+  const startUpdate = () => {
+    setStarted(true);
+    window.location.href = externalUrl;
+  };
+  const tryInApp = () => { openExternal(apkUrl).catch(() => { window.location.href = apkUrl; }); };
   const later = () => {
     try { localStorage.setItem(SNOOZE_KEY, `${latest.versionCode}@${Date.now()}`); } catch { /* ignore */ }
     setLatest(null);
@@ -67,14 +79,31 @@ export default function NativeAppUpdate() {
             TaskFlow {latest.versionName} is ready.{latest.notes ? ` ${latest.notes}` : ""}
           </DialogDescription>
         </DialogHeader>
-        <p className="text-xs text-ink-muted">
-          Tap Update — the new app downloads, then tap <b>Install</b> when Android asks. Your data and login stay as they are.
-        </p>
+        {started ? (
+          <div className="space-y-2 rounded-md bg-muted/40 p-3 text-xs text-ink-secondary">
+            <p className="font-semibold text-ink-primary">Downloading in Chrome…</p>
+            <p>1. Watch the notification bar. If Chrome asks <i>“Download anyway?”</i>, tap <b>Download</b>.</p>
+            <p>2. When it finishes, tap the notification → <b>Install</b> (or <b>Update</b>).</p>
+            <p>3. If Android asks, allow <b>“Install unknown apps”</b> for Chrome, then go back and tap Install.</p>
+            <p className="pt-1">
+              Nothing happened?{" "}
+              <button type="button" onClick={startUpdate} className="font-medium text-primary underline">Try again</button>
+              {" · "}
+              <button type="button" onClick={tryInApp} className="font-medium text-primary underline">Open in app</button>
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-ink-muted">
+            Tap Update — Chrome downloads the new app, then tap <b>Install</b> when Android asks. Your data and login stay as they are.
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
-          {!latest.force && <Button variant="outline" onClick={later}>Later</Button>}
-          <Button className="gap-1.5" onClick={() => openExternal(apkUrl).catch(() => { window.location.href = apkUrl; })}>
-            <Download className="h-4 w-4" /> Update
-          </Button>
+          {!latest.force && <Button variant="outline" onClick={later}>{started ? "Close" : "Later"}</Button>}
+          {!started && (
+            <Button className="gap-1.5" onClick={startUpdate}>
+              <Download className="h-4 w-4" /> Update
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
