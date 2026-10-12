@@ -22,8 +22,11 @@ self.addEventListener("fetch", (e) => {
   if (req.mode === "navigate") {
     e.respondWith(
       fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put("/", copy));
+        // keep the app shell for offline use — but not standalone pages like /privacy.html
+        if (!/\.html$/.test(url.pathname) && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put("/", copy));
+        }
         return res;
       }).catch(() => caches.match("/"))
     );
