@@ -384,6 +384,9 @@ export function emptyFormData(schema: FormSchema): FormData {
 export const APPROVER_EMAIL = "hari@triloautomation.com";
 // Who approves each form (keep in sync with submit_form_request in the database):
 //   Asset Submission, Expense Tracking → Anu;  Quality Check Drawing, Design Validation → Harish;  everything else → Hari
+/** Forms raised by this account are always approved by Hari first. */
+export const PRODUCTION_EMAIL = "production@triloautomation.com";
+
 export function approverFor(title: string): { email: string; name: string } {
   if (/asset|expense/i.test(title)) return { email: "anu@triloautomation.com", name: "Anu" };
   if (/quality\s*check|design\s*validation/i.test(title)) return { email: "harishkanna@triloautomation.com", name: "Harish Kanna MK" };

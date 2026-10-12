@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { toast } from "sonner";
-import { headingOf, approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { PRODUCTION_EMAIL, headingOf, approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -42,8 +42,11 @@ export default function FormRequestDialog({
   const { names, authorizers, byNames } = useFormPeople();
   const title = existing?.form_title ?? form?.title ?? "";
   // managers skip the "Approved by" step — their forms go straight to authorization
-  const approvalStep = needsApproval(title) && profile?.role !== "manager";
-  const approverChoiceNames = approvalStep ? approverChoices(title) : null;
+  // production@ — every form is approved by Hari first (set by the database too)
+  const isProduction = (profile?.email ?? "").toLowerCase() === PRODUCTION_EMAIL;
+  const approvalStep = needsApproval(title) && (isProduction || profile?.role !== "manager");
+  const approverChoiceNames = approvalStep && !isProduction ? approverChoices(title) : null;
+  const fixedApproverName = isProduction ? "Hari" : approverFor(title).name;
   const approverOptions = approverChoiceNames ? byNames(approverChoiceNames) : null;
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
@@ -121,7 +124,7 @@ export default function FormRequestDialog({
       qc.invalidateQueries({ queryKey: ["form-requests"] });
       qc.invalidateQueries({ queryKey: ["production-forms"] });
       toast.success(approvalStep
-        ? `${existing ? "Resubmitted" : "Sent"} to ${(approverOptions && names[approver]) || approverFor(title).name} for approval`
+        ? `${existing ? "Resubmitted" : "Sent"} to ${(approverOptions && names[approver]) || fixedApproverName} for approval`
         : schema.reviewer ? `${existing ? "Resubmitted" : "Sent"} to ${schema.reviewer.name} for approval`
         : `${existing ? "Resubmitted" : "Sent"} to ${authorizers.find((a) => a.id === authorizer)?.full_name ?? "the authorizer"} for authorization`);
       onSubmitted?.(id);
@@ -345,7 +348,7 @@ export default function FormRequestDialog({
                 ) : (
                   <>
                     <p className="text-xs text-ink-muted">Approved by</p>
-                    <p className="text-sm font-semibold text-ink-primary">{approverFor(title).name}</p>
+                    <p className="text-sm font-semibold text-ink-primary">{fixedApproverName}</p>
                   </>
                 )}
               </div>
