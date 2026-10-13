@@ -172,7 +172,7 @@ export default function FormRequestsPage() {
                   {r.form_title}{r.reference_value ? ` · ${r.reference_value}` : ""}{r.revision ? ` · Rev ${String(r.revision).padStart(2, "0")}` : ""}
                 </p>
                 <p className="text-xs text-ink-muted">
-                  {names[r.requested_by] ?? "—"} · {format(new Date(r.submitted_at), "d MMM yyyy, h:mm a")} · Authorizer: {names[r.authorizer_id] ?? "—"}
+                  Requested by: <span className="font-medium text-ink-secondary">{names[r.requested_by] ?? "—"}</span> · {format(new Date(r.submitted_at), "d MMM yyyy, h:mm a")}{r.approver_id ? <> · Approver: {names[r.approver_id] ?? "—"}</> : null} · Authorizer: {names[r.authorizer_id] ?? "—"}
                 </p>
               </div>
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass[r.status]}`}>
