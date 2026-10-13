@@ -286,7 +286,7 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
       return roots;
     },
     enabled: !!task,
-    refetchInterval: 10000,
+    refetchInterval: 60000,
   });
 
   const { data: attachments = [] } = useQuery({

@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import LiveSync from "@/components/LiveSync";
 import AutoRefresh from "@/components/AutoRefresh";
 import NativeAppUpdate from "@/components/NativeAppUpdate";
 import { BrowserRouter, HashRouter, Route, Routes, Navigate } from "react-router-dom";
@@ -51,9 +52,9 @@ import NotFound from "@/pages/NotFound";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // auto refresh on every device: on-screen data is refreshed every 5 seconds
-      // (paused while the app is in the background), and again when it comes back
-      refetchInterval: 5000,
+      // live updates come from <LiveSync/> (one realtime connection per device);
+      // this slow poll is only a safety net. Data also refreshes when the app comes back.
+      refetchInterval: 120_000,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
@@ -78,6 +79,7 @@ const App = () => (
       <NativeAppUpdate />
       <Router>
         <AuthProvider>
+          <LiveSync />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

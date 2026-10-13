@@ -600,9 +600,19 @@ function RequestPaymentModal({
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const path = `${userId}/${Date.now()}_${safeName}`;
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, { contentType: file.type || undefined, upsert: false });
+      // a dropped mobile connection shows up as "Failed to fetch" — retry the upload a couple of times
+      let upErr: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          ({ error: upErr } = await supabase.storage
+            .from(BUCKET)
+            .upload(path, file, { contentType: file.type || undefined, upsert: false }));
+        } catch (e) { upErr = e; }
+        // an earlier attempt got through but its reply was lost → the file is already there
+        if (attempt > 0 && upErr && /exists|duplicate/i.test(String(upErr?.message ?? ""))) upErr = null;
+        if (!upErr || !/fetch|network|load failed/i.test(String(upErr?.message ?? upErr))) break;
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      }
       if (upErr) throw upErr;
 
       const { error: insErr } = await supabase.from("payment_requests").insert({
@@ -627,7 +637,10 @@ function RequestPaymentModal({
       onDone();
       onClose();
     } catch (e: any) {
-      toast.error("Could not submit request: " + (e?.message ?? ""));
+      const msg = String(e?.message ?? "");
+      toast.error(/failed to fetch|network|load failed/i.test(msg)
+        ? "Could not reach the server — check your internet connection and try again. (If the bill is a very large photo, try a smaller one.)"
+        : "Could not submit request: " + msg);
     } finally {
       setSubmitting(false);
     }
