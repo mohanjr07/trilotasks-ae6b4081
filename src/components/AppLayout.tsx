@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { usePendingCounts } from "@/hooks/usePendingCounts";
 import { initPush } from "@/lib/push";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
 import InstallAppBanner from "@/components/InstallAppBanner";
@@ -119,6 +120,7 @@ const shortLabel: Record<string, string> = {
 
 export default function AppLayout() {
   const { profile, signOut } = useAuth();
+  const pending = usePendingCounts();   // red number badges: things waiting for me
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -199,6 +201,7 @@ export default function AppLayout() {
                     )}
                     <item.icon className="relative z-10 h-[18px] w-[18px]" />
                     <span className="relative z-10">{item.label}</span>
+                    {pending[item.path] ? <span className="relative z-10 ml-auto min-w-[20px] rounded-full bg-destructive px-1.5 py-0.5 text-center text-[11px] font-bold leading-none text-destructive-foreground">{pending[item.path] > 99 ? "99+" : pending[item.path]}</span> : null}
                   </Link>
                 </li>
               );
@@ -275,6 +278,7 @@ export default function AppLayout() {
                       >
                         <item.icon className="h-[18px] w-[18px]" />
                         <span>{item.label}</span>
+                        {pending[item.path] ? <span className="ml-auto min-w-[20px] rounded-full bg-destructive px-1.5 py-0.5 text-center text-[11px] font-bold leading-none text-destructive-foreground">{pending[item.path] > 99 ? "99+" : pending[item.path]}</span> : null}
                       </Link>
                     </li>
                   );
@@ -333,11 +337,16 @@ export default function AppLayout() {
               >
                 <span
                   className={cn(
-                    "flex h-8 w-14 items-center justify-center rounded-full transition-colors",
+                    "relative flex h-8 w-14 items-center justify-center rounded-full transition-colors",
                     active ? "bg-accent-light text-primary" : "text-ink-muted"
                   )}
                 >
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
+                  {pending[item.path] ? (
+                    <span className="absolute -top-1 right-1.5 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+                      {pending[item.path] > 99 ? "99+" : pending[item.path]}
+                    </span>
+                  ) : null}
                 </span>
                 <span
                   className={cn(
