@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
-  CheckSquare, ArrowLeft,
+  CheckSquare, ArrowLeft, IndianRupee,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -14,6 +14,7 @@ import UserAvatar from "@/components/UserAvatar";
 import PriorityBadge from "@/components/PriorityBadge";
 import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
+import ProjectPaymentsDialog, { formatINR, isSpend } from "@/components/ProjectPaymentsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,11 +44,26 @@ const PROJECT_COLORS = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, profile } = useAuth();
+  // project payments are for admins only (managers also count as "isAdmin" here)
+  const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "");
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [paymentsFor, setPaymentsFor] = useState<Project | null>(null);
+  // admins: overall spend per project (approved payment requests)
+  const { data: spendByProject = {} } = useQuery({
+    queryKey: ["project-spend"],
+    enabled: canSeePayments,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("payment_requests").select("project_id, amount, status").not("project_id", "is", null);
+      if (error) throw error;
+      const out: Record<string, number> = {};
+      for (const r of data ?? []) if (isSpend(r.status)) out[r.project_id] = (out[r.project_id] ?? 0) + Number(r.amount || 0);
+      return out;
+    },
+  });
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -151,6 +167,8 @@ export default function ProjectsPage() {
                 currentUserId={user?.id ?? ""}
                 onToggle={() => toggleExpand(project.id)}
                 onEdit={() => setEditProject(project)}
+                spend={canSeePayments ? spendByProject[project.id] ?? 0 : null}
+                onPayments={() => setPaymentsFor(project)}
                 onDelete={() => {
                   if (confirm(`Delete project "${project.name}"? This cannot be undone.`)) {
                     deleteProject.mutate(project.id);
@@ -162,6 +180,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {canSeePayments && <ProjectPaymentsDialog project={paymentsFor} onClose={() => setPaymentsFor(null)} />}
       {isAdmin && (
         <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
       )}
@@ -175,13 +194,15 @@ export default function ProjectsPage() {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
   project, projectTeams, projectMembers, allProfiles,
-  isAdmin, isExpanded, currentUserId, onToggle, onEdit, onDelete,
+  isAdmin, isExpanded, currentUserId, onToggle, onEdit, onDelete, spend, onPayments,
 }: {
   project: Project;
   projectTeams: ProjectTeam[];
   projectMembers: ProjectMember[];
   allProfiles: Profile[];
   isAdmin: boolean;
+  spend?: number | null;
+  onPayments?: () => void;
   isExpanded: boolean;
   currentUserId: string;
   onToggle: () => void;
@@ -295,6 +316,13 @@ function ProjectCard({
             <span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
               {projectTeams.length} team{projectTeams.length !== 1 ? "s" : ""}
             </span>
+            {spend != null && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onPayments?.(); }}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-success bg-success-light px-2 py-0.5 rounded-pill hover:opacity-80"
+                title="Overall spend — open payments">
+                <IndianRupee className="h-3 w-3" /> {formatINR(spend).slice(1)} spent
+              </button>
+            )}
           </div>
           {project.description && (
             <p className="text-xs text-ink-muted truncate mt-0.5">{project.description}</p>
@@ -326,6 +354,7 @@ function ProjectCard({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Project</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>
+                {spend != null && <DropdownMenuItem onClick={onPayments}><IndianRupee className="h-3.5 w-3.5 mr-2" />Payments</DropdownMenuItem>}
                 <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete Project</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

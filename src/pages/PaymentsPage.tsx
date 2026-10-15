@@ -40,6 +40,7 @@ type PaymentRequest = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  verify_note?: string | null;   // optional comment from the manager who verified
   created_at: string;
   requester?: { full_name: string; avatar_url: string | null } | null;
   project?: { name: string; color: string } | null;
@@ -62,7 +63,8 @@ export default function PaymentsPage() {
   const [tab, setTab] = useState<"all" | "pending" | "approved" | "rejected" | "topay">("all");
   const [requestOpen, setRequestOpen] = useState(false);
   const [selected, setSelected] = useState<PaymentRequest | null>(null);
-  const [rejectNote, setRejectNote] = useState<string | null>(null); // manager rejecting: reason being typed
+  const [rejectNote, setRejectNote] = useState<string | null>(null);
+  const [comment, setComment] = useState("");   // optional comment while verifying / approving // manager rejecting: reason being typed
   const [paying, setPaying] = useState(false);                       // Anu: receipt picker open
   const [receipt, setReceipt] = useState<File | null>(null);
 
@@ -142,6 +144,7 @@ export default function PaymentsPage() {
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       toast.success(vars.status === "approved" ? "Payment request approved" : "Payment request rejected");
       setSelected(null);
+      setComment("");
     },
     onError: (e: any) => toast.error("Failed to update: " + (e?.message ?? "")),
   });
@@ -155,6 +158,7 @@ export default function PaymentsPage() {
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       toast.success(vars.ok ? "Verified — sent to admins for approval" : "Payment request rejected");
       setRejectNote(null);
+      setComment("");
       setSelected(null);
     },
     onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
@@ -358,7 +362,7 @@ export default function PaymentsPage() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 z-40" onClick={() => { setSelected(null); setRejectNote(null); setPaying(false); setReceipt(null); }}
+              className="fixed inset-0 bg-black/40 z-40" onClick={() => { setSelected(null); setRejectNote(null); setComment(""); setPaying(false); setReceipt(null); }}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -372,7 +376,7 @@ export default function PaymentsPage() {
                       {format(new Date(selected.created_at), "MMM d, yyyy 'at' h:mm a")}
                     </p>
                   </div>
-                  <button onClick={() => { setSelected(null); setRejectNote(null); setPaying(false); setReceipt(null); }} className="text-ink-muted hover:text-ink-primary shrink-0">
+                  <button onClick={() => { setSelected(null); setRejectNote(null); setComment(""); setPaying(false); setReceipt(null); }} className="text-ink-muted hover:text-ink-primary shrink-0">
                     <X className="h-5 w-5" />
                   </button>
                 </div>
@@ -436,10 +440,18 @@ export default function PaymentsPage() {
                       )}
                     </div>
                   )}
+                  {selected.verify_note && (
+                    <div className="pt-1">
+                      <span className="text-ink-muted">Comment from {nameOf(selected.verifier_id) ?? "verifier"}: </span>
+                      <span className="text-ink-primary whitespace-pre-wrap">{selected.verify_note}</span>
+                    </div>
+                  )}
                   {selected.review_note && (
                     <div className="pt-1">
-                      <span className="text-ink-muted">Note: </span>
-                      <span className="text-ink-primary">{selected.review_note}</span>
+                      <span className="text-ink-muted">
+                        {selected.status === "rejected" ? "Reason" : "Comment"}{selected.reviewed_by ? ` from ${nameOf(selected.reviewed_by) ?? "—"}` : ""}:{" "}
+                      </span>
+                      <span className="text-ink-primary whitespace-pre-wrap">{selected.review_note}</span>
                     </div>
                   )}
                 </div>
@@ -497,15 +509,19 @@ export default function PaymentsPage() {
 
                 {selected.status === "pending_verification" && selected.verifier_id === user?.id && (
                   rejectNote === null ? (
-                    <div className="flex gap-3 pt-2">
+                    <div className="space-y-2 pt-2">
+                    <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
+                      placeholder="Comment (optional)" />
+                    <div className="flex gap-3">
                       <Button variant="outline" className="flex-1 gap-1.5" disabled={verifyMutation.isPending}
-                        onClick={() => setRejectNote("")}>
+                        onClick={() => setRejectNote(comment)}>
                         <XCircle className="h-4 w-4" /> Reject
                       </Button>
                       <Button className="flex-1 gap-1.5" disabled={verifyMutation.isPending}
-                        onClick={() => verifyMutation.mutate({ id: selected.id, ok: true })}>
+                        onClick={() => verifyMutation.mutate({ id: selected.id, ok: true, note: comment.trim() || undefined })}>
                         <ShieldCheck className="h-4 w-4" /> Verified
                       </Button>
+                    </div>
                     </div>
                   ) : (
                     <div className="space-y-2 pt-2">
@@ -523,22 +539,26 @@ export default function PaymentsPage() {
                 )}
 
                 {isAdmin && selected.status === "pending" && (
-                  <div className="flex gap-3 pt-2">
+                  <div className="space-y-2 pt-2">
+                  <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
+                    placeholder="Comment (optional)" />
+                  <div className="flex gap-3">
                     <Button
                       variant="outline"
                       className="flex-1 gap-1.5"
                       disabled={reviewMutation.isPending}
-                      onClick={() => reviewMutation.mutate({ id: selected.id, status: "rejected" })}
+                      onClick={() => reviewMutation.mutate({ id: selected.id, status: "rejected", note: comment.trim() || undefined })}
                     >
                       <XCircle className="h-4 w-4" /> Reject
                     </Button>
                     <Button
                       className="flex-1 gap-1.5"
                       disabled={reviewMutation.isPending}
-                      onClick={() => reviewMutation.mutate({ id: selected.id, status: "approved" })}
+                      onClick={() => reviewMutation.mutate({ id: selected.id, status: "approved", note: comment.trim() || undefined })}
                     >
                       <CheckCircle2 className="h-4 w-4" /> Approve
                     </Button>
+                  </div>
                   </div>
                 )}
 
