@@ -48,6 +48,8 @@ type PaymentRequest = {
 
 const PAYER_EMAILS = ["anu@triloautomation.com"];
 
+/** Old payments imported from the bank statement have no requester and no bill file. */
+const imported = (r: { bill_path?: string | null }) => (r.bill_path ?? "").startsWith("imported/");
 const formatINR = (n: number) => "₹" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 export default function PaymentsPage() {
@@ -294,7 +296,7 @@ export default function PaymentsPage() {
               className="rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-start gap-3">
-                {(canSeeAll || r.requester_id !== user?.id) && (
+                {(canSeeAll || r.requester_id !== user?.id) && !imported(r) && (
                   <UserAvatar name={r.requester?.full_name ?? nameOf(r.requester_id) ?? ""} avatarUrl={r.requester?.avatar_url} size="sm" />
                 )}
                 <div className="min-w-0 flex-1">
@@ -308,7 +310,8 @@ export default function PaymentsPage() {
                     ) : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-                    {(canSeeAll || r.requester_id !== user?.id) && <span className="truncate">{r.requester?.full_name ?? nameOf(r.requester_id)}</span>}
+                    {(canSeeAll || r.requester_id !== user?.id) && !imported(r) && <span className="truncate">{r.requester?.full_name ?? nameOf(r.requester_id)}</span>}
+                    {imported(r) && <span className="truncate">From bank statement · {format(new Date(r.created_at), "d MMM yyyy")}</span>}
                     {r.status === "pending_verification" && r.verifier_id && (
                       <span className="truncate">{r.verifier_id === user?.id ? "Waiting for your verification" : `Verifier: ${nameOf(r.verifier_id) ?? "—"}`}</span>
                     )}
@@ -387,7 +390,7 @@ export default function PaymentsPage() {
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  {(canSeeAll || selected.requester_id !== user?.id) && (
+                  {(canSeeAll || selected.requester_id !== user?.id) && !imported(selected) && (
                     <div className="flex items-center justify-between">
                       <span className="text-ink-muted">Requested by</span>
                       <span className="text-ink-primary font-medium">{selected.requester?.full_name ?? nameOf(selected.requester_id) ?? "—"}</span>
@@ -456,12 +459,12 @@ export default function PaymentsPage() {
                   )}
                 </div>
 
-                <button
+                {!imported(selected) && <button
                   onClick={() => openBill(selected.bill_path)}
                   className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm font-medium text-ink-primary hover:bg-muted transition-colors"
                 >
                   <FileText className="h-4 w-4" /> View attached bill <ExternalLink className="h-3.5 w-3.5" />
-                </button>
+                </button>}
 
                 {selected.receipt_path && (
                   <button

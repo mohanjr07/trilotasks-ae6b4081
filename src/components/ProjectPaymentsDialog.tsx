@@ -22,6 +22,8 @@ type Proj = { id: string; name: string; color: string };
 
 /** Approved requests count as spend (paid or still to be paid). */
 export const isSpend = (status: string) => status === "approved";
+/** Old payments imported from the bank statement: no requester, no bill file. */
+export const isImported = (r: { bill_path?: string | null }) => (r.bill_path ?? "").startsWith("imported/");
 const isPending = (status: string) => status === "pending" || status === "pending_verification";
 const sum = (list: Row[]) => list.reduce((s, r) => s + Number(r.amount || 0), 0);
 const totalsOf = (list: Row[]) => {
@@ -99,7 +101,7 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-ink-primary">{r.purpose}</p>
                   <p className="text-xs text-ink-muted">
-                    {format(new Date(r.created_at), "d MMM yyyy")} · Requested by {names[r.requester_id] ?? "—"}
+                    {format(new Date(r.created_at), "d MMM yyyy")}{isImported(r) ? " · From bank statement" : ` · Requested by ${names[r.requester_id] ?? "—"}`}
                     {r.verifier_id && r.status !== "pending_verification" ? ` · Verified by ${names[r.verifier_id] ?? "—"}` : ""}
                     {r.reviewed_by && r.status === "approved" ? ` · Approved by ${names[r.reviewed_by] ?? "—"}` : ""}
                     {r.paid_at ? ` · Paid ${format(new Date(r.paid_at), "d MMM")}` : ""}
@@ -108,10 +110,12 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>
                       {r.status === "approved" ? (r.paid_at ? "Paid" : "Approved · not paid") : st.label}
                     </span>
-                    <button type="button" onClick={() => openFile(r.bill_path)}
-                      className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary hover:bg-muted">
-                      <FileText className="h-3 w-3" /> Bill
-                    </button>
+                    {!isImported(r) && (
+                      <button type="button" onClick={() => openFile(r.bill_path)}
+                        className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary hover:bg-muted">
+                        <FileText className="h-3 w-3" /> Bill
+                      </button>
+                    )}
                     {r.receipt_path && (
                       <button type="button" onClick={() => openFile(r.receipt_path!)}
                         className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary hover:bg-muted">
