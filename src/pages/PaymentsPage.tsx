@@ -37,6 +37,7 @@ type PaymentRequest = {
   paid_by?: string | null;
   receipt_path?: string | null;
   receipt_name?: string | null;
+  paid_from?: string | null;      // which account the money went out from
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -47,6 +48,14 @@ type PaymentRequest = {
 };
 
 const PAYER_EMAILS = ["anu@triloautomation.com"];
+/** Accounts a payment can be paid from (keep in sync with payment_requests.paid_from in the database) */
+export const PAID_FROM = [
+  { key: "cash", label: "Cash" },
+  { key: "expense", label: "Expense account" },
+  { key: "chennai", label: "Chennai account" },
+  { key: "bangalore", label: "Bangalore account" },
+] as const;
+export const paidFromLabel = (k?: string | null) => PAID_FROM.find((a) => a.key === k)?.label ?? null;
 
 /** Old payments imported from the bank statement have no requester and no bill file. */
 const imported = (r: { bill_path?: string | null }) => (r.bill_path ?? "").startsWith("imported/");
@@ -69,6 +78,8 @@ export default function PaymentsPage() {
   const [comment, setComment] = useState("");   // optional comment while verifying / approving // manager rejecting: reason being typed
   const [paying, setPaying] = useState(false);                       // Anu: receipt picker open
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [paidFrom, setPaidFrom] = useState("");                     // Anu: which account she paid from
+  const [accountFilter, setAccountFilter] = useState("all");        // admins: filter paid payments by account
 
   // everyone's names + roles (for the verifier dropdown and labels)
   const { data: people = [] } = useQuery({
@@ -117,10 +128,13 @@ export default function PaymentsPage() {
   }), [requests]);
 
   const filtered = useMemo(
-    () => requests.filter((r) => tab === "all" || r.status === tab || (tab === "pending" && r.status === "pending_verification")
-      || (tab === "topay" && r.status === "approved" && !r.paid_at)),
-    [requests, tab]
+    () => requests
+      .filter((r) => tab === "all" || r.status === tab || (tab === "pending" && r.status === "pending_verification")
+        || (tab === "topay" && r.status === "approved" && !r.paid_at))
+      .filter((r) => accountFilter === "all" || (accountFilter === "none" ? !!r.paid_at && !r.paid_from : r.paid_from === accountFilter)),
+    [requests, tab, accountFilter]
   );
+  const filteredTotal = useMemo(() => filtered.reduce((s, r) => s + Number(r.amount || 0), 0), [filtered]);
 
   const openBill = async (path: string) => {
     try {
@@ -165,13 +179,26 @@ export default function PaymentsPage() {
     },
     onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
   });
+  const accountMutation = useMutation({
+    mutationFn: async ({ id, account }: { id: string; account: string }) => {
+      const { error } = await (supabase as any).rpc("set_payment_account", { p_id: id, p_paid_from: account });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["payment-requests"] });
+      setSelected((s) => (s && s.id === v.id ? { ...s, paid_from: v.account } : s));
+      toast.success("Account saved");
+    },
+    onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
+  });
   const paidMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!paidFrom) throw new Error("Choose which account it was paid from");
       if (!receipt) throw new Error("Upload the payment receipt");
       const path = `receipts/${id}/${Date.now()}_${receipt.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, receipt, { contentType: receipt.type || undefined, upsert: false });
       if (upErr) throw upErr;
-      const { error } = await (supabase as any).rpc("mark_payment_paid", { p_id: id, p_receipt_path: path, p_receipt_name: receipt.name });
+      const { error } = await (supabase as any).rpc("mark_payment_paid", { p_id: id, p_receipt_path: path, p_receipt_name: receipt.name, p_paid_from: paidFrom });
       if (error) {
         await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
         throw error;
@@ -180,6 +207,7 @@ export default function PaymentsPage() {
     onSuccess: () => {
       setPaying(false);
       setReceipt(null);
+      setPaidFrom("");
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       toast.success("Marked as paid — everyone involved has been notified");
       setSelected(null);
@@ -268,6 +296,25 @@ export default function PaymentsPage() {
         </div>
       </div>
 
+      {canSeeAll && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-ink-muted">Paid from</span>
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger className="h-8 w-[190px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All accounts</SelectItem>
+              {PAID_FROM.map((a) => <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>)}
+              <SelectItem value="none">Paid — account not set</SelectItem>
+            </SelectContent>
+          </Select>
+          {accountFilter !== "all" && (
+            <span className="text-xs text-ink-secondary">
+              {filtered.length} payment{filtered.length === 1 ? "" : "s"} · <span className="font-semibold text-ink-primary">{formatINR(filteredTotal)}</span>
+            </span>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -322,7 +369,7 @@ export default function PaymentsPage() {
                       <span className="truncate text-success">✓ Approved by {nameOf(r.reviewed_by) ?? "—"}</span>
                     )}
                     {r.paid_at && (
-                      <span className="truncate text-success">✓ Paid by {nameOf(r.paid_by) ?? "Accounts"}</span>
+                      <span className="truncate text-success">✓ Paid by {nameOf(r.paid_by) ?? "Accounts"}{paidFromLabel(r.paid_from) ? ` · ${paidFromLabel(r.paid_from)}` : ""}</span>
                     )}
                     {r.status === "rejected" && r.reviewed_by && (
                       <span className="truncate text-destructive">✗ Rejected by {nameOf(r.reviewed_by) ?? "—"}</span>
@@ -443,6 +490,21 @@ export default function PaymentsPage() {
                       )}
                     </div>
                   )}
+                  {selected.paid_at && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-ink-muted">Paid from</span>
+                      {isPayer || isAdmin ? (
+                        <Select value={selected.paid_from ?? ""} onValueChange={(v) => accountMutation.mutate({ id: selected.id, account: v })}>
+                          <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Choose account" /></SelectTrigger>
+                          <SelectContent>
+                            {PAID_FROM.map((a) => <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-ink-primary font-medium">{paidFromLabel(selected.paid_from) ?? "—"}</span>
+                      )}
+                    </div>
+                  )}
                   {selected.verify_note && (
                     <div className="pt-1">
                       <span className="text-ink-muted">Comment from {nameOf(selected.verifier_id) ?? "verifier"}: </span>
@@ -482,7 +544,16 @@ export default function PaymentsPage() {
                     </Button>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border p-3">
-                      <p className="text-xs font-medium text-ink-muted">Upload the payment receipt *</p>
+                      <p className="text-xs font-medium text-ink-muted">Paid from *</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {PAID_FROM.map((a) => (
+                          <button key={a.key} type="button" onClick={() => setPaidFrom(a.key)}
+                            className={`h-9 rounded-md border text-xs font-medium transition-colors ${paidFrom === a.key ? "border-primary bg-accent-light text-primary" : "border-input text-ink-secondary hover:bg-muted"}`}>
+                            {a.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="pt-1 text-xs font-medium text-ink-muted">Upload the payment receipt *</p>
                       <div className="relative">
                         <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 pr-10 cursor-pointer hover:bg-muted/40 transition-colors">
                           <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
@@ -499,8 +570,8 @@ export default function PaymentsPage() {
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" className="flex-1" disabled={paidMutation.isPending}
-                          onClick={() => { setPaying(false); setReceipt(null); }}>Cancel</Button>
-                        <Button className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-white" disabled={!receipt || paidMutation.isPending}
+                          onClick={() => { setPaying(false); setReceipt(null); setPaidFrom(""); }}>Cancel</Button>
+                        <Button className="flex-1 gap-1.5 bg-success hover:bg-success/90 text-white" disabled={!receipt || !paidFrom || paidMutation.isPending}
                           onClick={() => paidMutation.mutate(selected.id)}>
                           {paidMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                           {paidMutation.isPending ? "Saving…" : "Confirm payment"}

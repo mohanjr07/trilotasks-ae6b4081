@@ -11,12 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from "sonner";
 
 const BUCKET = "payment-bills";
+const ACCOUNT_LABEL: Record<string, string> = { cash: "Cash", expense: "Expense account", chennai: "Chennai account", bangalore: "Bangalore account" };
 export const formatINR = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 type Row = {
   id: string; project_id: string | null; purpose: string; amount: number; status: string; created_at: string;
   requester_id: string; verifier_id: string | null; reviewed_by: string | null;
-  paid_at: string | null; paid_by: string | null; bill_path: string; receipt_path: string | null;
+  paid_at: string | null; paid_by: string | null; bill_path: string; receipt_path: string | null; paid_from?: string | null;
 };
 type Proj = { id: string; name: string; color: string };
 
@@ -105,6 +106,7 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
                     {r.verifier_id && r.status !== "pending_verification" ? ` · Verified by ${names[r.verifier_id] ?? "—"}` : ""}
                     {r.reviewed_by && r.status === "approved" ? ` · Approved by ${names[r.reviewed_by] ?? "—"}` : ""}
                     {r.paid_at ? ` · Paid ${format(new Date(r.paid_at), "d MMM")}` : ""}
+                    {r.paid_from ? ` · ${ACCOUNT_LABEL[r.paid_from] ?? r.paid_from}` : ""}
                   </p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>
@@ -152,7 +154,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("payment_requests")
-        .select("id, project_id, purpose, amount, status, created_at, requester_id, verifier_id, reviewed_by, paid_at, paid_by, bill_path, receipt_path")
+        .select("id, project_id, purpose, amount, status, created_at, requester_id, verifier_id, reviewed_by, paid_at, paid_by, bill_path, receipt_path, paid_from")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Row[];
