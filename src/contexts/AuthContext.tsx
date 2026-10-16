@@ -35,18 +35,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initialLoadDone = useRef(false);
 
+  // The profile is cached on the device, so a slow or dropped connection (very common when the
+  // iPhone home-screen app wakes up) never looks like being logged out.
+  const PROFILE_CACHE = "taskflow-profile";
+  const readCachedProfile = (userId: string): Profile | null => {
+    try {
+      const p = JSON.parse(localStorage.getItem(PROFILE_CACHE) ?? "null");
+      return p && p.id === userId ? (p as Profile) : null;
+    } catch { return null; }
+  };
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if (!error) {
+        setProfile((data as Profile | null) ?? null);
+        try {
+          if (data) localStorage.setItem(PROFILE_CACHE, JSON.stringify(data));
+          else localStorage.removeItem(PROFILE_CACHE);
+        } catch { /* ignore */ }
+        return;
+      }
+      lastError = error;
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     }
-
-    setProfile((data as Profile | null) ?? null);
+    // still offline: keep using the copy saved on this device
+    const cached = readCachedProfile(userId);
+    if (cached) { setProfile(cached); return; }
+    throw lastError;
   };
 
   useEffect(() => {
@@ -65,13 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (showLoading) setLoading(true);
+      // show the saved profile straight away; the fresh one replaces it a moment later
+      const cached = readCachedProfile(nextSession.user.id);
+      if (cached) { setProfile(cached); setLoading(false); }
 
       try {
         await fetchProfile(nextSession.user.id);
       } catch {
-        if (isMounted) {
-          setProfile(null);
-        }
+        // couldn't load it and nothing saved — leave the session alone (never log out over a network blip);
+        // it is fetched again when the app comes back to the front or the connection returns
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -99,9 +117,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       syncAuthState(nextSession, true)
     );
 
+    // app back in front / connection back: make sure the session is fresh and the profile is loaded
+    const onWake = () => {
+      if (document.visibilityState !== "visible") return;
+      void supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (!isMounted || !s?.user) return;
+        setSession(s);
+        fetchProfile(s.user.id).catch(() => {});
+      });
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("online", onWake);
+
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("online", onWake);
     };
   }, []);
 
@@ -113,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     await removePushToken().catch(() => {});
     await supabase.auth.signOut();
+    try { localStorage.removeItem(PROFILE_CACHE); } catch { /* ignore */ }
     setProfile(null);
   };
 

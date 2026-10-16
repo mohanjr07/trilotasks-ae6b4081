@@ -63,9 +63,11 @@ const queryClient = new QueryClient({
 });
 
 function RootRedirect() {
-  const { profile, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
   if (loading) return null;
-  if (!profile) return <Navigate to="/login" replace />;
+  if (!session) return <Navigate to="/login" replace />;
+  // signed in but the profile is still loading (slow / flaky network on a phone) — wait, don't send to login
+  if (!profile) return null;
   if (profile.role === "employee") return <Navigate to="/my-dashboard" replace />;
   if (profile.role === "intern") return <Navigate to="/intern-dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
