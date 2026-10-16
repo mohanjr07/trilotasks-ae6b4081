@@ -1,8 +1,8 @@
 // Shows the company's ORIGINAL Word form, filled in with the request's
-// values and approval status. The filled .docx is put in the private
-// "form-copies" bucket and shown through Microsoft's Office viewer (looks
-// exactly like Word) using a 15-minute signed link. Falls back to an in-app
-// render (docx-preview), then to the simple built-in layout.
+// values and approval status. It is drawn straight away in the browser
+// (docx-preview) — "Exact Word view" can also show it through Microsoft's
+// Office viewer (uploads a copy to the private "form-copies" bucket).
+// Falls back to the simple built-in layout.
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { renderAsync } from "docx-preview";
@@ -46,8 +46,11 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
   const hostRef = useRef<HTMLDivElement>(null);
   const fallbackRef = useRef<HTMLDivElement>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [rendered, setRendered] = useState(false);
   const [failed, setFailed] = useState(false);
+  // optional exact Word rendering through Microsoft's viewer (slower: upload + Microsoft fetch)
   const [officeUrl, setOfficeUrl] = useState<string | null>(null);
+  const [officeBusy, setOfficeBusy] = useState(false);
   const [frameLoaded, setFrameLoaded] = useState(false);
   useEffect(() => setFrameLoaded(false), [officeUrl]);
 
@@ -57,38 +60,19 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
   }), [failed, tpl.isError, blob]);
 
   const key = JSON.stringify([request.data, request.revision, request.status, request.approved_at, request.authorized_at, request.rejected_at, request.reference_value, names[request.requested_by]]);
+  // 1) fast: fill the Word form and draw it right here in the browser (no upload, no waiting on Microsoft)
   useEffect(() => {
     if (!tpl.data || !hostRef.current) return;
     let cancelled = false;
+    setOfficeUrl(null);
     (async () => {
       try {
         const filled = await buildFilledDocx(tpl.data.buffer.slice(0), schema, request, names, tpl.data.locator);
-        if (cancelled) return;
-        setBlob(filled);
-        // 1) exact rendering via Microsoft's Office viewer
-        try {
-          const path = request.id === "draft" ? `drafts/${request.requested_by || "me"}.docx` : `${request.id}.docx`;
-          const { error: upErr } = await supabase.storage.from("form-copies").upload(path, filled, {
-            upsert: true,
-            contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          });
-          if (upErr) throw upErr;
-          const { data: signed, error: sErr } = await supabase.storage.from("form-copies").createSignedUrl(path, 15 * 60);
-          if (sErr || !signed?.signedUrl) throw sErr ?? new Error("no link");
-          const abs = new URL(signed.signedUrl, window.location.origin).toString();
-          if (!cancelled) {
-            setOfficeUrl(`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(abs)}`);
-            setFailed(false);
-          }
-          return;
-        } catch {
-          // fall through to the in-app render
-        }
         if (cancelled || !hostRef.current) return;
-        setOfficeUrl(null);
+        setBlob(filled);
         hostRef.current.innerHTML = "";
         await renderAsync(filled, hostRef.current, hostRef.current, { className: "docx-preview", inWrapper: false, ignoreHeight: true, breakPages: true });
-        setFailed(false);
+        if (!cancelled) { setRendered(true); setFailed(false); }
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -97,24 +81,59 @@ const FilledFormPreview = forwardRef<FilledFormHandle, {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tpl.dataUpdatedAt, key]);
 
+  // 2) on request: exact rendering via Microsoft's Office viewer
+  const openWordView = async () => {
+    if (!blob) return;
+    setOfficeBusy(true);
+    try {
+      const path = request.id === "draft" ? `drafts/${request.requested_by || "me"}.docx` : `${request.id}.docx`;
+      const { error: upErr } = await supabase.storage.from("form-copies").upload(path, blob, {
+        upsert: true,
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      if (upErr) throw upErr;
+      const { data: signed, error: sErr } = await supabase.storage.from("form-copies").createSignedUrl(path, 15 * 60);
+      if (sErr || !signed?.signedUrl) throw sErr ?? new Error("no link");
+      const abs = new URL(signed.signedUrl, window.location.origin).toString();
+      setOfficeUrl(`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(abs)}`);
+    } catch {
+      setOfficeUrl(null);
+    } finally {
+      setOfficeBusy(false);
+    }
+  };
+
   if (tpl.isError || failed) {
     return <FormDocument ref={fallbackRef} schema={schema} request={request} names={names} />;
   }
   return (
     <div className="bg-white text-black">
-      {(tpl.isLoading || (!officeUrl && !blob)) && <div className="p-10 text-center text-sm text-neutral-500">Loading form…</div>}
+      {!rendered && !officeUrl && <div className="p-10 text-center text-sm text-neutral-500">Loading form…</div>}
+      {rendered && (
+        <div className="flex justify-end border-b border-neutral-200 bg-neutral-50 px-3 py-1.5">
+          {officeUrl ? (
+            <button type="button" onClick={() => setOfficeUrl(null)} className="text-xs font-medium text-blue-600 hover:underline">Quick view</button>
+          ) : (
+            <button type="button" onClick={openWordView} disabled={officeBusy} className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-60">
+              {officeBusy ? "Opening Word view…" : "Exact Word view"}
+            </button>
+          )}
+        </div>
+      )}
       {officeUrl && (
         <div className="relative">
           {!frameLoaded && (
             <div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500 bg-white">
-              Opening the form… (a few seconds)
+              Opening the Word view… (a few seconds)
             </div>
           )}
           <iframe key={officeUrl} src={officeUrl} title="Form" onLoad={() => setTimeout(() => setFrameLoaded(true), 1500)}
             className="w-full h-[58dvh] border-0 bg-white" />
         </div>
       )}
-      <div ref={hostRef} className={officeUrl ? "hidden" : "docx-host"} />
+      <div className={officeUrl ? "hidden" : "max-h-[58dvh] overflow-auto bg-neutral-100"}>
+        <div ref={hostRef} className="docx-host mx-auto w-fit" />
+      </div>
     </div>
   );
 });
