@@ -30,6 +30,7 @@ type PaymentRequest = {
   amount: number;
   bill_path: string;
   bill_name: string | null;
+  extra_bills?: { path: string; name: string }[] | null;   // more bill files (the first is bill_path)
   status: "pending_verification" | "pending" | "approved" | "rejected";
   verifier_id: string | null;
   verified_at: string | null;
@@ -222,7 +223,8 @@ export default function PaymentsPage() {
       const { data, error } = await supabase.from("payment_requests").delete().eq("id", r.id).select("id");
       if (error) throw error;
       if (!data?.length) throw new Error("not allowed (run the admin-delete SQL in Supabase)");
-      if (r.bill_path) await supabase.storage.from(BUCKET).remove([r.bill_path]).catch(() => {});
+      const paths = [r.bill_path, ...(r.extra_bills ?? []).map((b) => b.path)].filter((x) => x && !x.startsWith("imported/"));
+      if (paths.length) await supabase.storage.from(BUCKET).remove(paths).catch(() => {});
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
@@ -521,12 +523,15 @@ export default function PaymentsPage() {
                   )}
                 </div>
 
-                {!imported(selected) && <button
-                  onClick={() => openBill(selected.bill_path)}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm font-medium text-ink-primary hover:bg-muted transition-colors"
-                >
-                  <FileText className="h-4 w-4" /> View attached bill <ExternalLink className="h-3.5 w-3.5" />
-                </button>}
+                {!imported(selected) && [{ path: selected.bill_path, name: selected.bill_name ?? "Bill" }, ...(selected.extra_bills ?? [])].map((b, i, all) => (
+                  <button
+                    key={b.path}
+                    onClick={() => openBill(b.path)}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm font-medium text-ink-primary hover:bg-muted transition-colors"
+                  >
+                    <FileText className="h-4 w-4" /> {all.length > 1 ? `View bill ${i + 1} of ${all.length}` : "View attached bill"} <ExternalLink className="h-3.5 w-3.5" />
+                  </button>
+                ))}
 
                 {selected.receipt_path && (
                   <button
@@ -671,7 +676,7 @@ function RequestPaymentModal({
   const [projectId, setProjectId] = useState<string>("");
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);   // any number of bill files
   const [verifierId, setVerifierId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -679,49 +684,56 @@ function RequestPaymentModal({
     setProjectId("");
     setPurpose("");
     setAmount("");
-    setFile(null);
+    setFiles([]);
     setVerifierId("");
   };
 
   const handleSubmit = async () => {
     if (!purpose.trim()) return toast.error("Enter the purpose of this payment");
     if (!amount || Number(amount) <= 0) return toast.error("Enter a valid amount");
-    if (!file) return toast.error("Attach the bill");
+    if (!files.length) return toast.error("Attach the bill");
     if (!skipVerification && !fixedVerifier && !verifierId) return toast.error("Choose the manager who will verify the bill");
     if (!userId) return toast.error("You must be logged in");
 
     setSubmitting(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${userId}/${Date.now()}_${safeName}`;
-      // a dropped mobile connection shows up as "Failed to fetch" — retry the upload a couple of times
-      let upErr: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          ({ error: upErr } = await supabase.storage
-            .from(BUCKET)
-            .upload(path, file, { contentType: file.type || undefined, upsert: false }));
-        } catch (e) { upErr = e; }
-        // an earlier attempt got through but its reply was lost → the file is already there
-        if (attempt > 0 && upErr && /exists|duplicate/i.test(String(upErr?.message ?? ""))) upErr = null;
-        if (!upErr || !/fetch|network|load failed/i.test(String(upErr?.message ?? upErr))) break;
-        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      // upload every bill (a dropped mobile connection shows up as "Failed to fetch" — retry each a couple of times)
+      const uploaded: { path: string; name: string }[] = [];
+      const cleanup = () => uploaded.length && supabase.storage.from(BUCKET).remove(uploaded.map((u) => u.path)).catch(() => {});
+      for (const [i, file] of files.entries()) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${userId}/${Date.now()}_${i}_${safeName}`;
+        let upErr: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            ({ error: upErr } = await supabase.storage
+              .from(BUCKET)
+              .upload(path, file, { contentType: file.type || undefined, upsert: false }));
+          } catch (e) { upErr = e; }
+          // an earlier attempt got through but its reply was lost → the file is already there
+          if (attempt > 0 && upErr && /exists|duplicate/i.test(String(upErr?.message ?? ""))) upErr = null;
+          if (!upErr || !/fetch|network|load failed/i.test(String(upErr?.message ?? upErr))) break;
+          await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        }
+        if (upErr) { await cleanup(); throw upErr; }
+        uploaded.push({ path, name: file.name });
       }
-      if (upErr) throw upErr;
+      const [first, ...rest] = uploaded;
 
       const { error: insErr } = await supabase.from("payment_requests").insert({
         requester_id: userId,
         project_id: projectId || null,
         purpose: purpose.trim(),
         amount: Number(amount),
-        bill_path: path,
-        bill_name: file.name,
+        bill_path: first.path,
+        bill_name: first.name,
+        extra_bills: rest,
         // production@: the database sets Hari as the verifier
         verifier_id: skipVerification || fixedVerifier ? null : verifierId,
         status: skipVerification ? "pending" : "pending_verification",
       } as any);
       if (insErr) {
-        await supabase.storage.from(BUCKET).remove([path]).catch(() => {});
+        await cleanup();
         throw insErr;
       }
 
@@ -802,32 +814,34 @@ function RequestPaymentModal({
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-ink-muted mb-1.5 block">Attach bill *</label>
-                  <div className="relative">
-                    <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 pr-10 cursor-pointer hover:bg-muted/40 transition-colors">
+                  <label className="text-xs font-medium text-ink-muted mb-1.5 block">
+                    Attach bills * {files.length > 0 && <span className="font-normal">({files.length})</span>}
+                  </label>
+                  <div className="space-y-2">
+                    {files.map((f, i) => (
+                      <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                        <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
+                        <span className="min-w-0 flex-1 truncate text-ink-primary">{f.name}</span>
+                        <button type="button" onClick={() => setFiles((all) => all.filter((_, j) => j !== i))} disabled={submitting}
+                          className="rounded-md p-1 text-ink-muted hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          title="Remove attachment" aria-label={`Remove ${f.name}`}>
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <label className="flex items-center gap-2 w-full text-sm rounded-md border border-dashed border-border bg-background px-3 py-3 cursor-pointer hover:bg-muted/40 transition-colors">
                       <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
                       <span className="truncate text-ink-secondary">
-                        {file ? file.name : "Tap to choose a photo or PDF of the bill"}
+                        {files.length ? "Add more bills" : "Tap to choose photos or PDFs of the bills"}
                       </span>
                       <input
                         type="file"
+                        multiple
                         accept="image/*,.pdf"
                         className="hidden"
-                        onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                        onChange={(e) => { const picked = Array.from(e.target.files ?? []); setFiles((all) => [...all, ...picked]); e.target.value = ""; }}
                       />
                     </label>
-                    {file && (
-                      <button
-                        type="button"
-                        onClick={() => setFile(null)}
-                        disabled={submitting}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-muted hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                        title="Remove attachment"
-                        aria-label="Remove attachment"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    )}
                   </div>
                 </div>
 

@@ -18,6 +18,7 @@ type Row = {
   id: string; project_id: string | null; purpose: string; amount: number; status: string; created_at: string;
   requester_id: string; verifier_id: string | null; reviewed_by: string | null;
   paid_at: string | null; paid_by: string | null; bill_path: string; receipt_path: string | null; paid_from?: string | null;
+  extra_bills?: { path: string; name: string }[] | null;
 };
 type Proj = { id: string; name: string; color: string };
 
@@ -112,12 +113,12 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>
                       {r.status === "approved" ? (r.paid_at ? "Paid" : "Approved · not paid") : st.label}
                     </span>
-                    {!isImported(r) && (
-                      <button type="button" onClick={() => openFile(r.bill_path)}
+                    {!isImported(r) && [r.bill_path, ...(r.extra_bills ?? []).map((b) => b.path)].map((path, i, all) => (
+                      <button key={path} type="button" onClick={() => openFile(path)}
                         className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary hover:bg-muted">
-                        <FileText className="h-3 w-3" /> Bill
+                        <FileText className="h-3 w-3" /> {all.length > 1 ? `Bill ${i + 1}` : "Bill"}
                       </button>
-                    )}
+                    ))}
                     {r.receipt_path && (
                       <button type="button" onClick={() => openFile(r.receipt_path!)}
                         className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-secondary hover:bg-muted">
@@ -154,7 +155,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("payment_requests")
-        .select("id, project_id, purpose, amount, status, created_at, requester_id, verifier_id, reviewed_by, paid_at, paid_by, bill_path, receipt_path, paid_from")
+        .select("id, project_id, purpose, amount, status, created_at, requester_id, verifier_id, reviewed_by, paid_at, paid_by, bill_path, receipt_path, paid_from, extra_bills")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Row[];
