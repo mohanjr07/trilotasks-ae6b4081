@@ -39,20 +39,25 @@ export default function FormRequestDialog({
   const { profile, user } = useAuth();
   const [preview, setPreview] = useState(false);
   const qc = useQueryClient();
-  const { names, authorizers, byNames } = useFormPeople();
+  const { names, authorizers, byNames, managers } = useFormPeople();
   const title = existing?.form_title ?? form?.title ?? "";
   // managers skip the "Approved by" step — their forms go straight to authorization
   // production@ — every form is approved by Hari first (set by the database too)
   const isProduction = (profile?.email ?? "").toLowerCase() === PRODUCTION_EMAIL;
   const approvalStep = needsApproval(title) && (isProduction || profile?.role !== "manager");
-  const approverChoiceNames = approvalStep && !isProduction ? approverChoices(title) : null;
+  // "Approved by" dropdown: the usual approver(s) for this form first, then every manager
   const fixedApproverName = isProduction ? "Hari" : approverFor(title).name;
-  const approverOptions = approverChoiceNames ? byNames(approverChoiceNames) : null;
+  const defaultApprovers = approvalStep && !isProduction ? byNames(approverChoices(title) ?? [fixedApproverName]) : [];
+  const approverOptions = approvalStep && !isProduction
+    ? [...(existing?.approver_id && names[existing.approver_id] ? [{ id: existing.approver_id, full_name: names[existing.approver_id] }] : []),
+       ...defaultApprovers, ...managers].filter((p, i, all) => p.id !== user?.id && all.findIndex((q) => q.id === p.id) === i)
+    : null;
+  const defaultApproverId = approverOptions?.find((p) => defaultApprovers.some((d) => d.id === p.id))?.id ?? "";
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
   const [attachments, setAttachments] = useState<FormAttachment[]>([]);
   const [authorizer, setAuthorizer] = useState("");
-  const [approver, setApprover] = useState("");   // only for forms with an approver dropdown (Quality Check)
+  const [approver, setApprover] = useState("");   // chosen in the "Approved by" dropdown
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +78,10 @@ export default function FormRequestDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
+  // new form: pre-select the usual approver once the people list has loaded
+  useEffect(() => {
+    if (open && !existing && !approver && defaultApproverId) setApprover(defaultApproverId);
+  }, [open, existing, approver, defaultApproverId]);
 
   // Running numbers already issued on any form (for reference-number fields)
   const needsMaterialOut = schema.fields.some((f) => f.lookup === "refs");
