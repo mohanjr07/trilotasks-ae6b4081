@@ -118,7 +118,8 @@ export default function NotificationsPage() {
                   <motion.div key={n.id} variants={staggerItem}
                     onClick={() => {
                       if (!n.is_read) markRead.mutate(n.id);
-                      if (n.type === "form" && n.reference_id) navigate(`/form-requests?id=${n.reference_id}`);
+                      if (n.type === "system" && n.reference_id && /^Production plan/i.test(n.title ?? "")) navigate(`/production-plan/task/${n.reference_id}`);
+                      else if (n.type === "form" && n.reference_id) navigate(`/form-requests?id=${n.reference_id}`);
                       else if (n.type === "payment") navigate("/payments");
                       else if (n.type === "overtime") navigate("/overtime");
                     }}

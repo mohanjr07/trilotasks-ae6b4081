@@ -46,6 +46,8 @@ import TeamMembersPage from "@/pages/TeamMembersPage";
 import BirthdaysPage from "@/pages/BirthdaysPage";
 import PaymentsPage from "@/pages/PaymentsPage";
 import OvertimePage from "@/pages/OvertimePage";
+import ProductionPlanPage from "@/pages/ProductionPlanPage";
+import { PlanTaskPage, PlanProjectPage } from "@/pages/PlanDetailPage";
 import AttendancePage from "@/pages/AttendancePage";
 import NotFound from "@/pages/NotFound";
 
@@ -122,6 +124,9 @@ const App = () => (
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/overtime" element={<OvertimePage />} />
+              <Route path="/production-plan" element={<ProductionPlanPage />} />
+              <Route path="/production-plan/task/:id" element={<PlanTaskPage />} />
+              <Route path="/production-plan/project/:id" element={<PlanProjectPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/birthdays" element={<BirthdaysPage />} />
               <Route path="/profile" element={<ProfilePage />} />

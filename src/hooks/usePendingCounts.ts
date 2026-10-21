@@ -27,7 +27,7 @@ export function usePendingCounts(): Record<string, number> {
     enabled: !!me,
     queryFn: async () => {
       const head = { count: "exact", head: true } as const;
-      const [forms, payVerify, payApprove, payToPay, ot, leave] = await Promise.all([
+      const [forms, payVerify, payApprove, payToPay, ot, leave, plan] = await Promise.all([
         // forms waiting for my approval or my authorization
         count((s) => s.from("form_requests").select("id", head)
           .or(`and(approver_id.eq.${me},status.eq.pending_approval),and(authorizer_id.eq.${me},status.eq.pending_authorization)`)),
@@ -41,12 +41,15 @@ export function usePendingCounts(): Record<string, number> {
         email === OT_APPROVER_EMAIL ? count((s) => s.from("overtime_entries").select("id", head).is("verified_at", null)) : Promise.resolve(0),
         // admins / managers: leave requests waiting
         role === "admin" || role === "manager" ? count((s) => s.from("leave_requests").select("id", head).eq("status", "pending")) : Promise.resolve(0),
+        // production plan: tasks waiting for my approval
+        count((s) => s.from("pp_tasks").select("id", head).eq("approver_id", me).eq("maturity", "in_approval")),
       ]);
       return {
         "/form-requests": forms,
         "/payments": payVerify + payApprove + payToPay,
         "/overtime": ot,
         "/leave": leave,
+        "/production-plan": plan,
       } as Record<string, number>;
     },
   });

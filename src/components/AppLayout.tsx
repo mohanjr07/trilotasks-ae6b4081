@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer,
+  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -21,6 +21,7 @@ const adminNav: NavItem[] = [
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Completed Tasks", path: "/completed-tasks", icon: CheckCircle2 },
   { label: "Projects", path: "/projects", icon: FolderKanban },
+  { label: "Production Plan", path: "/production-plan", icon: CalendarRange },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Package },
   { label: "People", path: "/people", icon: Contact },
@@ -46,6 +47,7 @@ const managerNav: NavItem[] = [
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Completed Tasks", path: "/completed-tasks", icon: CheckCircle2 },
   { label: "Projects", path: "/projects", icon: FolderKanban },
+  { label: "Production Plan", path: "/production-plan", icon: CalendarRange },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Package },
   { label: "People", path: "/people", icon: Contact },
@@ -71,6 +73,7 @@ const employeeNav: NavItem[] = [
   { label: "My Tasks", path: "/my-tasks", icon: CheckSquare },
   { label: "Completed Tasks", path: "/completed-tasks", icon: CheckCircle2 },
   { label: "Projects", path: "/projects", icon: FolderKanban },
+  { label: "Production Plan", path: "/production-plan", icon: CalendarRange },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Package },
   { label: "People", path: "/people", icon: Contact },
@@ -92,6 +95,7 @@ const internNav: NavItem[] = [
   { label: "My Tasks", path: "/intern-tasks", icon: CheckSquare },
   { label: "Completed Tasks", path: "/completed-tasks", icon: CheckCircle2 },
   { label: "Projects", path: "/projects", icon: FolderKanban },
+  { label: "Production Plan", path: "/production-plan", icon: CalendarRange },
   { label: "Organisation Flow", path: "/organisation-flow", icon: Network },
   { label: "Assets", path: "/assets", icon: Package },
   { label: "People", path: "/people", icon: Contact },
@@ -182,7 +186,7 @@ export default function AppLayout() {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
             {nav.map((item) => {
-              const active = location.pathname === item.path;
+              const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
               return (
                 <li key={item.path}>
                   <Link
@@ -265,7 +269,7 @@ export default function AppLayout() {
             <nav className="flex-1 overflow-y-auto px-3 py-4">
               <ul className="space-y-1">
                 {nav.map((item) => {
-                  const active = location.pathname === item.path;
+                  const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
                   return (
                     <li key={item.path}>
                       <Link
@@ -327,7 +331,7 @@ export default function AppLayout() {
       <nav className="fixed inset-x-0 bottom-0 z-30 md:hidden [transform:translateZ(0)] border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
         <div className="grid grid-cols-5 h-16">
           {mobileTabs.map((item) => {
-            const active = location.pathname === item.path;
+            const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
             return (
               <Link
                 key={item.path}
