@@ -96,8 +96,9 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   // People allowed to assign tasks to anyone, whatever their role.
   const ASSIGN_ANYONE_EMAILS = ["hari@triloautomation.com"];
   const canAssignAnyone = ASSIGN_ANYONE_EMAILS.includes((user?.email ?? "").toLowerCase());
-  const isManagerRole = profile?.role === "manager" && !canAssignAnyone;
-  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern" || canAssignAnyone;
+  // managers can assign to everyone too (not only their own team)
+  const isManagerRole = false;
+  const isEmployeeRole = profile?.role === "employee" || profile?.role === "intern" || profile?.role === "manager" || canAssignAnyone;
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list", isManagerRole ? `team:${user?.id}` : "all"],

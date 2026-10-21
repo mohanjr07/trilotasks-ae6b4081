@@ -305,11 +305,10 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .eq("is_active", true);
-      return data ?? [];
+      const { data, error } = await supabase.rpc("get_active_profiles");
+      if (error) throw error;
+      return ((data ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null }>)
+        .map(({ id, full_name, avatar_url }) => ({ id, full_name, avatar_url }));
     },
     enabled: editMode && isAdmin,
   });

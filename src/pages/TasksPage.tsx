@@ -181,13 +181,14 @@ export default function TasksPage({ myTasksOnly = false }: { myTasksOnly?: boole
   const { data: columns = DEFAULT_TASK_COLUMNS } = useTaskColumns();
 
   const { data: members = [] } = useQuery({
-    queryKey: ["members-list", isManagerRole ? `team:${user?.id}` : "all"],
+    queryKey: ["members-list", "all"],
     queryFn: async () => {
-      let q = supabase.from("profiles").select("id, full_name, avatar_url").eq("is_active", true).order("full_name");
-      // Manager filter list and assignee picker is scoped to their team only.
-      if (isManagerRole && user?.id) q = q.eq("manager_id", user.id);
-      const { data } = await q;
-      return data ?? [];
+      // everyone active (managers can assign to and filter by anyone)
+      const { data, error } = await supabase.rpc("get_active_profiles");
+      if (error) throw error;
+      return ((data ?? []) as Array<{ id: string; full_name: string; avatar_url: string | null }>)
+        .map(({ id, full_name, avatar_url }) => ({ id, full_name, avatar_url }))
+        .sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
     },
     enabled: isAdmin,
   });
