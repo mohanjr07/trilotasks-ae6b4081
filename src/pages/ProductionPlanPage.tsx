@@ -52,7 +52,8 @@ function ProjectsTab() {
   const { data: projects = [] } = usePlanProjects();
   const { data: plans = [], isLoading, error } = usePlans();
   const { data: tasks = [] } = usePlanTasks();
-  const [filter, setFilter] = useState<"assigned" | "active" | "all">("assigned");
+  // admins / managers start with every active plan; others with the plans they are part of
+  const [filter, setFilter] = useState<"assigned" | "active" | "all">(() => (lead ? "active" : "assigned"));
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -135,7 +136,7 @@ function TasksTab() {
   const { data: projects = [] } = usePlanProjects();
   const { data: plans = [] } = usePlans();
   const { data: tasks = [], isLoading, error } = usePlanTasks();
-  const [filter, setFilter] = useState<"assigned" | "approval" | "open" | "all">("assigned");
+  const [filter, setFilter] = useState<"assigned" | "approval" | "open" | "all">(() => (isLead(profile?.role) ? "open" : "assigned"));
   const [projectId, setProjectId] = useState("");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
