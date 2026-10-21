@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.pp_plans (
   title         text,
   phase         text,
   plan_type     text,
-  maturity      text NOT NULL DEFAULT 'draft' CHECK (maturity IN ('draft','active','review','completed')),
+  maturity      text NOT NULL DEFAULT 'draft',
   owner_id      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   description   text,
   est_start     date,
@@ -243,7 +243,7 @@ CREATE OR REPLACE FUNCTION public.pp_move_plan(p_project_id uuid, p_to text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT public._pp_can_manage(p_project_id, auth.uid()) THEN RAISE EXCEPTION 'Only the plan owner or an admin can change this plan'; END IF;
-  IF p_to NOT IN ('draft','active','review','completed') THEN RAISE EXCEPTION 'Unknown state'; END IF;
+  IF p_to NOT IN ('draft','todo','in_work','in_approval','completed') THEN RAISE EXCEPTION 'Unknown state'; END IF;
   UPDATE public.pp_plans SET maturity = p_to,
          actual_finish = CASE WHEN p_to = 'completed' THEN coalesce(actual_finish, current_date) ELSE actual_finish END,
          updated_at = now()
@@ -417,6 +417,21 @@ REVOKE EXECUTE ON FUNCTION public.pp_delete_task(uuid) FROM anon, public;
 REVOKE EXECUTE ON FUNCTION public.pp_move_task(uuid, text, uuid, text) FROM anon, public;
 GRANT EXECUTE ON FUNCTION public.pp_projects(), public.pp_save_plan(uuid, text, jsonb), public.pp_move_plan(uuid, text),
   public.pp_save_task(uuid, uuid, jsonb), public.pp_delete_task(uuid), public.pp_move_task(uuid, text, uuid, text) TO authenticated;
+
+-- Projects use the same lifecycle as tasks: Draft → To Do → In Work → In Approval → Completed
+-- (also upgrades plans saved with the earlier Active / Review states)
+DO $$
+DECLARE c record;
+BEGIN
+  FOR c IN SELECT conname FROM pg_constraint
+            WHERE conrelid = 'public.pp_plans'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) ILIKE '%maturity%' LOOP
+    EXECUTE format('ALTER TABLE public.pp_plans DROP CONSTRAINT %I', c.conname);
+  END LOOP;
+  UPDATE public.pp_plans SET maturity = CASE maturity WHEN 'active' THEN 'todo' WHEN 'review' THEN 'in_approval' ELSE maturity END
+   WHERE maturity IN ('active','review');
+  ALTER TABLE public.pp_plans ADD CONSTRAINT pp_plans_maturity_check
+    CHECK (maturity IN ('draft','todo','in_work','in_approval','completed'));
+END $$;
 
 -- live updates
 DO $$

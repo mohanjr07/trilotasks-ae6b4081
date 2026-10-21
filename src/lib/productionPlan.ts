@@ -58,7 +58,7 @@ export type PlanHistory = {
 };
 
 export type TaskState = "draft" | "todo" | "in_work" | "in_approval" | "completed";
-export type PlanState = "draft" | "active" | "review" | "completed";
+export type PlanState = TaskState;   // projects follow the same lifecycle as tasks
 
 export const TASK_STATES: Array<{ key: TaskState; label: string }> = [
   { key: "draft", label: "Draft" },
@@ -67,14 +67,9 @@ export const TASK_STATES: Array<{ key: TaskState; label: string }> = [
   { key: "in_approval", label: "In Approval" },
   { key: "completed", label: "Completed" },
 ];
-export const PLAN_STATES: Array<{ key: PlanState; label: string }> = [
-  { key: "draft", label: "Draft" },
-  { key: "active", label: "Active" },
-  { key: "review", label: "Review" },
-  { key: "completed", label: "Completed" },
-];
+export const PLAN_STATES = TASK_STATES;
 export const stateLabel = (s?: string | null) =>
-  [...TASK_STATES, ...PLAN_STATES].find((x) => x.key === s)?.label ?? (s ?? "—");
+  TASK_STATES.find((x) => x.key === s)?.label ?? (s ?? "—");
 
 export const PRIORITIES = ["Low", "Medium", "High", "Critical"] as const;
 export const PHASES = ["Concept", "Design", "Procurement", "Manufacturing", "Assembly", "Installation", "Commissioning", "Handover"];

@@ -2,7 +2,7 @@
 // properties table, history table.
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -289,15 +289,19 @@ export function MoveDialog({ open, onClose, title, needApprover, needComment, co
 export function LifecycleChain({ states, current }: { states: Array<{ key: string; label: string }>; current: string }) {
   const idx = states.findIndex((s) => s.key === current);
   return (
-    <div className="flex flex-wrap items-center justify-center gap-y-3 py-6">
+    <div className="flex flex-wrap items-center justify-center gap-y-4 py-8">
       {states.map((s, i) => (
         <Fragment key={s.key}>
-          <div className={cn("rounded-md border px-4 py-2 text-sm font-medium shadow-sm min-w-[96px] text-center",
-            i === idx ? "border-primary bg-primary text-primary-foreground"
-              : i < idx ? "border-border bg-muted text-ink-secondary" : "border-border bg-card text-ink-muted")}>
+          <div className={cn("rounded-[3px] px-5 sm:px-7 py-1.5 text-sm text-center whitespace-nowrap shadow-[0_1px_2px_rgba(0,0,0,0.25)]",
+            i === idx ? "bg-[#3d9be0] text-white font-medium" : "bg-[#e6e6e6] text-[#333] dark:bg-muted dark:text-ink-primary")}>
             {s.label}
           </div>
-          {i < states.length - 1 && <ArrowRight className="mx-2 h-4 w-4 text-ink-muted shrink-0" />}
+          {i < states.length - 1 && (
+            <div className="flex items-center shrink-0 mx-1" aria-hidden>
+              <div className="h-[1.5px] w-6 sm:w-12 md:w-16 bg-ink-primary" />
+              <div className="h-0 w-0 border-y-[5px] border-y-transparent border-l-[9px] border-l-ink-primary" />
+            </div>
+          )}
         </Fragment>
       ))}
     </div>
