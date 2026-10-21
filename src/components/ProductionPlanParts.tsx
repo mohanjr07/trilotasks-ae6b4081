@@ -30,7 +30,7 @@ function Field({ label, children, wide }: { label: string; children: ReactNode; 
 
 export function useInvalidatePlan() {
   const qc = useQueryClient();
-  return () => ["pp-plans", "pp-tasks", "pp-history", "pp-approvals", "pp-projects"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  return () => ["pp-plans", "pp-tasks", "pp-history", "pp-approvals", "pp-projects", "pp-bom"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 }
 
 // ── Plan (project) create / edit ─────────────────────────────────────────────

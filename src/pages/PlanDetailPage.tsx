@@ -18,6 +18,7 @@ import {
   PlanDialog, TaskDialog, MoveDialog, LifecycleChain, MaturityChips, PropertiesTable, HistoryTable, ProgressBar, useInvalidatePlan,
 } from "@/components/ProductionPlanParts";
 import PlanApprovalsPanel from "@/components/PlanApprovalsPanel";
+import PlanBomPanel, { useBom } from "@/components/PlanBomPanel";
 import {
   TASK_STATES, PLAN_STATES, usePlanPeople, usePlanProjects, usePlans, usePlanTasks, usePlanHistory, usePlanApprovals, usePlanApprovalsFor,
   slipDays, healthOf, HEALTH_CLASS, stateLabel, fmtDate, fmtDateTime, isLead, isAdmin, planError, type TaskState,
@@ -242,7 +243,8 @@ export function PlanProjectPage() {
   const { data: history = [] } = usePlanHistory("project", id);
   const { data: projectApprovals = [] } = usePlanApprovalsFor(tasks.map((t) => t.id));
   const invalidate = useInvalidatePlan();
-  const [tab, setTab] = useState<"properties" | "tasks" | "lifecycle" | "history">("properties");
+  const [tab, setTab] = useState<"properties" | "tasks" | "bom" | "lifecycle" | "history">("properties");
+  const { data: bom = [] } = useBom(id);
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
 
@@ -284,7 +286,7 @@ export function PlanProjectPage() {
         owner={nameOf(plan.owner_id)} modified={fmtDateTime(plan.updated_at)}
         actions={canManage ? <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setEditing(true)}><Pencil className="h-3.5 w-3.5" /> Edit</Button> : undefined} />
 
-      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["tasks", `Tasks (${tasks.length})`], ["lifecycle", "Lifecycle"], ["history", "History"]]} />
+      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["tasks", `Tasks (${tasks.length})`], ["bom", `BOM (${bom.length})`], ["lifecycle", "Lifecycle"], ["history", "History"]]} />
 
       {tab === "properties" && (
         <PropertiesTable rows={[
@@ -354,6 +356,8 @@ export function PlanProjectPage() {
         <PlanApprovalsPanel approvals={projectApprovals} tasks={tasks} nameOf={nameOf} showRelated />
         </div>
       )}
+
+      {tab === "bom" && <PlanBomPanel projectId={id} projectName={project?.name ?? "Project"} canEdit={canManage} />}
 
       {tab === "history" && <HistoryTable rows={history} nameOf={nameOf} />}
 
