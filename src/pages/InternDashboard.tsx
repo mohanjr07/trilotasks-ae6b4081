@@ -8,6 +8,7 @@ import AnimatedPage, { staggerContainer, staggerItem } from "@/components/Animat
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import PriorityBadge from "@/components/PriorityBadge";
+import MyPlanTasksCard from "@/components/MyPlanTasksCard";
 
 export default function InternDashboard() {
   const { user, profile } = useAuth();
@@ -148,6 +149,7 @@ export default function InternDashboard() {
           )}
         </motion.div>
       </div>
+      <MyPlanTasksCard />
     </AnimatedPage>
   );
 }

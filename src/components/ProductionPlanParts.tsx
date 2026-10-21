@@ -181,7 +181,7 @@ export function TaskDialog({ open, onClose, task, defaultProjectId, onSaved }: {
 
   // projects this person may add tasks to
   const allowedProjects = useMemo(() => projects.filter((p) => lead ||
-    plans.some((pl) => pl.project_id === p.id && (pl.owner_id === user?.id || pl.created_by === user?.id))), [projects, plans, lead, user?.id]);
+    plans.some((pl) => pl.project_id === p.id && pl.owner_id === user?.id)), [projects, plans, lead, user?.id]);
 
   const save = useMutation({
     mutationFn: async () => {

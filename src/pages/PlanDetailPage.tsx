@@ -87,7 +87,7 @@ export function PlanTaskPage() {
   const [pct, setPct] = useState<string | null>(null);
 
   const plan = plans.find((p) => p.project_id === task?.project_id);
-  const canManage = isLead(profile?.role) || (!!plan && (plan.owner_id === user?.id || plan.created_by === user?.id));
+  const canManage = isLead(profile?.role) || (!!plan && plan.owner_id === user?.id);
   const isOwner = !!task && task.owner_id === user?.id;
   const isDecider = !!task && (task.approver_id === user?.id || isAdmin(profile?.role));
 
@@ -250,7 +250,7 @@ export function PlanProjectPage() {
 
   const plan = plans.find((p) => p.project_id === id) ?? null;
   const project = projects.find((p) => p.id === id);
-  const canManage = isLead(profile?.role) || (!!plan && (plan.owner_id === user?.id || plan.created_by === user?.id));
+  const canManage = isLead(profile?.role) || (!!plan && plan.owner_id === user?.id);
 
   const movePlan = useMutation({
     mutationFn: async (to: string) => {

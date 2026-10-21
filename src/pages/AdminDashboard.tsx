@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import TaskDetailModal from "@/components/TaskDetailModal";
+import MyPlanTasksCard from "@/components/MyPlanTasksCard";
 
 const COLORS = ["hsl(224,72%,53%)", "hsl(142,72%,39%)", "hsl(32,95%,44%)", "hsl(0,72%,51%)"];
 
@@ -223,6 +224,7 @@ export default function AdminDashboard() {
       </div>
 
       <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+      <MyPlanTasksCard />
     </AnimatedPage>
   );
 }

@@ -28,7 +28,7 @@ export default function ProductionPlanPage() {
     <AnimatedPage>
       <div className="mb-5">
         <h1 className="font-heading text-xl sm:text-[28px] font-bold text-ink-primary">Production Plan</h1>
-        <p className="text-sm text-ink-muted mt-0.5">Plan each project, split it into tasks and follow every task from Draft to Completed.</p>
+        <p className="text-sm text-ink-muted mt-0.5">Plan each project, split it into tasks and follow every task from Draft to Completed. You see the plans you are part of.</p>
       </div>
       <div className="mb-4 flex gap-1 border-b border-border">
         {([["projects", "Projects"], ["tasks", "Tasks"]] as const).map(([k, label]) => (
@@ -46,7 +46,8 @@ export default function ProductionPlanPage() {
 // ── Projects ─────────────────────────────────────────────────────────────────
 function ProjectsTab() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const lead = isLead(profile?.role);   // only admins / managers create plans
   const { nameOf } = usePlanPeople();
   const { data: projects = [] } = usePlanProjects();
   const { data: plans = [], isLoading, error } = usePlans();
@@ -81,7 +82,7 @@ function ProjectsTab() {
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects" className="h-9 pl-9" />
           </div>
         </div>
-        <Button className="gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New plan</Button>
+        {lead && <Button className="gap-1.5" onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> New plan</Button>}
       </div>
 
       {error ? (
@@ -90,7 +91,7 @@ function ProjectsTab() {
         <div className="h-40 rounded-xl bg-muted animate-pulse" />
       ) : rows.length === 0 ? (
         <EmptyState icon={CalendarRange} title="No Objects Found"
-          description={filter === "assigned" ? "No active plans you own or have tasks in. Switch the filter to see all plans, or create one." : "Click “New plan” to plan a project."} />
+          description={!lead ? "Plans you are part of (as plan owner or task owner) will show here." : filter === "assigned" ? "No active plans you own or have tasks in. Switch the filter to see all plans, or create one." : "Click “New plan” to plan a project."} />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full min-w-[960px] text-sm">
@@ -138,7 +139,7 @@ function TasksTab() {
   const [projectId, setProjectId] = useState("");
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
-  const canAdd = isLead(profile?.role) || plans.some((pl) => pl.owner_id === user?.id || pl.created_by === user?.id);
+  const canAdd = isLead(profile?.role) || plans.some((pl) => pl.owner_id === user?.id);
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? "—";
   const waitingForMe = tasks.filter((t) => t.maturity === "in_approval" && t.approver_id === user?.id).length;
 
