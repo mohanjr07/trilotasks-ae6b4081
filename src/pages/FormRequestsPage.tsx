@@ -188,7 +188,7 @@ export default function FormRequestsPage() {
 
       {selected && (
         <RequestViewer request={selected} names={names} canDecide={myTurn(selected)}
-          canResubmit={selected.status !== "authorized" && selected.requested_by === user?.id}
+          canResubmit={selected.requested_by === user?.id && (selected.status === "pending_approval" || selected.status === "rejected" || (selected.status === "pending_authorization" && !selected.approved_at))}
           canDelete={profile?.role === "admin" || profile?.role === "super_admin" ||
             (selected.requested_by === user?.id && selected.status !== "authorized")}
           onClose={close} />
