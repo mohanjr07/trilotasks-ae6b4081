@@ -97,6 +97,23 @@ export default function FormRequestDialog({
     },
   });
 
+  // Project dropdowns (Material IN / OUT): every project name
+  const needsProjects = schema.fields.some((f) => f.type === "project");
+  const { data: projectNames = [] } = useQuery({
+    queryKey: ["form-project-names"],
+    enabled: open && needsProjects,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const rpc = await (supabase as any).rpc("form_project_names");
+      if (!rpc.error) return ((rpc.data ?? []) as Array<{ name: string }>).map((r) => r.name);
+      const { data, error } = await supabase.from("projects").select("name").order("name");
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.name as string);
+    },
+  });
+  const [projectMode, setProjectMode] = useState<Record<string, "consumables" | "project" | "">>({});
+  useEffect(() => { if (open) setProjectMode({}); }, [open, existing?.id, title]);
+
   const setField = (k: string, v: string) => setData((d) => ({ ...d, fields: { ...d.fields, [k]: v } }));
   const setCell = (t: string, i: number, k: string, v: string) =>
     setData((d) => ({ ...d, tables: { ...d.tables, [t]: d.tables[t].map((r, j) => (j === i ? { ...r, [k]: v } : r)) } }));
@@ -176,7 +193,32 @@ export default function FormRequestDialog({
               <p className="mt-1 text-[11px] text-ink-muted">No reference numbers issued yet — you can type one.</p>
             )}
           </>
-        ) : f.type === "checks" ? (
+        ) : f.type === "project" ? (() => {
+          const mode = projectMode[f.key] ?? (v === "Consumables" ? "consumables" : v ? "project" : "");
+          const names = v && v !== "Consumables" && !projectNames.includes(v) ? [v, ...projectNames] : projectNames;
+          return (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select id={`f-${f.key}`} value={mode}
+                onChange={(e) => {
+                  const m = e.target.value as "consumables" | "project" | "";
+                  setProjectMode((pm) => ({ ...pm, [f.key]: m }));
+                  setField(f.key, m === "consumables" ? "Consumables" : "");
+                }}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">Select…</option>
+                <option value="consumables">Consumables</option>
+                <option value="project">Project</option>
+              </select>
+              {mode === "project" && (
+                <select aria-label="Choose project" value={v === "Consumables" ? "" : v} onChange={(e) => setField(f.key, e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="">Choose project…</option>
+                  {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              )}
+            </div>
+          );
+        })() : f.type === "checks" ? (
           <div className="flex flex-wrap gap-2">
             {(f.options ?? []).map((o) => {
               const picked = v.split(", ").filter(Boolean);

@@ -4,7 +4,7 @@
 //  the fill-in screen and the printable / PDF copy.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "select" | "checks" | "lookup";
+export type FieldType = "text" | "textarea" | "number" | "date" | "time" | "select" | "checks" | "lookup" | "project";
 
 export type FormField = {
   key: string;
@@ -15,6 +15,7 @@ export type FormField = {
   placeholder?: string;
   wide?: boolean;          // full row on the form / document
   lookup?: "refs";         // "lookup": pick from running numbers issued on any form (typing still allowed)
+  // "project": dropdown Consumables / Project → then a list of all projects (value = "Consumables" or the project name)
 };
 
 export type TableColumn = {
@@ -135,7 +136,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       { key: "date", label: "Date", type: "date", required: true },
       { key: "address", label: "Address of receiver", type: "textarea", wide: true },
       { key: "phone", label: "Ph No", type: "text" },
-      { key: "project", label: "Project", type: "text", required: true },
+      { key: "project", label: "Project", type: "project", required: true },
       { key: "purpose", label: "Purpose", type: "text", required: true, wide: true },
     ],
     tables: [{
@@ -158,7 +159,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs",
         placeholder: "Pick a reference number (optional)" },
       { key: "date", label: "Date", type: "date", required: true },
-      { key: "project", label: "Project", type: "text", required: true },
+      { key: "project", label: "Project", type: "project", required: true },
       { key: "purpose", label: "Purpose", type: "text", required: true },
     ],
     tables: [{
@@ -180,7 +181,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       { key: "out_ref", label: "Material OUT No / Ref No", type: "lookup", lookup: "refs",
         placeholder: "Pick a reference number (optional)" },
       { key: "date", label: "Date", type: "date", required: true },
-      { key: "project", label: "Project", type: "text", required: true },
+      { key: "project", label: "Project", type: "project", required: true },
       { key: "purpose", label: "Purpose", type: "text", required: true },
     ],
     tables: [{
