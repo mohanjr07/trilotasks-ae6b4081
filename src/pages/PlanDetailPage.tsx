@@ -17,8 +17,9 @@ import { cn } from "@/lib/utils";
 import {
   PlanDialog, TaskDialog, MoveDialog, LifecycleChain, MaturityChips, PropertiesTable, HistoryTable, ProgressBar, useInvalidatePlan,
 } from "@/components/ProductionPlanParts";
+import PlanApprovalsPanel from "@/components/PlanApprovalsPanel";
 import {
-  TASK_STATES, PLAN_STATES, usePlanPeople, usePlanProjects, usePlans, usePlanTasks, usePlanHistory, usePlanApprovals,
+  TASK_STATES, PLAN_STATES, usePlanPeople, usePlanProjects, usePlans, usePlanTasks, usePlanHistory, usePlanApprovals, usePlanApprovalsFor,
   slipDays, healthOf, HEALTH_CLASS, stateLabel, fmtDate, fmtDateTime, isLead, isAdmin, planError, type TaskState,
 } from "@/lib/productionPlan";
 
@@ -215,33 +216,7 @@ export function PlanTaskPage() {
               <p className="mt-3 text-center text-xs text-ink-muted">Waiting for {nameOf(task.approver_id)} to approve.</p>
             )}
           </div>
-          <div>
-            <h2 className="mb-2 text-sm font-semibold text-ink-primary">Approvals</h2>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="bg-muted/50 text-left text-ink-secondary">
-                  <tr>{["Approver", "Requested by", "Approval Status", "Requested", "Decided", "Instructions", "Comments"].map((h) =>
-                    <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {approvals.length === 0 ? (
-                    <tr><td colSpan={7} className="px-3 py-6 text-center text-ink-muted">No Objects Found</td></tr>
-                  ) : approvals.map((a) => (
-                    <tr key={a.id} className="border-t border-border align-top">
-                      <td className="px-3 py-2">{nameOf(a.approver_id)}</td>
-                      <td className="px-3 py-2">{nameOf(a.requested_by)}</td>
-                      <td className={cn("px-3 py-2 capitalize", a.status === "approved" && "text-green-700", a.status === "rejected" && "text-red-600")}>
-                        {a.status === "rejected" ? "Sent back" : a.status}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtDateTime(a.requested_at)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{fmtDateTime(a.decided_at)}</td>
-                      <td className="px-3 py-2 whitespace-pre-wrap">{a.instructions ?? ""}</td>
-                      <td className="px-3 py-2 whitespace-pre-wrap">{a.comment ?? ""}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <PlanApprovalsPanel approvals={approvals} tasks={[task]} nameOf={nameOf} />
         </div>
       )}
 
@@ -265,6 +240,7 @@ export function PlanProjectPage() {
   const { data: plans = [], isLoading } = usePlans();
   const { data: tasks = [] } = usePlanTasks(id);
   const { data: history = [] } = usePlanHistory("project", id);
+  const { data: projectApprovals = [] } = usePlanApprovalsFor(tasks.map((t) => t.id));
   const invalidate = useInvalidatePlan();
   const [tab, setTab] = useState<"properties" | "tasks" | "lifecycle" | "history">("properties");
   const [editing, setEditing] = useState(false);
@@ -363,6 +339,7 @@ export function PlanProjectPage() {
       )}
 
       {tab === "lifecycle" && (
+        <div className="space-y-5">
         <div className="rounded-xl border border-border bg-card p-4">
           <LifecycleChain states={PLAN_STATES} current={plan.maturity} />
           {canManage && (
@@ -373,6 +350,8 @@ export function PlanProjectPage() {
                 <ChevronUp className="h-4 w-4" /> Promote to {next.label}</Button>}
             </div>
           )}
+        </div>
+        <PlanApprovalsPanel approvals={projectApprovals} tasks={tasks} nameOf={nameOf} showRelated />
         </div>
       )}
 

@@ -189,6 +189,20 @@ export function usePlanApprovals(taskId?: string) {
   });
 }
 
+/** Approval requests for several tasks (a project's lifecycle tab). */
+export function usePlanApprovalsFor(taskIds: string[]) {
+  const key = [...taskIds].sort().join(",");
+  return useQuery({
+    queryKey: ["pp-approvals", "many", key],
+    enabled: taskIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await sb.from("pp_approvals").select("*").in("task_id", taskIds).order("requested_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PlanApproval[];
+    },
+  });
+}
+
 /** Turns "relation does not exist" into a hint that the SQL has not been run yet. */
 export function planError(e: any): string {
   const m = String(e?.message ?? e ?? "");
