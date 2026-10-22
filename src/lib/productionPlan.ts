@@ -203,6 +203,13 @@ export function usePlanApprovalsFor(taskIds: string[]) {
   });
 }
 
+/** Where a "Production plan: …" notification should open. */
+export function planNotificationRoute(n: { title?: string | null; reference_id?: string | null }): string | null {
+  if (!n.reference_id || !/^Production plan/i.test(n.title ?? "")) return null;
+  if (/^Production plan: (BOM|you own a plan)/i.test(n.title ?? "")) return `/production-plan/project/${n.reference_id}?tab=bom`;
+  return `/production-plan/task/${n.reference_id}`;
+}
+
 /** Turns "relation does not exist" into a hint that the SQL has not been run yet. */
 export function planError(e: any): string {
   const m = String(e?.message ?? e ?? "");

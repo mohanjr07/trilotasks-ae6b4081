@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { planNotificationRoute } from "@/lib/productionPlan";
 import { Bell } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -125,7 +126,7 @@ export default function NotificationBell() {
           const n = payload.new as any;
           const title = n.title ?? "TaskFlow";
           const body = n.body ?? "";
-          const route = n.type === "system" && n.reference_id && /^Production plan/i.test(n.title ?? "") ? `/production-plan/task/${n.reference_id}` : n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : n.type === "payment" ? "/payments" : n.type === "overtime" ? "/overtime" : "/notifications";
+          const route = n.type === "system" && planNotificationRoute(n) ? planNotificationRoute(n)! : n.type === "form" && n.reference_id ? `/form-requests?id=${n.reference_id}` : n.type === "payment" ? "/payments" : n.type === "overtime" ? "/overtime" : "/notifications";
 
           // In-app toast (always shown when the window is visible).
           toast(title, { description: body });
@@ -219,9 +220,9 @@ export default function NotificationBell() {
                     key={n.id}
                     onClick={() => {
                       if (!n.is_read) markRead.mutate(n.id);
-                      if (n.type === "system" && n.reference_id && /^Production plan/i.test(n.title ?? "")) {
+                      if (n.type === "system" && planNotificationRoute(n)) {
                         setOpen(false);
-                        navigate(`/production-plan/task/${n.reference_id}`);
+                        navigate(planNotificationRoute(n)!);
                       } else if (n.type === "form" && n.reference_id) {
                         setOpen(false);
                         navigate(`/form-requests?id=${n.reference_id}`);
