@@ -18,6 +18,7 @@ import {
   PlanDialog, TaskDialog, MoveDialog, LifecycleChain, MaturityChips, PropertiesTable, HistoryTable, ProgressBar, useInvalidatePlan,
 } from "@/components/ProductionPlanParts";
 import PlanApprovalsPanel from "@/components/PlanApprovalsPanel";
+import { ProjectTimeline, ProjectEvents, TaskTimeline } from "@/components/PlanTimeline";
 import PlanBomPanel, { useBom, useBomParts } from "@/components/PlanBomPanel";
 import {
   TASK_STATES, PLAN_STATES, usePlanPeople, usePlanProjects, usePlans, usePlanTasks, usePlanHistory, usePlanApprovals, usePlanApprovalsFor,
@@ -81,7 +82,7 @@ export function PlanTaskPage() {
   const { data: history = [] } = usePlanHistory("task", id);
   const { data: approvals = [] } = usePlanApprovals(id);
   const invalidate = useInvalidatePlan();
-  const [tab, setTab] = useState<"properties" | "lifecycle" | "history">("properties");
+  const [tab, setTab] = useState<"properties" | "lifecycle" | "history" | "timeline">("properties");
   const [editing, setEditing] = useState(false);
   const [move, setMove] = useState<null | { to: TaskState; title: string; label: string; approver?: boolean; comment?: boolean }>(null);
   const [pct, setPct] = useState<string | null>(null);
@@ -179,7 +180,7 @@ export function PlanTaskPage() {
           </>
         ) : undefined} />
 
-      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["lifecycle", "Lifecycle"], ["history", "History"]]} />
+      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["lifecycle", "Lifecycle"], ["history", "History"], ["timeline", "Timeline"]]} />
 
       {tab === "properties" && (
         <PropertiesTable rows={[
@@ -222,6 +223,7 @@ export function PlanTaskPage() {
       )}
 
       {tab === "history" && <HistoryTable rows={history} nameOf={nameOf} />}
+      {tab === "timeline" && <TaskTimeline task={task} history={history} nameOf={nameOf} />}
 
       <TaskDialog open={editing} onClose={() => setEditing(false)} task={task} />
       <MoveDialog open={!!move} onClose={() => setMove(null)} title={move?.title ?? ""} confirmLabel={move?.label ?? "OK"}
@@ -244,8 +246,8 @@ export function PlanProjectPage() {
   const { data: projectApprovals = [] } = usePlanApprovalsFor(tasks.map((t) => t.id));
   const invalidate = useInvalidatePlan();
   const [params] = useSearchParams();
-  const [tab, setTab] = useState<"properties" | "tasks" | "bom" | "lifecycle" | "history">(() =>
-    (["tasks", "bom", "lifecycle", "history"].includes(params.get("tab") ?? "") ? params.get("tab") : "properties") as "properties");
+  const [tab, setTab] = useState<"properties" | "tasks" | "bom" | "lifecycle" | "history" | "timeline">(() =>
+    (["tasks", "bom", "lifecycle", "history", "timeline"].includes(params.get("tab") ?? "") ? params.get("tab") : "properties") as "properties");
   const { data: bom = [] } = useBom(id);
   const { data: bomParts = [] } = useBomParts(id);
   const bomWaiting = bomParts.some((p) => p.status === "pending" && p.approver_id === user?.id);
@@ -290,7 +292,7 @@ export function PlanProjectPage() {
         owner={nameOf(plan.owner_id)} modified={fmtDateTime(plan.updated_at)}
         actions={canManage ? <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setEditing(true)}><Pencil className="h-3.5 w-3.5" /> Edit</Button> : undefined} />
 
-      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["tasks", `Tasks (${tasks.length})`], ["bom", `BOM (${bom.filter((b) => b.is_final).length})${bomWaiting ? " •" : ""}`], ["lifecycle", "Lifecycle"], ["history", "History"]]} />
+      <Tabs<typeof tab> value={tab} onChange={setTab} items={[["properties", "Properties"], ["tasks", `Tasks (${tasks.length})`], ["bom", `BOM (${bom.filter((b) => b.is_final).length})${bomWaiting ? " •" : ""}`], ["lifecycle", "Lifecycle"], ["history", "History"], ["timeline", "Timeline"]]} />
 
       {tab === "properties" && (
         <PropertiesTable rows={[
@@ -364,6 +366,12 @@ export function PlanProjectPage() {
       {tab === "bom" && <PlanBomPanel projectId={id} projectName={project?.name ?? "Project"} canEdit={canManage} />}
 
       {tab === "history" && <HistoryTable rows={history} nameOf={nameOf} />}
+      {tab === "timeline" && (
+        <div className="space-y-4">
+          <ProjectTimeline plan={plan} tasks={tasks} history={history} nameOf={nameOf} />
+          <ProjectEvents history={history} nameOf={nameOf} />
+        </div>
+      )}
 
       <PlanDialog open={editing} onClose={() => setEditing(false)} plan={plan} projectName={project?.name} />
       <TaskDialog open={adding} onClose={() => setAdding(false)} defaultProjectId={id} />
