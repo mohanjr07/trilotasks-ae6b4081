@@ -342,7 +342,9 @@ export function PropertiesTable({ rows }: { rows: Array<[string, ReactNode]> }) 
 // ── History table ────────────────────────────────────────────────────────────
 export function HistoryTable({ rows, nameOf }: { rows: PlanHistory[]; nameOf: (id?: string | null) => string }) {
   const [q, setQ] = useState("");
-  const shown = rows.filter((r) => !q.trim() || `${r.action} ${r.description ?? ""} ${nameOf(r.user_id)}`.toLowerCase().includes(q.trim().toLowerCase()));
+  // newest first
+  const shown = rows.filter((r) => !q.trim() || `${r.action} ${r.description ?? ""} ${nameOf(r.user_id)}`.toLowerCase().includes(q.trim().toLowerCase()))
+    .slice().sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
   return (
     <div className="space-y-3">
       <div className="relative sm:w-72">
