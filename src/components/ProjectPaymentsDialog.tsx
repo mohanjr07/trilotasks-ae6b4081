@@ -4,9 +4,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { openFileLink } from "@/lib/nativeFiles";
+import { openFileLink, saveFile } from "@/lib/nativeFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -45,6 +45,80 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   approved: { label: "Approved", cls: "bg-success-light text-success" },
   rejected: { label: "Rejected", cls: "bg-destructive-light text-destructive" },
 };
+
+/** Excel: Summary (per project), Payment logs (every request) and By account. */
+async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<string, string>, fileLabel: string) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const money = "\"₹\"#,##0.00";
+  const head = (ws: any, cols: string[]) => {
+    const r = ws.addRow(cols);
+    r.font = { bold: true };
+    r.eachCell((c: any) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6E6E6" } }; c.border = { bottom: { style: "thin" } }; });
+    return r;
+  };
+  const projOf = new Map(projects.map((p) => [p.id, p.name]));
+  const mine = rows.filter((r) => r.project_id && projOf.has(r.project_id));
+  const all = totalsOf(mine);
+
+  // 1. Summary
+  const ws = wb.addWorksheet("Summary");
+  ws.addRow([`Project expenses — ${fileLabel}`]).font = { bold: true, size: 14 };
+  ws.addRow([`Exported ${new Date().toLocaleString("en-IN")} · Spend = approved payment requests`]);
+  ws.addRow([]);
+  ws.addRow(["Overall spend", all.spend]).font = { bold: true };
+  ws.addRow(["Paid", all.paid]);
+  ws.addRow(["Approved, to pay", all.toPay]);
+  ws.addRow(["Waiting approval", all.pending]);
+  ws.addRow(["Approved payments", all.count]);
+  for (let i = 4; i <= 7; i++) ws.getCell(`B${i}`).numFmt = money;
+  ws.addRow([]);
+  head(ws, ["Project", "Requests", "Approved payments", "Spend", "Paid", "Approved, to pay", "Waiting approval", "Rejected"]);
+  const per = projects.map((p) => {
+    const pr = mine.filter((r) => r.project_id === p.id);
+    return { p, pr, t: totalsOf(pr), rejected: pr.filter((r) => r.status === "rejected").length };
+  }).sort((a, b) => b.t.spend - a.t.spend || a.p.name.localeCompare(b.p.name));
+  const first = ws.rowCount + 1;
+  per.forEach(({ p, pr, t, rejected }) => ws.addRow([p.name, pr.length, t.count, t.spend, t.paid, t.toPay, t.pending, rejected]));
+  const last = ws.rowCount;
+  const tot = ws.addRow(["TOTAL", mine.length, all.count, all.spend, all.paid, all.toPay, all.pending, mine.filter((r) => r.status === "rejected").length]);
+  tot.font = { bold: true };
+  for (let r = first; r <= ws.rowCount; r++) ["D", "E", "F", "G"].forEach((c) => { ws.getCell(`${c}${r}`).numFmt = money; });
+  [42, 11, 18, 16, 16, 18, 18, 10].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  if (last >= first) ws.autoFilter = { from: { row: first - 1, column: 1 }, to: { row: last, column: 8 } };
+
+  // 2. Payment logs
+  const wl = wb.addWorksheet("Payment logs");
+  head(wl, ["Date", "Project", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills"]);
+  [...mine].sort((a, b) => (projOf.get(a.project_id!) ?? "").localeCompare(projOf.get(b.project_id!) ?? "") || b.created_at.localeCompare(a.created_at))
+    .forEach((r) => {
+      const imp = isImported(r);
+      const row = wl.addRow([
+        new Date(r.created_at), projOf.get(r.project_id!) ?? "", r.purpose, Number(r.amount || 0), STATUS[r.status]?.label ?? r.status,
+        imp ? "From bank statement" : names[r.requester_id] ?? "", r.verifier_id ? names[r.verifier_id] ?? "" : "",
+        r.reviewed_by ? names[r.reviewed_by] ?? "" : "", r.paid_at ? new Date(r.paid_at) : "", r.paid_by ? names[r.paid_by] ?? "" : "",
+        r.paid_from ? ACCOUNT_LABEL[r.paid_from] ?? r.paid_from : "", imp ? 0 : 1 + (r.extra_bills?.length ?? 0),
+      ]);
+      row.getCell(1).numFmt = "dd-mmm-yyyy"; row.getCell(4).numFmt = money; row.getCell(9).numFmt = "dd-mmm-yyyy";
+    });
+  [13, 34, 44, 14, 22, 20, 18, 18, 13, 18, 18, 7].forEach((w, i) => { wl.getColumn(i + 1).width = w; });
+  wl.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, wl.rowCount), column: 12 } };
+  wl.views = [{ state: "frozen", ySplit: 1 }];
+
+  // 3. By account (approved spend)
+  const wa = wb.addWorksheet("By account");
+  head(wa, ["Paid from", "Payments", "Amount"]);
+  const spend = mine.filter((r) => isSpend(r.status));
+  const accounts = new Map<string, Row[]>();
+  spend.forEach((r) => { const k = r.paid_at ? (r.paid_from ? ACCOUNT_LABEL[r.paid_from] ?? r.paid_from : "Not set") : "Not paid yet"; accounts.set(k, [...(accounts.get(k) ?? []), r]); });
+  [...accounts.entries()].sort((a, b) => sum(b[1]) - sum(a[1])).forEach(([k, list]) => { wa.addRow([k, list.length, sum(list)]).getCell(3).numFmt = money; });
+  const at = wa.addRow(["TOTAL", spend.length, sum(spend)]); at.font = { bold: true }; at.getCell(3).numFmt = money;
+  [22, 11, 18].forEach((w, i) => { wa.getColumn(i + 1).width = w; });
+
+  const buf = await wb.xlsx.writeBuffer();
+  await saveFile(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    `Project expenses - ${fileLabel.replace(/[\\/:*?"<>|]/g, "-")} - ${format(new Date(), "dd-MMM-yyyy")}.xlsx`);
+}
 
 async function openFile(path: string) {
   try {
@@ -182,6 +256,13 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
       .sort((a, b) => b.t.spend - a.t.spend || b.rows.length - a.rows.length || a.p.name.localeCompare(b.p.name));
   }, [rows, projects, find]);
   const noProject = rows.filter((r) => !r.project_id);
+  const [exporting, setExporting] = useState(false);
+  const doExport = async (subset: Proj[], label: string) => {
+    setExporting(true);
+    try { await exportExpensesExcel(subset, rows, names, label); }
+    catch (e: any) { toast.error("Could not export: " + (e?.message ?? "")); }
+    finally { setExporting(false); }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -208,6 +289,10 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
             {/* Projects */}
             <div className="flex items-center gap-2">
               <p className="mr-auto font-heading text-sm font-bold text-ink-primary">Projects ({list.length})</p>
+              <button type="button" disabled={exporting || !rows.length} onClick={() => doExport(list.map((x) => x.p), find.trim() ? `filtered "${find.trim()}"` : "All projects")}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export Excel
+              </button>
               <div className="relative w-48 sm:w-60">
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
                 <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search project"
@@ -239,7 +324,13 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                     {isOpen && (
                       <div className="space-y-3 border-t border-border bg-muted/20 p-4">
                         <div>
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Project expense</p>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Project expense</p>
+                            <button type="button" disabled={exporting} onClick={() => doExport([p], p.name)}
+                              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:opacity-50">
+                              <Download className="h-3.5 w-3.5" /> Export this project
+                            </button>
+                          </div>
                           <div className="mb-2 flex items-baseline gap-2">
                             <span className="font-heading text-2xl font-bold text-ink-primary">{formatINR(t.spend)}</span>
                             <span className="text-xs text-ink-muted">{t.count} approved payment{t.count === 1 ? "" : "s"}</span>
