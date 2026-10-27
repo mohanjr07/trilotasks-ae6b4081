@@ -566,7 +566,9 @@ export async function buildFilledDocx(
           body.removeChild(prev);
           prev = before;
         }
-        const anchor = map.sigAnchor ? kids(body, "p").find((x) => map.sigAnchor!.test(textOf(x))) : undefined;
+        // the template's own "Requested By  Verified By  Approved By" line is replaced by our filled-in table
+        const anchorRe = map.sigAnchor ?? /^\s*Requested\s*By.*(Verified|Approved|Authori[sz]ed)\s*By/i;
+        const anchor = kids(body, "p").find((x) => anchorRe.test(textOf(x)));
         const tbl = signatureTable(doc, ctx, map.sigLabels);
         if (anchor) {
           body.replaceChild(tbl, anchor);
