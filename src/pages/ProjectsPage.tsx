@@ -14,7 +14,7 @@ import UserAvatar from "@/components/UserAvatar";
 import PriorityBadge from "@/components/PriorityBadge";
 import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
-import ProjectExpensesDialog from "@/components/ProjectPaymentsDialog";
+import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,8 +45,9 @@ const PROJECT_COLORS = [
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
   const { isAdmin, user, profile } = useAuth();
-  // project payments are for admins only (managers also count as "isAdmin" here)
-  const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "");
+  // project payments: admins, plus Hari (view only)
+  const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "")
+    || EXPENSE_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);

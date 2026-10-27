@@ -12,6 +12,8 @@ import { toast } from "sonner";
 
 const BUCKET = "payment-bills";
 const ACCOUNT_LABEL: Record<string, string> = { cash: "Cash", expense: "Expense account", chennai: "Chennai account", bangalore: "Bangalore account" };
+/** Non-admins who can see project expense tracking (view only). Keep in sync with is_expense_viewer() in the database. */
+export const EXPENSE_VIEWER_EMAILS = ["hari@triloautomation.com"];
 export const formatINR = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 type Row = {
@@ -240,8 +242,12 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     queryKey: ["profile-names"],
     enabled: open,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, full_name");
-      return Object.fromEntries((data ?? []).map((p: any) => [p.id, p.full_name])) as Record<string, string>;
+      // everyone's name, also for people who can't read the profiles table directly
+      const [{ data: active }, { data: direct }] = await Promise.all([
+        supabase.rpc("get_active_profiles"),
+        supabase.from("profiles").select("id, full_name"),
+      ]);
+      return Object.fromEntries([...(active ?? []), ...(direct ?? [])].map((p: any) => [p.id, p.full_name])) as Record<string, string>;
     },
   });
 
