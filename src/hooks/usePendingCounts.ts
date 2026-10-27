@@ -38,7 +38,7 @@ export function usePendingCounts(): Record<string, number> {
         // Anu: approved payments still to pay
         email === PAYER_EMAIL ? count((s) => s.from("payment_requests").select("id", head).eq("status", "approved").is("paid_at", null)) : Promise.resolve(0),
         // Hari: overtime waiting for his approval
-        email === OT_APPROVER_EMAIL ? count((s) => s.from("overtime_entries").select("id", head).is("verified_at", null)) : Promise.resolve(0),
+        email === OT_APPROVER_EMAIL ? count((s) => s.from("overtime_entries").select("id", head).is("verified_at", null).is("rejected_at", null)) : Promise.resolve(0),
         // admins / managers: leave requests waiting
         role === "admin" || role === "manager" ? count((s) => s.from("leave_requests").select("id", head).eq("status", "pending")) : Promise.resolve(0),
         // production plan: tasks waiting for my approval

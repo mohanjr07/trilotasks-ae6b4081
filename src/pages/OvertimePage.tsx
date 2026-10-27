@@ -39,7 +39,12 @@ type Entry = {
   created_at: string;
   verified_by: string | null;
   verified_at: string | null;
+  rejected_by?: string | null;
+  rejected_at?: string | null;
+  reject_reason?: string | null;
 };
+/** waiting for Hari: not approved and not rejected */
+const isPendingOt = (e: { verified_at: string | null; rejected_at?: string | null }) => !e.verified_at && !e.rejected_at;
 type Person = { id: string; full_name: string; role: string };
 
 const halfLabel = (h: string) =>
@@ -59,7 +64,7 @@ export default function OvertimePage() {
   const canApprove = isHari;
   const anuOnly = !canVerify;                                          // Anu sees approved entries only
 
-  const [tab, setTab] = useState<"pending" | "verified" | "all">("all");
+  const [tab, setTab] = useState<"pending" | "verified" | "rejected" | "all">("all");
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
@@ -124,6 +129,23 @@ export default function OvertimePage() {
     onError: (e: any) => toast.error("Could not verify: " + (e?.message ?? "")),
   });
 
+  // Hari: reject with a reason (the person who entered it is notified)
+  const [rejectIds, setRejectIds] = useState<string[] | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const reject = useMutation({
+    mutationFn: async (a: { ids: string[]; reason: string }) => {
+      const { data, error } = await (supabase as any).rpc("reject_overtime", { p_ids: a.ids, p_reason: a.reason });
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ["overtime"] });
+      setPicked(new Set()); setRejectIds(null); setRejectReason("");
+      toast.success(`${n} ${n === 1 ? "entry" : "entries"} rejected — the person who entered it has been told`);
+    },
+    onError: (e: any) => toast.error("Could not reject: " + (e?.message ?? "")),
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await (supabase as any).from("overtime_entries").delete().eq("id", id).select("id");
@@ -136,7 +158,7 @@ export default function OvertimePage() {
 
   const q = search.trim().toLowerCase();
   const list = entries.filter((e) => !(anuOnly && !e.verified_at)).filter((e) =>
-    (tab === "all" || (tab === "pending" ? !e.verified_at : !!e.verified_at)) &&
+    (tab === "all" || (tab === "pending" ? isPendingOt(e) : tab === "rejected" ? !!e.rejected_at : !!e.verified_at)) &&
     (!q || nameOf(e.employee_id).toLowerCase().includes(q)));
 
   const byDate = useMemo(() => {
@@ -145,8 +167,9 @@ export default function OvertimePage() {
     return Array.from(m.entries());
   }, [list]);
 
-  const pendingCount = anuOnly ? 0 : entries.filter((e) => !e.verified_at).length;
-  const pendingPicked = Array.from(picked).filter((id) => entries.find((e) => e.id === id && !e.verified_at));
+  const pendingCount = anuOnly ? 0 : entries.filter(isPendingOt).length;
+  const rejectedCount = anuOnly ? 0 : entries.filter((e) => !!e.rejected_at).length;
+  const pendingPicked = Array.from(picked).filter((id) => entries.find((e) => e.id === id && isPendingOt(e)));
   const togglePick = (id: string) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   if (!allowed) {
@@ -163,13 +186,19 @@ export default function OvertimePage() {
         <div>
           <h1 className="font-heading text-xl sm:text-[28px] font-bold text-ink-primary">Overtime</h1>
           <p className="text-sm text-ink-muted mt-0.5">
-            {isHari ? "Approve the overtime entered by others — approved entries go to Anu. Your own entries go to Anu straight away."
+            {isHari ? "Approve or reject the overtime entered by others — approved entries go to Anu. Your own entries go to Anu straight away."
               : isAdmin ? "Set the OT members; overtime entered goes to Hari for approval, then to Anu."
               : canVerify ? "Enter overtime for the OT members — Hari approves it, then it goes to Anu."
               : "Overtime entered by the managers."}
           </p>
         </div>
         <div className="flex gap-2">
+          {canApprove && pendingPicked.length > 0 && (
+            <Button variant="outline" className="gap-1.5 text-destructive hover:text-destructive" disabled={reject.isPending}
+              onClick={() => { setRejectReason(""); setRejectIds(pendingPicked); }}>
+              <X className="h-4 w-4" /> Reject selected ({pendingPicked.length})
+            </Button>
+          )}
           {canApprove && pendingPicked.length > 0 && (
             <Button variant="outline" className="gap-1.5" disabled={verify.isPending} onClick={() => verify.mutate(pendingPicked)}>
               <ShieldCheck className="h-4 w-4" /> Approve selected ({pendingPicked.length})
@@ -189,8 +218,8 @@ export default function OvertimePage() {
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className={`flex gap-1 border-b border-border ${pendingCount ? "" : "invisible"}`}>
-          {([["pending", `Waiting for Hari's approval${pendingCount ? ` (${pendingCount})` : ""}`], ["verified", "Approved"], ["all", "All"]] as const).map(([k, label]) => (
+        <div className={`flex gap-1 border-b border-border ${pendingCount || rejectedCount ? "" : "invisible"}`}>
+          {([["pending", `Waiting for Hari's approval${pendingCount ? ` (${pendingCount})` : ""}`], ["verified", "Approved"], ...(rejectedCount ? [["rejected", `Rejected (${rejectedCount})`]] : []), ["all", "All"]] as Array<[typeof tab, string]>).map(([k, label]) => (
             <button key={k} onClick={() => { setTab(k); setPicked(new Set()); }}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${tab === k ? "border-primary text-primary" : "border-transparent text-ink-muted hover:text-ink-secondary"}`}>
               {label}
@@ -214,8 +243,8 @@ export default function OvertimePage() {
       ) : (
         <div className="space-y-5">
           {byDate.map(([date, rows]) => {
-            const dayPending = rows.filter((r) => !r.verified_at).map((r) => r.id);
-            const total = rows.reduce((s, r) => s + Number(r.duration_hours), 0);
+            const dayPending = rows.filter(isPendingOt).map((r) => r.id);
+            const total = rows.filter((r) => !r.rejected_at).reduce((s, r) => s + Number(r.duration_hours), 0);
             return (
               <div key={date} className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
@@ -232,7 +261,7 @@ export default function OvertimePage() {
                 <div className="divide-y divide-border">
                   {rows.map((r) => (
                     <div key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                      {canApprove && !r.verified_at && (
+                      {canApprove && isPendingOt(r) && (
                         <input type="checkbox" className="h-4 w-4 accent-primary" checked={picked.has(r.id)} onChange={() => togglePick(r.id)} aria-label="Select" />
                       )}
                       <div className="min-w-0 flex-1">
@@ -251,10 +280,21 @@ export default function OvertimePage() {
                           {r.verified_by === r.created_by ? "✓ Sent to Anu" : `✓ Approved by ${nameOf(r.verified_by)} · sent to Anu`}
                           <span className="block text-ink-muted">{format(new Date(r.verified_at), "d MMM, h:mm a")}</span>
                         </span>
+                      ) : r.rejected_at ? (
+                        <span className="text-xs text-destructive text-right min-w-[150px] max-w-[260px]">
+                          ✗ Rejected by {nameOf(r.rejected_by)}
+                          <span className="block text-ink-muted">{format(new Date(r.rejected_at), "d MMM, h:mm a")}{r.reject_reason ? ` · ${r.reject_reason}` : ""}</span>
+                        </span>
                       ) : canApprove ? (
-                        <Button size="sm" className="h-8 gap-1.5 min-w-[110px]" disabled={verify.isPending} onClick={() => verify.mutate([r.id])}>
-                          <ShieldCheck className="h-4 w-4" /> Approve
-                        </Button>
+                        <div className="flex gap-1.5">
+                          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-destructive hover:text-destructive" disabled={reject.isPending}
+                            onClick={() => { setRejectReason(""); setRejectIds([r.id]); }}>
+                            <X className="h-4 w-4" /> Reject
+                          </Button>
+                          <Button size="sm" className="h-8 gap-1.5 min-w-[110px]" disabled={verify.isPending} onClick={() => verify.mutate([r.id])}>
+                            <ShieldCheck className="h-4 w-4" /> Approve
+                          </Button>
+                        </div>
                       ) : (
                         <span className="text-xs text-warning min-w-[110px] text-right">Waiting for Hari's approval</span>
                       )}
@@ -272,6 +312,26 @@ export default function OvertimePage() {
           })}
         </div>
       )}
+
+      <Dialog open={!!rejectIds} onOpenChange={(o) => !o && setRejectIds(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject overtime{rejectIds && rejectIds.length > 1 ? ` (${rejectIds.length} entries)` : ""}</DialogTitle>
+            <DialogDescription>It won't go to Anu. The person who entered it gets your reason.</DialogDescription>
+          </DialogHeader>
+          <label htmlFor="ot-reject" className="text-sm font-medium text-ink-primary">Reason *</label>
+          <textarea id="ot-reject" rows={3} autoFocus value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="e.g. Not approved in advance / wrong hours"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setRejectIds(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={reject.isPending}
+              onClick={() => (rejectReason.trim() ? rejectIds && reject.mutate({ ids: rejectIds, reason: rejectReason.trim() }) : toast.error("Give a reason"))}>
+              {reject.isPending ? "Rejecting…" : "Reject"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {canVerify && (
         <AddOvertimeDialog isHari={isHari} open={addOpen} onClose={() => setAddOpen(false)} people={members} userId={user?.id ?? ""}
