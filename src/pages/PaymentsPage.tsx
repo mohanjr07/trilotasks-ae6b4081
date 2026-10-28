@@ -593,7 +593,7 @@ export default function PaymentsPage() {
                   )
                 )}
 
-                {selected.status === "pending_verification" && selected.verifier_id === user?.id && (
+                {selected.status === "pending_verification" && selected.verifier_id === user?.id && !isAdmin && (
                   rejectNote === null ? (
                     <div className="space-y-2 pt-2">
                     <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
@@ -624,8 +624,11 @@ export default function PaymentsPage() {
                   )
                 )}
 
-                {isAdmin && selected.status === "pending" && (
+                {isAdmin && (selected.status === "pending" || selected.status === "pending_verification") && (
                   <div className="space-y-2 pt-2">
+                  {selected.status === "pending_verification" && (
+                    <p className="rounded-md bg-warning-light px-3 py-2 text-xs text-warning">Not verified yet — as admin you can approve or reject it now, without waiting for verification.</p>
+                  )}
                   <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2}
                     placeholder="Comment (optional)" />
                   <div className="flex gap-3">

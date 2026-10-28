@@ -37,6 +37,8 @@ const statusClass: Record<string, string> = {
 
 export default function FormRequestsPage() {
   const { user, profile, isAdmin } = useAuth();
+  // admins can approve / authorize any waiting form, without waiting for the approver
+  const isStrictAdmin = profile?.role === "admin" || profile?.role === "super_admin";
   const qc = useQueryClient();
   const { names } = useFormPeople();
   const [params, setParams] = useSearchParams();
@@ -187,7 +189,7 @@ export default function FormRequestsPage() {
       )}
 
       {selected && (
-        <RequestViewer request={selected} names={names} canDecide={myTurn(selected)}
+        <RequestViewer request={selected} names={names} canDecide={myTurn(selected) || (isStrictAdmin && (selected.status === "pending_approval" || selected.status === "pending_authorization"))}
           canResubmit={selected.requested_by === user?.id && (selected.status === "pending_approval" || selected.status === "rejected" || (selected.status === "pending_authorization" && !selected.approved_at))}
           canDelete={profile?.role === "admin" || profile?.role === "super_admin" ||
             (selected.requested_by === user?.id && selected.status !== "authorized")}
