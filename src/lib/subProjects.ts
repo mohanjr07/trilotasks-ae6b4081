@@ -6,6 +6,7 @@ export const SUB_PROJECTS = [
   { key: "consumables", label: "Consumables" },
   { key: "internal_transport", label: "Internal Transport" },
   { key: "external_transport", label: "External Transport" },
+  { key: "production", label: "Production" },
 ] as const;
 export type SubProject = (typeof SUB_PROJECTS)[number]["key"];
 export const subProjectLabel = (k?: string | null) => (k ? SUB_PROJECTS.find((s) => s.key === k)?.label ?? k : "");

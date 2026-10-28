@@ -169,6 +169,61 @@ function SummaryTiles({ t, big }: { t: ReturnType<typeof totalsOf>; big?: boolea
   );
 }
 
+/** Expenses tracked by subproject (Electrical, Mechanical …) across every payment request. */
+function SubProjectsView({ rows, projects, names }: { rows: Row[]; projects: Proj[]; names: Record<string, string> }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const projName = (id: string | null) => (id ? projects.find((p) => p.id === id)?.name ?? "—" : "No project");
+  const groups = [...SUB_PROJECTS.map((s) => ({ key: s.key as string, label: s.label })), { key: "", label: "Not specified" }]
+    .map((g) => {
+      const gr = rows.filter((r) => (r.sub_project ?? "") === g.key);
+      return { ...g, rows: gr, t: totalsOf(gr) };
+    });
+  const tracked = groups.filter((g) => g.key).reduce((s, g) => s + g.t.spend, 0);
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-ink-muted">All payment requests, with or without a project. Tracked under a subproject: <span className="font-semibold text-ink-primary">{formatINR(tracked)}</span> approved.</p>
+      {groups.filter((g) => g.key || g.rows.length).map((g) => {
+        const isOpen = openKey === g.label;
+        const byProject = new Map<string, number>();
+        g.rows.filter((r) => isSpend(r.status)).forEach((r) => byProject.set(projName(r.project_id), (byProject.get(projName(r.project_id)) ?? 0) + Number(r.amount || 0)));
+        return (
+          <div key={g.label} className="overflow-hidden rounded-xl border border-border bg-card">
+            <button type="button" onClick={() => setOpenKey(isOpen ? null : g.label)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/30">
+              <div className="min-w-0 flex-1">
+                <p className={`truncate font-heading text-sm font-bold ${g.key ? "text-ink-primary" : "text-ink-muted"}`}>{g.label}</p>
+                <p className="text-xs text-ink-muted">
+                  {g.rows.length} request{g.rows.length === 1 ? "" : "s"} · {byProject.size} project{byProject.size === 1 ? "" : "s"}
+                  {g.t.pending > 0 ? ` · ${formatINR(g.t.pending)} waiting approval` : ""}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`font-heading text-base font-bold ${g.t.spend > 0 ? "text-ink-primary" : "text-ink-muted"}`}>{formatINR(g.t.spend)}</p>
+                <p className="text-[11px] text-ink-muted">spent</p>
+              </div>
+              {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-ink-muted" /> : <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />}
+            </button>
+            {isOpen && (
+              <div className="space-y-3 border-t border-border bg-muted/20 p-4">
+                <SummaryTiles t={g.t} />
+                {byProject.size > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...byProject.entries()].sort((a, b) => b[1] - a[1]).map(([name, total]) => (
+                      <span key={name} className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-ink-secondary">
+                        {name}: <span className="font-semibold text-ink-primary">{formatINR(total)}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <PaymentLogs rows={g.rows} names={names} projectName={projName} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Approved spend of one project split by subproject. */
 function SubProjectSplit({ rows }: { rows: Row[] }) {
   const spend = rows.filter((r) => isSpend(r.status));
@@ -187,7 +242,7 @@ function SubProjectSplit({ rows }: { rows: Row[] }) {
   );
 }
 
-function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, string> }) {
+function PaymentLogs({ rows, names, projectName }: { rows: Row[]; names: Record<string, string>; projectName?: (id: string | null) => string }) {
   const [filter, setFilter] = useState<"spend" | "pending" | "rejected" | "all">("all");
   const shown = rows.filter((r) =>
     filter === "all" ? true : filter === "spend" ? isSpend(r.status) : filter === "pending" ? isPending(r.status) : r.status === "rejected");
@@ -215,7 +270,7 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-ink-primary">{r.purpose}{r.sub_project && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-ink-secondary align-middle">{subProjectLabel(r.sub_project)}</span>}</p>
                   <p className="text-xs text-ink-muted">
-                    {format(new Date(r.created_at), "d MMM yyyy")}{isImported(r) ? " · From bank statement" : ` · Requested by ${names[r.requester_id] ?? "—"}`}
+                    {format(new Date(r.created_at), "d MMM yyyy")}{projectName ? ` · ${projectName(r.project_id)}` : ""}{isImported(r) ? " · From bank statement" : ` · Requested by ${names[r.requester_id] ?? "—"}`}
                     {r.verifier_id && r.status !== "pending_verification" ? ` · Verified by ${names[r.verifier_id] ?? "—"}` : ""}
                     {r.reviewed_by && r.status === "approved" ? ` · Approved by ${names[r.reviewed_by] ?? "—"}` : ""}
                     {r.paid_at ? ` · Paid ${format(new Date(r.paid_at), "d MMM")}` : ""}
@@ -259,6 +314,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   open: boolean; onClose: () => void; projects: Proj[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<"projects" | "subprojects">("projects");
   const [find, setFind] = useState("");
 
   const { data: rows = [], isLoading } = useQuery({
@@ -328,6 +384,16 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               <SummaryTiles t={overall} big />
             </div>
 
+            <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+              {([["projects", "Projects"], ["subprojects", "Subprojects"]] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => setView(k)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === k ? "bg-primary text-primary-foreground" : "text-ink-secondary hover:text-ink-primary"}`}>{l}</button>
+              ))}
+            </div>
+
+            {view === "subprojects" && <SubProjectsView rows={rows} projects={projects} names={names} />}
+
+            {view === "projects" && (<>
             {/* Projects */}
             <div className="flex items-center gap-2">
               <p className="mr-auto font-heading text-sm font-bold text-ink-primary">Projects ({list.length})</p>
@@ -395,6 +461,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                 ({formatINR(sum(noProject.filter((r) => isSpend(r.status))))} approved) — not included above.
               </p>
             )}
+            </>)}
           </div>
         )}
       </DialogContent>
