@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,6 +27,7 @@ type PaymentRequest = {
   id: string;
   requester_id: string;
   project_id: string | null;
+  sub_project?: string | null;   // Electrical / Mechanical / Consumables / Internal / External Transport
   purpose: string;
   amount: number;
   bill_path: string;
@@ -376,7 +378,8 @@ export default function PaymentsPage() {
                     {r.status === "rejected" && r.reviewed_by && (
                       <span className="truncate text-destructive">✗ Rejected by {nameOf(r.reviewed_by) ?? "—"}</span>
                     )}
-                    {r.project?.name && <span className="truncate">{r.project.name}</span>}
+                    {r.project?.name && <span className="truncate">{r.project.name}{r.sub_project ? ` · ${subProjectLabel(r.sub_project)}` : ""}</span>}
+                    {!r.project?.name && r.sub_project && <span className="truncate">{subProjectLabel(r.sub_project)}</span>}
                     <span>{format(new Date(r.created_at), "MMM d, yyyy")}</span>
                   </div>
                 </div>
@@ -472,6 +475,10 @@ export default function PaymentsPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-ink-muted">Project</span>
                     <span className="text-ink-primary font-medium truncate max-w-[200px]">{selected.project?.name ?? "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-ink-muted">Subproject</span>
+                    <span className="text-ink-primary font-medium">{subProjectLabel(selected.sub_project) || "—"}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-ink-muted">Status</span>
@@ -674,6 +681,7 @@ function RequestPaymentModal({
   onDone: () => void;
 }) {
   const [projectId, setProjectId] = useState<string>("");
+  const [subProject, setSubProject] = useState<string>("");
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
   const [files, setFiles] = useState<File[]>([]);   // any number of bill files
@@ -682,6 +690,7 @@ function RequestPaymentModal({
 
   const reset = () => {
     setProjectId("");
+    setSubProject("");
     setPurpose("");
     setAmount("");
     setFiles([]);
@@ -723,6 +732,7 @@ function RequestPaymentModal({
       const { error: insErr } = await supabase.from("payment_requests").insert({
         requester_id: userId,
         project_id: projectId || null,
+        ...(subProject ? { sub_project: subProject } : {}),   // only sent when chosen
         purpose: purpose.trim(),
         amount: Number(amount),
         bill_path: first.path,
@@ -785,6 +795,17 @@ function RequestPaymentModal({
                       {projects.map((p) => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-ink-muted mb-1.5 block">Subproject</label>
+                  <Select value={subProject || "none"} onValueChange={(v) => setSubProject(v === "none" ? "" : v)}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Select a subproject" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {SUB_PROJECTS.map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

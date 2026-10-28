@@ -1,6 +1,7 @@
 // Admins: project expenses.
 //  Top: overall spend across all projects.
 //  Then every project with its own spend — open one to see its breakdown and payment logs.
+import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -17,7 +18,7 @@ export const EXPENSE_VIEWER_EMAILS = ["hari@triloautomation.com"];
 export const formatINR = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 type Row = {
-  id: string; project_id: string | null; purpose: string; amount: number; status: string; created_at: string;
+  id: string; project_id: string | null; sub_project?: string | null; purpose: string; amount: number; status: string; created_at: string;
   requester_id: string; verifier_id: string | null; reviewed_by: string | null;
   paid_at: string | null; paid_by: string | null; bill_path: string; receipt_path: string | null; paid_from?: string | null;
   extra_bills?: { path: string; name: string }[] | null;
@@ -91,23 +92,40 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
 
   // 2. Payment logs
   const wl = wb.addWorksheet("Payment logs");
-  head(wl, ["Date", "Project", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills"]);
+  head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills"]);
   [...mine].sort((a, b) => (projOf.get(a.project_id!) ?? "").localeCompare(projOf.get(b.project_id!) ?? "") || b.created_at.localeCompare(a.created_at))
     .forEach((r) => {
       const imp = isImported(r);
       const row = wl.addRow([
-        new Date(r.created_at), projOf.get(r.project_id!) ?? "", r.purpose, Number(r.amount || 0), STATUS[r.status]?.label ?? r.status,
+        new Date(r.created_at), projOf.get(r.project_id!) ?? "", subProjectLabel(r.sub_project), r.purpose, Number(r.amount || 0), STATUS[r.status]?.label ?? r.status,
         imp ? "From bank statement" : names[r.requester_id] ?? "", r.verifier_id ? names[r.verifier_id] ?? "" : "",
         r.reviewed_by ? names[r.reviewed_by] ?? "" : "", r.paid_at ? new Date(r.paid_at) : "", r.paid_by ? names[r.paid_by] ?? "" : "",
         r.paid_from ? ACCOUNT_LABEL[r.paid_from] ?? r.paid_from : "", imp ? 0 : 1 + (r.extra_bills?.length ?? 0),
       ]);
-      row.getCell(1).numFmt = "dd-mmm-yyyy"; row.getCell(4).numFmt = money; row.getCell(9).numFmt = "dd-mmm-yyyy";
+      row.getCell(1).numFmt = "dd-mmm-yyyy"; row.getCell(5).numFmt = money; row.getCell(10).numFmt = "dd-mmm-yyyy";
     });
-  [13, 34, 44, 14, 22, 20, 18, 18, 13, 18, 18, 7].forEach((w, i) => { wl.getColumn(i + 1).width = w; });
-  wl.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, wl.rowCount), column: 12 } };
+  [13, 34, 18, 44, 14, 22, 20, 18, 18, 13, 18, 18, 7].forEach((w, i) => { wl.getColumn(i + 1).width = w; });
+  wl.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, wl.rowCount), column: 13 } };
   wl.views = [{ state: "frozen", ySplit: 1 }];
 
-  // 3. By account (approved spend)
+  // 3. By subproject (approved spend), per project
+  const ws2 = wb.addWorksheet("By subproject");
+  const cols = [...SUB_PROJECTS.map((x) => x.label), "Not specified"];
+  head(ws2, ["Project", ...cols, "Total"]);
+  const spendRows = mine.filter((r) => isSpend(r.status));
+  const keyOf = (r: Row) => subProjectLabel(r.sub_project) || "Not specified";
+  const firstS = ws2.rowCount + 1;
+  per.forEach(({ p }) => {
+    const pr = spendRows.filter((r) => r.project_id === p.id);
+    if (!pr.length) return;
+    ws2.addRow([p.name, ...cols.map((c) => sum(pr.filter((r) => keyOf(r) === c)) || ""), sum(pr)]);
+  });
+  const st = ws2.addRow(["TOTAL", ...cols.map((c) => sum(spendRows.filter((r) => keyOf(r) === c))), sum(spendRows)]);
+  st.font = { bold: true };
+  for (let r = firstS; r <= ws2.rowCount; r++) for (let c = 2; c <= cols.length + 2; c++) ws2.getRow(r).getCell(c).numFmt = money;
+  ws2.getColumn(1).width = 40; for (let c = 2; c <= cols.length + 2; c++) ws2.getColumn(c).width = 18;
+
+  // 4. By account (approved spend)
   const wa = wb.addWorksheet("By account");
   head(wa, ["Paid from", "Payments", "Amount"]);
   const spend = mine.filter((r) => isSpend(r.status));
@@ -151,6 +169,24 @@ function SummaryTiles({ t, big }: { t: ReturnType<typeof totalsOf>; big?: boolea
   );
 }
 
+/** Approved spend of one project split by subproject. */
+function SubProjectSplit({ rows }: { rows: Row[] }) {
+  const spend = rows.filter((r) => isSpend(r.status));
+  const parts = [...SUB_PROJECTS.map((s) => ({ key: s.key as string, label: s.label })), { key: "", label: "Not specified" }]
+    .map((s) => ({ ...s, total: sum(spend.filter((r) => (r.sub_project ?? "") === s.key)) }))
+    .filter((s) => s.total > 0);
+  if (!parts.length || (parts.length === 1 && parts[0].key === "")) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {parts.map((s) => (
+        <span key={s.label} className="rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-ink-secondary">
+          {s.label}: <span className="font-semibold text-ink-primary">{formatINR(s.total)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, string> }) {
   const [filter, setFilter] = useState<"spend" | "pending" | "rejected" | "all">("all");
   const shown = rows.filter((r) =>
@@ -177,7 +213,7 @@ function PaymentLogs({ rows, names }: { rows: Row[]; names: Record<string, strin
             return (
               <div key={r.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-ink-primary">{r.purpose}</p>
+                  <p className="text-sm font-semibold text-ink-primary">{r.purpose}{r.sub_project && <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-ink-secondary align-middle">{subProjectLabel(r.sub_project)}</span>}</p>
                   <p className="text-xs text-ink-muted">
                     {format(new Date(r.created_at), "d MMM yyyy")}{isImported(r) ? " · From bank statement" : ` · Requested by ${names[r.requester_id] ?? "—"}`}
                     {r.verifier_id && r.status !== "pending_verification" ? ` · Verified by ${names[r.verifier_id] ?? "—"}` : ""}
@@ -231,7 +267,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("payment_requests")
-        .select("id, project_id, purpose, amount, status, created_at, requester_id, verifier_id, reviewed_by, paid_at, paid_by, bill_path, receipt_path, paid_from, extra_bills")
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as Row[];
@@ -342,6 +378,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                             <span className="text-xs text-ink-muted">{t.count} approved payment{t.count === 1 ? "" : "s"}</span>
                           </div>
                           <SummaryTiles t={t} />
+                          <SubProjectSplit rows={pr} />
                         </div>
                         <PaymentLogs rows={pr} names={names} />
                       </div>
