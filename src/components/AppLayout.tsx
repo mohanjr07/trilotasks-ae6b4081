@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { usePendingCounts } from "@/hooks/usePendingCounts";
 import { initPush } from "@/lib/push";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
@@ -324,7 +324,9 @@ export default function AppLayout() {
         </header>
         <main className="flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <InstallAppBanner />
-          <Outlet />
+          <Suspense fallback={<div className="flex justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       {/* Mobile bottom tab bar */}

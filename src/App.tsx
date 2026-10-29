@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import LiveSync from "@/components/LiveSync";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -19,36 +20,37 @@ import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
-import AdminDashboard from "@/pages/AdminDashboard";
-import EmployeeDashboard from "@/pages/EmployeeDashboard";
-import TasksPage from "@/pages/TasksPage";
-import UsersPage from "@/pages/UsersPage";
-import AdminLeavePage from "@/pages/AdminLeavePage";
-import EmployeeLeavePage from "@/pages/EmployeeLeavePage";
-import ReportsPage from "@/pages/ReportsPage";
-import SettingsPage from "@/pages/SettingsPage";
-import NotificationsPage from "@/pages/NotificationsPage";
-import ProfilePage from "@/pages/ProfilePage";
-import CalendarPage from "@/pages/CalendarPage";
-import TeamsPage from "@/pages/TeamsPage";
-import NotesPage from "@/pages/NotesPage";
-import InternDashboard from "@/pages/InternDashboard";
-import ProjectsPage from "@/pages/ProjectsPage";
-import OrganisationFlowPage from "@/pages/OrganisationFlowPage";
-import ProductionFormsPage from "@/pages/ProductionFormsPage";
-import FormRequestsPage from "@/pages/FormRequestsPage";
-import CompletedTasksPage from "@/pages/CompletedTasksPage";
-import AssetsPage from "@/pages/AssetsPage";
-import PeoplePage from "@/pages/PeoplePage";
-import KraKpiPage from "@/pages/KraKpiPage";
-import DocumentsPage from "@/pages/DocumentsPage";
-import TeamMembersPage from "@/pages/TeamMembersPage";
-import BirthdaysPage from "@/pages/BirthdaysPage";
-import PaymentsPage from "@/pages/PaymentsPage";
-import OvertimePage from "@/pages/OvertimePage";
-import ProductionPlanPage from "@/pages/ProductionPlanPage";
-import { PlanTaskPage, PlanProjectPage } from "@/pages/PlanDetailPage";
-import AttendancePage from "@/pages/AttendancePage";
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const EmployeeDashboard = lazy(() => import("@/pages/EmployeeDashboard"));
+const TasksPage = lazy(() => import("@/pages/TasksPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const AdminLeavePage = lazy(() => import("@/pages/AdminLeavePage"));
+const EmployeeLeavePage = lazy(() => import("@/pages/EmployeeLeavePage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
+const TeamsPage = lazy(() => import("@/pages/TeamsPage"));
+const NotesPage = lazy(() => import("@/pages/NotesPage"));
+const InternDashboard = lazy(() => import("@/pages/InternDashboard"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const OrganisationFlowPage = lazy(() => import("@/pages/OrganisationFlowPage"));
+const ProductionFormsPage = lazy(() => import("@/pages/ProductionFormsPage"));
+const FormRequestsPage = lazy(() => import("@/pages/FormRequestsPage"));
+const CompletedTasksPage = lazy(() => import("@/pages/CompletedTasksPage"));
+const AssetsPage = lazy(() => import("@/pages/AssetsPage"));
+const PeoplePage = lazy(() => import("@/pages/PeoplePage"));
+const KraKpiPage = lazy(() => import("@/pages/KraKpiPage"));
+const DocumentsPage = lazy(() => import("@/pages/DocumentsPage"));
+const TeamMembersPage = lazy(() => import("@/pages/TeamMembersPage"));
+const BirthdaysPage = lazy(() => import("@/pages/BirthdaysPage"));
+const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
+const OvertimePage = lazy(() => import("@/pages/OvertimePage"));
+const ProductionPlanPage = lazy(() => import("@/pages/ProductionPlanPage"));
+const PlanTaskPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanTaskPage })));
+const PlanProjectPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanProjectPage })));
+const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -56,10 +58,15 @@ const queryClient = new QueryClient({
     queries: {
       // live updates come from <LiveSync/> (one realtime connection per device);
       // this slow poll is only a safety net. Data also refreshes when the app comes back.
-      refetchInterval: 120_000,
+      // data stays "fresh" for a minute, so moving between screens shows it instantly
+      // instead of reloading every time (live changes still arrive through LiveSync)
+      staleTime: 60_000,
+      gcTime: 30 * 60_000,
+      refetchInterval: 5 * 60_000,
       refetchIntervalInBackground: false,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
+      retry: 1,
     },
   },
 });
@@ -84,6 +91,7 @@ const App = () => (
       <Router>
         <AuthProvider>
           <LiveSync />
+          <Suspense fallback={null}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -134,6 +142,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </AuthProvider>
       </Router>
     </TooltipProvider>

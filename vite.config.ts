@@ -20,6 +20,22 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        // libraries in their own files: they rarely change, so phones keep them cached
+        // between TaskFlow updates and only download the (small) app part again
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
+          if (/[\\/]@supabase[\\/]/.test(id)) return "vendor-supabase";
+          if (/[\\/](@radix-ui|framer-motion|lucide-react|sonner|cmdk|vaul)[\\/]/.test(id)) return "vendor-ui";
+          if (/[\\/](@tanstack|date-fns|zod|react-hook-form|@hookform|clsx|tailwind-merge|class-variance-authority)[\\/]/.test(id)) return "vendor-utils";
+          return undefined;
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
