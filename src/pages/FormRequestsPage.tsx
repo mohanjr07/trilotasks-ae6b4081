@@ -235,7 +235,7 @@ export default function FormRequestsPage() {
       )}
 
       {selected && (
-        <RequestViewer request={selected} names={names} canDecide={myTurn(selected) || (isStrictAdmin && (selected.status === "pending_approval" || selected.status === "pending_authorization"))}
+        <RequestViewer request={selected} names={names} projects={projectList} canSetProject={isStrictAdmin || selected.requested_by === user?.id} canDecide={myTurn(selected) || (isStrictAdmin && (selected.status === "pending_approval" || selected.status === "pending_authorization"))}
           canResubmit={selected.requested_by === user?.id && (selected.status === "pending_approval" || selected.status === "rejected" || (selected.status === "pending_authorization" && !selected.approved_at))}
           canDelete={profile?.role === "admin" || profile?.role === "super_admin" ||
             (selected.requested_by === user?.id && selected.status !== "authorized")}
@@ -245,8 +245,10 @@ export default function FormRequestsPage() {
   );
 }
 
-function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onClose }: {
+function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onClose, projects, canSetProject }: {
   canDelete: boolean;
+  projects: Array<{ id: string; name: string }>;
+  canSetProject: boolean;
   request: FormRequestRow;
   names: Record<string, string>;
   canDecide: boolean;
@@ -256,6 +258,14 @@ function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onCl
   const qc = useQueryClient();
   const schema = schemaForTitle(request.form_title);
   const previewRef = useRef<FilledFormHandle>(null);
+  const setProject = useMutation({
+    mutationFn: async (pid: string | null) => {
+      const { error } = await (supabase as any).rpc("set_form_project", { p_id: request.id, p_project: pid });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["form-requests"] }); toast.success("Project updated"); },
+    onError: (e: any) => toast.error(/set_form_project/.test(e?.message ?? "") ? "Run the forms sync SQL first" : e?.message ?? "Could not change the project"),
+  });
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [editing, setEditing] = useState(false);
@@ -309,6 +319,20 @@ function RequestViewer({ request, names, canDecide, canResubmit, canDelete, onCl
 
           <div className="overflow-auto max-h-[60dvh] rounded-lg border border-border bg-neutral-200 p-2">
             <FilledFormPreview ref={previewRef} formId={request.form_id} schema={schema} request={request} names={names} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-ink-muted">Project:</span>
+            {canSetProject ? (
+              <select value={request.project_id ?? ""} disabled={setProject.isPending}
+                onChange={(e) => setProject.mutate(e.target.value || null)}
+                className="h-8 max-w-[280px] rounded-md border border-input bg-background px-2 text-sm">
+                <option value="">No project</option>
+                {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            ) : (
+              <span className="font-medium text-ink-primary">{projects.find((p) => p.id === request.project_id)?.name ?? "No project"}</span>
+            )}
           </div>
 
           <FormAttachmentsList value={(request.data as any)?.attachments} />
