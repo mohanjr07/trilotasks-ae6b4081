@@ -51,6 +51,9 @@ export default function PayslipsPage() {
   const seeAll = isEditor || isAdmin;
 
   const [personFilter, setPersonFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");      // "01" … "12"
+  const [order, setOrder] = useState<"new" | "old">("new");
   const [q, setQ] = useState("");
   const [view, setView] = useState<Payslip | null>(null);
   const [edit, setEdit] = useState<Payslip | "new" | null>(null);
@@ -83,8 +86,12 @@ export default function PayslipsPage() {
     onError: (e: any) => toast.error(e?.message ?? "Could not delete"),
   });
 
+  const years = Array.from(new Set(slips.map((s) => s.pay_month.slice(0, 4)))).sort().reverse();
   const shown = slips.filter((s) => (!seeAll || personFilter === "all" || s.user_id === personFilter) &&
-    (!q.trim() || `${s.employee_name} ${s.employee_code ?? ""} ${monthLabel(s.pay_month)}`.toLowerCase().includes(q.trim().toLowerCase())));
+    (yearFilter === "all" || s.pay_month.slice(0, 4) === yearFilter) &&
+    (monthFilter === "all" || s.pay_month.slice(5, 7) === monthFilter) &&
+    (!q.trim() || `${s.employee_name} ${s.employee_code ?? ""} ${monthLabel(s.pay_month)}`.toLowerCase().includes(q.trim().toLowerCase())))
+    .sort((a, b) => (order === "new" ? b.pay_month.localeCompare(a.pay_month) : a.pay_month.localeCompare(b.pay_month)) || a.employee_name.localeCompare(b.employee_name));
   const byMonth = useMemo(() => {
     const m = new Map<string, Payslip[]>();
     shown.forEach((s) => m.set(s.pay_month, [...(m.get(s.pay_month) ?? []), s]));
@@ -102,6 +109,25 @@ export default function PayslipsPage() {
           </p>
         </div>
         {isEditor && <Button className="gap-1.5" onClick={() => setEdit("new")}><Plus className="h-4 w-4" /> New payslip</Button>}
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        <select aria-label="Year" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="all">All years</option>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select aria-label="Month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="all">All months</option>
+          {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((m) =>
+            <option key={m} value={m}>{format(new Date(2000, Number(m) - 1, 1), "MMMM")}</option>)}
+        </select>
+        <select aria-label="Sort" value={order} onChange={(e) => setOrder(e.target.value as "new" | "old")} className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+          <option value="new">Newest first</option>
+          <option value="old">Oldest first</option>
+        </select>
+        {(yearFilter !== "all" || monthFilter !== "all") && (
+          <button type="button" className="text-xs font-medium text-primary" onClick={() => { setYearFilter("all"); setMonthFilter("all"); }}>Clear</button>
+        )}
       </div>
 
       {seeAll && (
