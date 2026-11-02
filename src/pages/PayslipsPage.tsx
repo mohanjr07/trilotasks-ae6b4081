@@ -72,8 +72,14 @@ export default function PayslipsPage() {
     enabled: seeAll,
     queryFn: async () => {
       const { data, error } = await sb.rpc("payroll_people");
-      if (error) throw error;
-      return (data ?? []) as Person[];
+      if (!error && data?.length) return data as Person[];
+      // payslips SQL not run yet (or it failed): fall back to the normal people list so names still show
+      if (error) console.warn("payroll_people:", error.message);
+      const { data: act, error: e2 } = await supabase.rpc("get_active_profiles");
+      if (e2) throw e2;
+      return ((act ?? []) as Array<{ id: string; full_name: string; position?: string | null }>).map((p) => ({
+        id: p.id, full_name: p.full_name, employee_code: null, position: (p as any).position ?? null, joined_at: null, is_active: true,
+      })).sort((a, b) => a.full_name.localeCompare(b.full_name)) as Person[];
     },
   });
 
