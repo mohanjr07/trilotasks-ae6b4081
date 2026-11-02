@@ -22,6 +22,7 @@ export type FormRequestRow = {
   reject_reason: string | null;
   submitted_at: string;
   created_at: string;
+  project_id?: string | null;
 };
 
 const fmt = (iso: string | null | undefined) => (iso ? format(new Date(iso), "dd-MM-yyyy, h:mm a") : "");

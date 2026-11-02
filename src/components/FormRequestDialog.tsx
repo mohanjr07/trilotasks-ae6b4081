@@ -58,6 +58,22 @@ export default function FormRequestDialog({
   const [attachments, setAttachments] = useState<FormAttachment[]>([]);
   const [authorizer, setAuthorizer] = useState("");
   const [approver, setApprover] = useState("");   // chosen in the "Approved by" dropdown
+  // which project this form belongs to (forms are grouped by project in My Forms & Approvals)
+  const [projectId, setProjectId] = useState("");
+  const hasProjectPicker = schema.fields.some((f) => f.type === "project");   // Material IN / OUT pick it in their own field
+  const projectTextKey = schema.fields.find((f) => ["project", "project_name", "project_title"].includes(f.key) && f.type === "text")?.key;
+  const { data: allProjects = [] } = useQuery({
+    queryKey: ["form-projects"],
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const rpc = await (supabase as any).rpc("pp_projects");
+      if (!rpc.error) return ((rpc.data ?? []) as Array<{ id: string; name: string }>).map(({ id, name }) => ({ id, name }));
+      const { data, error } = await supabase.from("projects").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -69,12 +85,14 @@ export default function FormRequestDialog({
       setAuthorizer(existing.authorizer_id);
       setAttachments(((existing.data as any)?.attachments ?? []) as FormAttachment[]);
       setApprover(existing.approver_id ?? "");
+      setProjectId((existing as any).project_id ?? (existing.data as any)?.project_id ?? "");
     } else {
       if ("name" in base.fields && !base.fields.name && profile?.full_name) base.fields.name = profile.full_name;
       setData(base);
       setAuthorizer("");
       setApprover("");
       setAttachments([]);
+      setProjectId("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
@@ -134,6 +152,7 @@ export default function FormRequestDialog({
       const clean: FormData = {
         ...(schema.attachments ? { attachments } : {}),
         ...(data.headings ? { headings: data.headings } : {}),
+        ...(projectId && !hasProjectPicker ? { project_id: projectId } : {}),
         fields: data.fields,
         tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
       };
@@ -288,6 +307,23 @@ export default function FormRequestDialog({
           onSubmit={(e) => { e.preventDefault(); submit.mutate(); }}
           className={preview ? "hidden" : "space-y-5"}
         >
+          {!hasProjectPicker && (
+            <div>
+              <label htmlFor="f-project-id" className="mb-1.5 block text-sm font-medium text-ink-primary">Project</label>
+              <select id="f-project-id" value={projectId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setProjectId(id);
+                  const name = allProjects.find((p) => p.id === id)?.name;
+                  // fill the form's own project field when it's still empty
+                  if (name && projectTextKey && !String(data.fields[projectTextKey] ?? "").trim()) setField(projectTextKey, name);
+                }}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="">No project / general</option>
+                {allProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">{schema.fields.map(renderField)}</div>
 
           {(schema.tables ?? []).map((t) => {

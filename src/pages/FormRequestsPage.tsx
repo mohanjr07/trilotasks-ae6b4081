@@ -48,6 +48,19 @@ export default function FormRequestsPage() {
   const setTab = (k: TabKey) => { setTabState(k); params.set("tab", k); setParams(params, { replace: true }); };
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("any");
   const [search, setSearch] = useState("");
+  const [projectFilter, setProjectFilter] = useState<string>("all");   // "all" | "none" | project id
+  const { data: projectList = [] } = useQuery({
+    queryKey: ["form-projects"],
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const rpc = await (supabase as any).rpc("pp_projects");
+      if (!rpc.error) return ((rpc.data ?? []) as Array<{ id: string; name: string }>).map(({ id, name }) => ({ id, name }));
+      const { data, error } = await supabase.from("projects").select("id, name").order("name");
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+  });
+  const projectNameOf = (id?: string | null) => (id ? projectList.find((p) => p.id === id)?.name ?? "Project" : "No project");
 
   const { data: requests = [], isLoading } = useQuery({
     queryKey: ["form-requests"],
@@ -102,9 +115,23 @@ export default function FormRequestsPage() {
       if (statusFilter === "authorized" && r.status !== "authorized") return false;
       if (statusFilter === "rejected" && r.status !== "rejected") return false;
     }
+    if (projectFilter === "none" && r.project_id) return false;
+    if (projectFilter !== "all" && projectFilter !== "none" && r.project_id !== projectFilter) return false;
     if (!q) return true;
-    return [r.form_title, r.reference_value, names[r.requested_by]].some((v) => (v ?? "").toLowerCase().includes(q));
+    return [r.form_title, r.reference_value, names[r.requested_by], projectNameOf(r.project_id)].some((v) => (v ?? "").toLowerCase().includes(q));
   });
+  // segregated by project: one section per project (most recent activity first), "No project" last
+  const groups = useMemo(() => {
+    const m = new Map<string, FormRequestRow[]>();
+    for (const r of list) m.set(r.project_id ?? "", [...(m.get(r.project_id ?? "") ?? []), r]);
+    return Array.from(m.entries()).sort((a, b) => (a[0] === "" ? 1 : b[0] === "" ? -1 : projectNameOf(a[0]).localeCompare(projectNameOf(b[0]))));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, projectList]);
+  const projectCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of base) m.set(r.project_id ?? "", (m.get(r.project_id ?? "") ?? 0) + 1);
+    return m;
+  }, [base]);
 
   const tabs = [
     ...(isReviewer ? [{ key: "waiting" as const, label: `Waiting for me${waiting.length ? ` (${waiting.length})` : ""}` }] : []),
@@ -145,6 +172,16 @@ export default function FormRequestsPage() {
         ))}
       </div>
 
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <label htmlFor="form-project-filter" className="text-xs text-ink-muted">Project</label>
+        <select id="form-project-filter" value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)}
+          className="h-8 max-w-[280px] rounded-md border border-input bg-background px-2 text-sm">
+          <option value="all">All projects ({base.length})</option>
+          {projectList.filter((p) => projectCounts.get(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name} ({projectCounts.get(p.id)})</option>)}
+          {projectCounts.get("") ? <option value="none">No project ({projectCounts.get("")})</option> : null}
+        </select>
+      </div>
+
       {activeTab !== "waiting" && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           {filters.map((f) => (
@@ -165,8 +202,14 @@ export default function FormRequestsPage() {
           title={activeTab === "waiting" ? "Nothing waiting for you" : base.length ? "Nothing matches" : activeTab === "mine" ? "You haven't filled any forms yet" : "No form requests yet"}
           description={activeTab === "mine" && !base.length ? "Open Forms and Formats and click “Fill & Request” on a form. Every form you send stays here — pending, authorized or rejected." : "New requests will appear here."} />
       ) : (
+        <div className="space-y-4">
+        {groups.map(([pid, rows]) => (
+        <div key={pid || "none"}>
+          <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            {projectNameOf(pid || null)} <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal">{rows.length}</span>
+          </p>
         <div className="rounded-xl border border-border bg-card divide-y divide-border">
-          {list.map((r) => (
+          {rows.map((r) => (
             <button key={r.id} onClick={() => open(r.id)}
               className="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-muted/40">
               <div className="min-w-0 flex-1">
@@ -185,6 +228,9 @@ export default function FormRequestsPage() {
               </span>
             </button>
           ))}
+        </div>
+        </div>
+        ))}
         </div>
       )}
 
