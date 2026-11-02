@@ -205,6 +205,7 @@ export function usePlanApprovalsFor(taskIds: string[]) {
 
 /** Where a "Production plan: …" notification should open. */
 export function planNotificationRoute(n: { title?: string | null; reference_id?: string | null }): string | null {
+  if (/^Payslip (ready|updated)/i.test(n.title ?? "")) return "/payslips";
   if (!n.reference_id || !/^Production plan/i.test(n.title ?? "")) return null;
   if (/^Production plan: (BOM|you own a plan)/i.test(n.title ?? "")) return `/production-plan/project/${n.reference_id}?tab=bom`;
   return `/production-plan/task/${n.reference_id}`;

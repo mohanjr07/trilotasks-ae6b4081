@@ -49,6 +49,7 @@ const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const OvertimePage = lazy(() => import("@/pages/OvertimePage"));
 const ProductionPlanPage = lazy(() => import("@/pages/ProductionPlanPage"));
 const ProjectFormsPage = lazy(() => import("@/pages/ProjectFormsPage"));
+const PayslipsPage = lazy(() => import("@/pages/PayslipsPage"));
 const PlanTaskPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanTaskPage })));
 const PlanProjectPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanProjectPage })));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
@@ -134,6 +135,7 @@ const App = () => (
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
+              <Route path="/payslips" element={<PayslipsPage />} />
               <Route path="/overtime" element={<OvertimePage />} />
               <Route path="/production-plan" element={<ProductionPlanPage />} />
               <Route path="/production-plan/task/:id" element={<PlanTaskPage />} />

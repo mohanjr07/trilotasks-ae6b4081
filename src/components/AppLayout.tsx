@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange,
+  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange, Receipt,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
@@ -28,6 +28,7 @@ const adminNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Payslips", path: "/payslips", icon: Receipt },
   { label: "Overtime", path: "/overtime", icon: Timer },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
@@ -54,6 +55,7 @@ const managerNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Payslips", path: "/payslips", icon: Receipt },
   { label: "Overtime", path: "/overtime", icon: Timer },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
@@ -80,6 +82,7 @@ const employeeNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Payslips", path: "/payslips", icon: Receipt },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Teams", path: "/my-teams", icon: Video },
@@ -102,6 +105,7 @@ const internNav: NavItem[] = [
   { label: "KRA & KPI", path: "/kra-kpi", icon: Target },
   { label: "Documents", path: "/documents", icon: Folder },
   { label: "Payments", path: "/payments", icon: Wallet },
+  { label: "Payslips", path: "/payslips", icon: Receipt },
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Team Members", path: "/team-members", icon: Workflow },
