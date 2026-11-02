@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
-  CheckSquare, ArrowLeft, IndianRupee,
+  CheckSquare, ArrowLeft, IndianRupee, FileStack,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -45,6 +46,7 @@ const PROJECT_COLORS = [
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
   const { isAdmin, user, profile } = useAuth();
+  const navigate = useNavigate();
   // project payments: admins, plus Hari (view only)
   const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "")
     || EXPENSE_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
@@ -120,6 +122,9 @@ export default function ProjectsPage() {
           <p className="text-sm text-ink-muted">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => navigate("/project-forms")} className="gap-2">
+            <FileStack className="h-4 w-4" /> Forms
+          </Button>
           {canSeePayments && (
             <Button variant="outline" onClick={() => setExpensesOpen(true)} className="gap-2">
               <IndianRupee className="h-4 w-4" /> Expenses

@@ -48,6 +48,7 @@ const BirthdaysPage = lazy(() => import("@/pages/BirthdaysPage"));
 const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const OvertimePage = lazy(() => import("@/pages/OvertimePage"));
 const ProductionPlanPage = lazy(() => import("@/pages/ProductionPlanPage"));
+const ProjectFormsPage = lazy(() => import("@/pages/ProjectFormsPage"));
 const PlanTaskPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanTaskPage })));
 const PlanProjectPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanProjectPage })));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
@@ -102,6 +103,8 @@ const App = () => (
               <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminDashboard /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/project-forms" element={<ProjectFormsPage />} />
+              <Route path="/project-forms/:id" element={<ProjectFormsPage />} />
               {/* Organisation Flow — visible to every signed-in role.
                   Admin-only writes are enforced at the DB level via RLS. */}
               <Route path="/organisation-flow" element={<OrganisationFlowPage />} />

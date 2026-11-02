@@ -186,7 +186,7 @@ export default function AppLayout() {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
             {nav.map((item) => {
-              const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
+              const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms"));
               return (
                 <li key={item.path}>
                   <Link
@@ -269,7 +269,7 @@ export default function AppLayout() {
             <nav className="flex-1 overflow-y-auto px-3 py-4">
               <ul className="space-y-1">
                 {nav.map((item) => {
-                  const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
+                  const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms"));
                   return (
                     <li key={item.path}>
                       <Link
@@ -333,7 +333,7 @@ export default function AppLayout() {
       <nav className="fixed inset-x-0 bottom-0 z-30 md:hidden [transform:translateZ(0)] border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
         <div className="grid grid-cols-5 h-16">
           {mobileTabs.map((item) => {
-            const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/"));
+            const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms"));
             return (
               <Link
                 key={item.path}

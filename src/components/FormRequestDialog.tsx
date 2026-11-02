@@ -28,8 +28,9 @@ export type RequestableForm = {
 };
 
 export default function FormRequestDialog({
-  open, onClose, form, existing, onSubmitted,
+  open, onClose, form, existing, onSubmitted, presetProjectId,
 }: {
+  presetProjectId?: string;           // opened from a project's forms timeline
   open: boolean;
   onClose: () => void;
   form: RequestableForm | null;
@@ -92,10 +93,18 @@ export default function FormRequestDialog({
       setAuthorizer("");
       setApprover("");
       setAttachments([]);
-      setProjectId("");
+      setProjectId(presetProjectId ?? "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existing?.id, title]);
+  useEffect(() => {
+    if (!open || existing || !presetProjectId) return;
+    const name = allProjects.find((p) => p.id === presetProjectId)?.name;
+    if (!name) return;
+    const key = schema.fields.find((f) => f.type === "project")?.key ?? projectTextKey;
+    if (key) setData((d) => (String(d.fields[key] ?? "").trim() ? d : { ...d, fields: { ...d.fields, [key]: name } }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, presetProjectId, allProjects.length, title]);
   // new form: pre-select the usual approver once the people list has loaded
   useEffect(() => {
     if (open && !existing && !approver && defaultApproverId) setApprover(defaultApproverId);
