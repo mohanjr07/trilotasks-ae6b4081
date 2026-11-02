@@ -35,7 +35,10 @@ type Payslip = {
 type Person = { id: string; full_name: string; employee_code: string | null; position: string | null; joined_at: string | null; is_active: boolean };
 
 const DEFAULT_EARNINGS = ["Basic Pay", "HRA", "Personal Allowance", "Overtime Allowance"];
-const DEFAULT_DEDUCTIONS = ["PF", "Medical Insurance", "Professional Tax"];
+const DEFAULT_DEDUCTIONS = ["PF", "Medical Insurance", "Professional Tax", "Loss of Pay"];
+/** the standard lines are always there, even when copying an older payslip that didn't have them */
+const withDefaults = (l: Line[], defaults: string[]) => [...l.map((x) => ({ ...x })),
+  ...defaults.filter((d) => !l.some((x) => x.label.trim().toLowerCase() === d.toLowerCase())).map((label) => ({ label, amount: null }))];
 
 const rupees = (n: number | null | undefined) => (n ? `₹ ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "-");
 const dmy = (d?: string | null) => (d ? format(new Date(d.length <= 10 ? d + "T00:00:00" : d), "dd/MM/yyyy") : "");
@@ -336,7 +339,7 @@ function PayslipEditor({ slip, people, onClose }: { slip: Payslip | "new" | null
       setPan(pd.pan_number ?? ""); setAcc(pd.account_number ?? ""); setIfsc(pd.ifsc_code ?? "");
     }
     if (!pd?.pan_number && !pd?.account_number) toast.message("This person hasn't filled their payroll details in Profile yet");
-    if (last && isNew) { setEarn((last.earnings as Line[]).map((l) => ({ ...l }))); setDed((last.deductions as Line[]).map((l) => ({ ...l }))); }
+    if (last && isNew) { setEarn(withDefaults(last.earnings as Line[], DEFAULT_EARNINGS)); setDed(withDefaults(last.deductions as Line[], DEFAULT_DEDUCTIONS)); }
   };
 
   const save = useMutation({
