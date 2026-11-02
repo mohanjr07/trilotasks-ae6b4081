@@ -323,11 +323,19 @@ function PayslipEditor({ slip, people, onClose }: { slip: Payslip | "new" | null
     setUserId(id);
     const p = people.find((x) => x.id === id);
     setCode(p?.employee_code ?? ""); setPosition(p?.position ?? ""); setDoj(p?.joined_at?.slice(0, 10) ?? "");
-    const [{ data: pd }, { data: last }] = await Promise.all([
-      sb.from("payroll_details").select("*").eq("user_id", id).maybeSingle(),
+    setPan(""); setAcc(""); setIfsc("");
+    // everything the person filled in their Profile → Payroll details
+    const [{ data: prof }, { data: last }] = await Promise.all([
+      sb.rpc("payroll_profile", { p_user: id }),
       sb.from("payslips").select("earnings, deductions").eq("user_id", id).order("pay_month", { ascending: false }).limit(1).maybeSingle(),
     ]);
-    setPan(pd?.pan_number ?? ""); setAcc(pd?.account_number ?? ""); setIfsc(pd?.ifsc_code ?? "");
+    const pd = prof?.[0];
+    if (pd) {
+      setCode(pd.employee_code ?? p?.employee_code ?? ""); setPosition(pd.position ?? p?.position ?? "");
+      setDoj(pd.joined_at?.slice(0, 10) ?? p?.joined_at?.slice(0, 10) ?? "");
+      setPan(pd.pan_number ?? ""); setAcc(pd.account_number ?? ""); setIfsc(pd.ifsc_code ?? "");
+    }
+    if (!pd?.pan_number && !pd?.account_number) toast.message("This person hasn't filled their payroll details in Profile yet");
     if (last && isNew) { setEarn((last.earnings as Line[]).map((l) => ({ ...l }))); setDed((last.deductions as Line[]).map((l) => ({ ...l }))); }
   };
 
