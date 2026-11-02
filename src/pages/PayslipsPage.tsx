@@ -267,9 +267,11 @@ function PayslipEditor({ slip, people, onClose }: { slip: Payslip | "new" | null
   const [ifsc, setIfsc] = useState("");
   const [earn, setEarn] = useState<Line[]>([]);
   const [ded, setDed] = useState<Line[]>([]);
+  const [preview, setPreview] = useState(false);
 
   useEffect(() => {
     if (!slip) return;
+    setPreview(false);
     if (slip === "new") {
       setUserId(""); setMonth(prevMonth); setPayDate(format(new Date(), "yyyy-MM-dd"));
       setCode(""); setPosition(""); setDoj(""); setPan(""); setAcc(""); setIfsc("");
@@ -343,11 +345,23 @@ function PayslipEditor({ slip, people, onClose }: { slip: Payslip | "new" | null
 
   return (
     <Dialog open={!!slip} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-3xl max-h-[94dvh] overflow-y-auto">
+      <DialogContent className={`${preview ? "max-w-[880px]" : "sm:max-w-3xl"} max-h-[94dvh] overflow-y-auto`}>
         <DialogHeader>
-          <DialogTitle>{isNew ? "New payslip" : "Edit payslip"}</DialogTitle>
+          <DialogTitle>{preview ? "Preview" : isNew ? "New payslip" : "Edit payslip"}</DialogTitle>
           <DialogDescription>Employee ID, Position and Date of Joining are saved on the person's profile; PAN and bank details are remembered for next month.</DialogDescription>
         </DialogHeader>
+        {preview ? (
+          <div className="overflow-x-auto rounded-lg border border-border bg-neutral-200 p-2">
+            <div style={{ width: 794 }}>
+              <PayslipSheet s={{
+                pay_date: payDate || null, employee_name: people.find((x) => x.id === userId)?.full_name ?? (slip !== "new" && slip ? slip.employee_name : "—"),
+                employee_code: code.trim() || null, position: position.trim() || null, date_of_joining: doj || null,
+                pan_number: pan.trim().toUpperCase() || null, account_number: acc.trim() || null, ifsc_code: ifsc.trim().toUpperCase() || null,
+                earnings: earn.filter((x) => x.label.trim()), deductions: ded.filter((x) => x.label.trim()),
+              }} />
+            </div>
+          </div>
+        ) : (<>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-3">
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Employee name *</label>
@@ -376,7 +390,11 @@ function PayslipEditor({ slip, people, onClose }: { slip: Payslip | "new" | null
           <div><label className="mb-1.5 block text-sm font-medium text-ink-primary">PAN Number</label><Input value={pan} onChange={(e) => setPan(e.target.value)} /></div>
           <div><label className="mb-1.5 block text-sm font-medium text-ink-primary">IFSC Code</label><Input value={ifsc} onChange={(e) => setIfsc(e.target.value)} /></div>
         </div>
-        <div className="flex justify-end gap-2 pt-1">
+        </>)}
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <Button variant="outline" className="mr-auto gap-1.5" onClick={() => setPreview((v) => !v)}>
+            {preview ? <><Pencil className="h-4 w-4" /> Back to edit</> : <><Eye className="h-4 w-4" /> Preview</>}
+          </Button>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Saving…" : isNew ? "Create payslip" : "Save"}</Button>
         </div>
