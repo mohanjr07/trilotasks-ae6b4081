@@ -6,7 +6,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2, Users } from "lucide-react";
+import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2, Users, Download } from "lucide-react";
+import { saveFile } from "@/lib/nativeFiles";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage from "@/components/AnimatedPage";
@@ -63,6 +64,9 @@ export default function OvertimePage() {
   const isHari = (profile?.email ?? "").toLowerCase() === OT_APPROVER_EMAIL;
   const canApprove = isHari;
   const anuOnly = !canVerify;                                          // Anu sees approved entries only
+  // admins and Anu can download overtime as Excel
+  const canExport = isAdmin || OVERTIME_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [tab, setTab] = useState<"pending" | "verified" | "rejected" | "all">("all");
   const [search, setSearch] = useState("");
@@ -204,6 +208,11 @@ export default function OvertimePage() {
               <ShieldCheck className="h-4 w-4" /> Approve selected ({pendingPicked.length})
             </Button>
           )}
+          {canExport && (
+            <Button variant="outline" className="gap-1.5" onClick={() => setExportOpen(true)}>
+              <Download className="h-4 w-4" /> Excel
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" className="gap-1.5" onClick={() => setMembersOpen(true)}>
               <Users className="h-4 w-4" /> OT members ({members.length})
@@ -332,6 +341,8 @@ export default function OvertimePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {canExport && <OvertimeExportDialog open={exportOpen} onClose={() => setExportOpen(false)} nameOf={nameOf} approvedOnly={anuOnly} />}
 
       {canVerify && (
         <AddOvertimeDialog isHari={isHari} open={addOpen} onClose={() => setAddOpen(false)} people={members} userId={user?.id ?? ""}
@@ -621,6 +632,119 @@ function OvertimeMembersDialog({ open, onClose, people, memberIds, onChanged }: 
 
         <div className="flex justify-end pt-2">
           <Button onClick={onClose}>Done</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+// ── Excel export (admins + Anu) ──────────────────────────────────────────────
+function OvertimeExportDialog({ open, onClose, nameOf, approvedOnly }: {
+  open: boolean; onClose: () => void; nameOf: (id?: string | null) => string; approvedOnly: boolean;
+}) {
+  const today = format(new Date(), "yyyy-MM-dd");
+  const monthStart = format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd");
+  const [from, setFrom] = useState(monthStart);
+  const [to, setTo] = useState(today);
+  const [which, setWhich] = useState<"approved" | "all">("approved");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setFrom(monthStart); setTo(today); setWhich("approved"); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const run = async () => {
+    if (!from || !to || from > to) { toast.error("Choose a valid date range"); return; }
+    setBusy(true);
+    try {
+      let q = (supabase as any).from("overtime_entries").select("*").gte("work_date", from).lte("work_date", to)
+        .order("work_date").order("created_at").limit(10000);
+      if (approvedOnly || which === "approved") q = q.not("verified_at", "is", null);
+      const { data, error } = await q;
+      if (error) throw error;
+      const rows = (data ?? []) as Entry[];
+      if (!rows.length) { toast.error("No overtime in that period"); return; }
+
+      const ExcelJS = (await import("exceljs")).default;
+      const wb = new ExcelJS.Workbook();
+      const head = (ws: any, cols: string[]) => {
+        const r = ws.addRow(cols); r.font = { bold: true };
+        r.eachCell((c: any) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE6E6E6" } }; });
+      };
+      const status = (e: Entry) => (e.verified_at ? "Approved" : e.rejected_at ? "Rejected" : "Waiting for approval");
+      const t = (x?: string | null) => (x ? fmtTime(x) : "");
+      const range = `${format(new Date(from + "T00:00:00"), "dd MMM yyyy")} – ${format(new Date(to + "T00:00:00"), "dd MMM yyyy")}`;
+
+      // Summary per person (approved hours)
+      const ws = wb.addWorksheet("Summary");
+      ws.addRow([`Overtime — ${range}`]).font = { bold: true, size: 14 };
+      ws.addRow([`Exported ${new Date().toLocaleString("en-IN")} · ${approvedOnly || which === "approved" ? "approved entries only" : "all entries"}`]);
+      ws.addRow([]);
+      head(ws, ["Employee", "Days", "Entries", "Approved hours", "Waiting hours", "Rejected hours"]);
+      const byPerson = new Map<string, Entry[]>();
+      rows.forEach((e) => byPerson.set(e.employee_id, [...(byPerson.get(e.employee_id) ?? []), e]));
+      const sumH = (l: Entry[]) => l.reduce((s, e) => s + Number(e.duration_hours || 0), 0);
+      const totals = [0, 0, 0, 0, 0];
+      [...byPerson.entries()].sort((a, b) => nameOf(a[0]).localeCompare(nameOf(b[0]))).forEach(([id, l]) => {
+        const v = [new Set(l.map((e) => e.work_date)).size, l.length, sumH(l.filter((e) => e.verified_at)),
+          sumH(l.filter((e) => !e.verified_at && !e.rejected_at)), sumH(l.filter((e) => e.rejected_at))];
+        v.forEach((x, i) => { totals[i] += x; });
+        ws.addRow([nameOf(id), ...v]);
+      });
+      ws.addRow(["TOTAL", ...totals]).font = { bold: true };
+      [30, 8, 9, 16, 15, 15].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+      // Every entry
+      const wl = wb.addWorksheet("Entries");
+      head(wl, ["Date", "Employee", "Slot", "Start", "End", "Hours", "Status", "Approved by", "Approved on", "Rejected reason", "Entered by", "Note"]);
+      rows.forEach((e) => {
+        const r = wl.addRow([new Date(e.work_date + "T00:00:00"), nameOf(e.employee_id), halfLabel(e.half), t(e.start_time), t(e.end_time),
+          Number(e.duration_hours || 0), status(e), e.verified_by ? nameOf(e.verified_by) : "", e.verified_at ? new Date(e.verified_at) : "",
+          e.reject_reason ?? "", nameOf(e.created_by), e.note ?? ""]);
+        r.getCell(1).numFmt = "dd-mmm-yyyy"; r.getCell(9).numFmt = "dd-mmm-yyyy hh:mm";
+      });
+      [13, 26, 14, 10, 10, 8, 20, 20, 18, 26, 20, 30].forEach((w, i) => { wl.getColumn(i + 1).width = w; });
+      wl.autoFilter = { from: { row: 1, column: 1 }, to: { row: wl.rowCount, column: 12 } };
+      wl.views = [{ state: "frozen", ySplit: 1 }];
+
+      const buf = await wb.xlsx.writeBuffer();
+      await saveFile(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `Overtime ${from} to ${to}.xlsx`);
+      onClose();
+    } catch (e: any) {
+      toast.error("Could not export: " + (e?.message ?? ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Download overtime (Excel)</DialogTitle>
+          <DialogDescription>A summary per person and every entry for the dates you choose.</DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="ot-from" className="mb-1.5 block text-sm font-medium text-ink-primary">From</label>
+            <Input id="ot-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label htmlFor="ot-to" className="mb-1.5 block text-sm font-medium text-ink-primary">To</label>
+            <Input id="ot-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        </div>
+        {!approvedOnly && (
+          <div className="flex gap-2">
+            {([["approved", "Approved only"], ["all", "All entries"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setWhich(k)}
+                className={`rounded-lg border px-3 py-1.5 text-sm ${which === k ? "border-primary bg-primary/10 text-primary" : "border-border text-ink-secondary"}`}>{l}</button>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button className="gap-1.5" disabled={busy} onClick={run}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
