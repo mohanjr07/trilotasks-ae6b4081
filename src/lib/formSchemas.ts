@@ -229,7 +229,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       { key: "size", label: "Size", type: "text" },
       { key: "blank", label: "Blank", type: "text" },
       { key: "processes", label: "Processes", type: "checks", wide: true,
-        options: ["Laser Cutting", "Bending", "Welding", "Powder Coating", "Cutting & Grinding"] },
+        options: ["Laser Cutting", "Bending", "Welding", "Powder Coating", "Cutting & Grinding", "Assembly"] },
     ],
   },
   {
