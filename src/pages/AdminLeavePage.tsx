@@ -489,7 +489,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   // (which uses an explicit time range instead).
   // For "Late" the default is half-day to match the previous behaviour;
   // for every other category the default is full-day.
-  const [duration, setDuration] = useState<"full" | "half">("full");
+  const [duration, setDuration] = useState<"full" | "half" | "time">("full");
   const [halfDayPeriod, setHalfDayPeriod] = useState<"AM" | "PM">("AM");
   // "Permission" time range — only used when leaveCategory === "permission"
   const [startTime, setStartTime] = useState("");
@@ -500,6 +500,9 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   // already a partial-day construct of its own).
   const supportsHalfDay = !isPermission;
   const isHalfDay = supportsHalfDay && duration === "half";
+  // On Duty can also be a From–To time range
+  const isOdTime = leaveCategory === "on_duty" && duration === "time";
+  const needsTime = isPermission || isOdTime;
 
   const resetForm = () => {
     setEmployeeId("");
@@ -517,6 +520,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   // Switching away from Late doesn't auto-reset — the admin's explicit choice wins.
   useEffect(() => {
     if (leaveCategory === "late") setDuration("half");
+    else if (leaveCategory !== "on_duty") setDuration((d) => (d === "time" ? "full" : d));
   }, [leaveCategory]);
 
   const { data: employees = [] } = useQuery({
@@ -537,9 +541,9 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         toast.error("Employee, start date, and reason are required");
         return;
       }
-      if (isPermission) {
+      if (needsTime) {
         if (!startTime || !endTime) {
-          toast.error("Start time and end time are required for Permission");
+          toast.error("Start time and end time are required");
           return;
         }
         if (startTime >= endTime) {
@@ -557,7 +561,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         leave_category: leaveCategory,
         start_date: startDate,
         // Half-day and Permission both collapse to a single date
-        end_date: isHalfDay || isPermission ? startDate : endDate || startDate,
+        end_date: isHalfDay || needsTime ? startDate : endDate || startDate,
         reason: reason.trim(),
         status: "approved",
         reviewed_by: user!.id,
@@ -567,7 +571,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         payload.is_half_day = true;
         payload.half_day_period = halfDayPeriod; // AM = First Half, PM = Second Half
       }
-      if (isPermission) {
+      if (needsTime) {
         payload.start_time = startTime;
         payload.end_time = endTime;
       }
@@ -659,6 +663,19 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                       >
                         Half Day
                       </button>
+                      {leaveCategory === "on_duty" && (
+                        <button
+                          type="button"
+                          onClick={() => setDuration("time")}
+                          className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                            duration === "time"
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-card text-ink-secondary hover:bg-muted"
+                          }`}
+                        >
+                          Time
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -697,7 +714,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               )}
 
-              {isPermission ? (
+              {needsTime ? (
                 <>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date *</label>

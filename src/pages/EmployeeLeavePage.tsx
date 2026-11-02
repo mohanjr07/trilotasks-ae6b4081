@@ -154,6 +154,8 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
   const [reason, setReason] = useState("");
   // Half-day state
   const [isHalfDay, setIsHalfDay] = useState(false);
+  // On Duty must say how long: full day, half day (AM/PM) or a from–to time range
+  const [odMode, setOdMode] = useState<"" | "full" | "half" | "time">("");
   const [halfDayPeriod, setHalfDayPeriod] = useState<"AM" | "PM">("AM");
   // Permission state — a short time-based leave on a single date
   const [startTime, setStartTime] = useState("");
@@ -273,6 +275,12 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
 
   const isPermission = category === "permission";
   const isWFH = effectiveCategory === "work_from_home";
+  const isOnDuty = effectiveCategory === "on_duty";
+  const odHalf = isOnDuty && odMode === "half";
+  const odTime = isOnDuty && odMode === "time";
+  const casualHalf = effectiveCategory === "casual_leave" && isHalfDay;
+  const singleDate = casualHalf || odHalf || odTime;
+  const needsTime = isPermission || odTime;
 
   // Validate that a YYYY-MM-DD string is a real calendar date.
   // JS's Date constructor silently rolls invalid days (e.g. "2026-06-31" → Jul 1),
@@ -292,17 +300,22 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
 
   const submit = useMutation({
     mutationFn: async () => {
-      const useHalfDay = effectiveCategory === "casual_leave" && isHalfDay;
+      const useHalfDay = casualHalf || odHalf;
+
+      if (isOnDuty && !odMode) {
+        toast.error("On Duty: choose Full day, Half day or a time range");
+        throw new Error("missing time");
+      }
 
       if (!isValidDate(startDate)) {
         toast.error("Please enter a valid date (that month may not have that day)");
         throw new Error("bad date");
       }
-      if (!isPermission && !useHalfDay && endDate && !isValidDate(endDate)) {
+      if (!isPermission && !singleDate && endDate && !isValidDate(endDate)) {
         toast.error("Please enter a valid end date");
         throw new Error("bad date");
       }
-      if (!isPermission && !useHalfDay && endDate && endDate < startDate) {
+      if (!isPermission && !singleDate && endDate && endDate < startDate) {
         toast.error("End date cannot be before start date");
         throw new Error("bad date");
       }
@@ -344,9 +357,9 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       }
 
       // Permission-specific validation: time range required and start < end
-      if (isPermission) {
+      if (needsTime) {
         if (!startTime || !endTime) {
-          toast.error("Start time and end time are required for Permission");
+          toast.error(isPermission ? "Start time and end time are required for Permission" : "From and To time are required for On Duty");
           throw new Error("missing time");
         }
         if (startTime >= endTime) {
@@ -361,14 +374,14 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
         reason,
         start_date: startDate,
         // Permission and half-day both collapse to a single date
-        end_date: isPermission || useHalfDay ? startDate : (endDate || startDate),
+        end_date: isPermission || singleDate ? startDate : (endDate || startDate),
         leave_category: isPermission ? "permission" : effectiveCategory,
       };
       if (useHalfDay) {
         payload.is_half_day = true;
         payload.half_day_period = halfDayPeriod;
       }
-      if (isPermission) {
+      if (needsTime) {
         payload.start_time = startTime;
         payload.end_time = endTime;
       }
@@ -395,6 +408,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
       toast.success(isPermission ? "Permission request submitted" : isWFH ? "WFH request submitted" : "Request submitted successfully");
       // Reset form
       setIsHalfDay(false);
+      setOdMode("");
       setHalfDayPeriod("AM");
       setStartDate("");
       setEndDate("");
@@ -422,7 +436,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
         ? `Limit reached (${approvedCasualDays}/${MONTHLY_QUOTA} days in ${monthLabel})`
         : `${remainingDays} day${remainingDays !== 1 ? "s" : ""} remaining (or ${remainingHalfDays} half-day${remainingHalfDays !== 1 ? "s" : ""}) ${isFutureMonth ? `in ${monthLabel}` : "this month"}`,
     },
-    { value: "on_duty", label: "On Duty", disabled: false },
+    { value: "on_duty", label: "On Duty", disabled: false, hint: "Choose Full day, Half day, or a From–To time (one is required)." },
     { value: "work_from_home", label: "Work From Home", disabled: false, hint: "Request to work remotely from home." },
     { value: "unauthorised_leave", label: "Unauthorised Leave", disabled: false },
     {
@@ -520,7 +534,50 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                 </div>
               )}
 
-              {isPermission ? (
+              {/* On Duty duration (one is required) */}
+              {isOnDuty && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-ink-primary">Duration *</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([["full", "Full Day"], ["half", "Half Day"], ["time", "Time (From–To)"]] as const).map(([v, l]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setOdMode(v)}
+                          className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-all ${
+                            odMode === v ? "bg-primary text-white border-primary" : "border-border text-ink-secondary hover:bg-muted"
+                          }`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {!odMode && <p className="mt-1 text-[11px] text-destructive">Pick one to continue.</p>}
+                  </div>
+                  {odHalf && (
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-ink-primary">Which half?</label>
+                      <div className="flex gap-2">
+                        {(["AM", "PM"] as const).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setHalfDayPeriod(p)}
+                            className={`flex-1 rounded-lg border py-1.5 text-sm font-medium transition-all ${
+                              halfDayPeriod === p ? "bg-primary text-white border-primary" : "border-border text-ink-secondary hover:bg-muted"
+                            }`}
+                          >
+                            {p === "AM" ? "First half (AM)" : "Second half (PM)"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {needsTime ? (
                 <>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">Date</label>
@@ -541,7 +598,7 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                   </div>
                   {startTime && endTime && startTime < endTime && (
                     <p className="text-[11px] text-ink-muted -mt-2">
-                      You're requesting permission from {fmtTime(startTime)} to {fmtTime(endTime)}
+                      You're requesting {isPermission ? "permission" : "on duty"} from {fmtTime(startTime)} to {fmtTime(endTime)}
                       {startDate && isValidDate(startDate) && ` on ${format(new Date(startDate), "MMM d, yyyy")}`}.
                     </p>
                   )}
@@ -550,14 +607,14 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-ink-primary">
-                      {isHalfDay ? "Date" : "Start Date"}
+                      {singleDate ? "Date" : "Start Date"}
                     </label>
                     <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10" />
                     {startDate && !isValidDate(startDate) && (
                       <p className="mt-1 text-xs text-destructive">That month doesn't have this date.</p>
                     )}
                   </div>
-                  {!isHalfDay && (
+                  {!singleDate && (
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-ink-primary">End Date</label>
                       <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10" />
@@ -581,7 +638,8 @@ function NewLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }
                   !isValidDate(startDate) ||
                   (!!endDate && !isValidDate(endDate)) ||
                   !reason ||
-                  (isPermission && (!startTime || !endTime))
+                  (needsTime && (!startTime || !endTime)) ||
+                  (isOnDuty && !odMode)
                 }
                 className="w-full h-11"
               >
