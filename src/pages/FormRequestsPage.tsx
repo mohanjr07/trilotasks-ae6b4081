@@ -99,7 +99,8 @@ export default function FormRequestsPage() {
   const email = (user?.email ?? "").toLowerCase();
   const firstName = ((profile as any)?.full_name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
   // Hari sees every production form (raised by production@ or Production-type) — see TRILO_hari_production_forms.sql
-  const seesProduction = email === "hari@triloautomation.com";
+  // …and Anu every Expense / Asset / Vendor form — see TRILO_forms_hari_anu_view.sql
+  const seesProduction = email === "hari@triloautomation.com" || email === "anu@triloautomation.com";
   const isReviewer = isApproverAnywhere || REVIEWER_EMAILS.includes(email) ||
     AUTHORIZER_NAMES.some((n) => n.toLowerCase() === firstName);
   const allowed: TabKey[] = [
