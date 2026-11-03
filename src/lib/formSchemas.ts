@@ -36,6 +36,7 @@ export type FormTable = {
   serial?: boolean;        // auto "S.No" column
   totals?: string[];       // number columns summed in a TOTAL row
   fixedRows?: Array<Record<string, string>>; // a fixed list (checklist) — no adding / removing rows
+  excelImport?: boolean;   // "Import from Excel" fills these rows (and the form's fields)
 };
 
 export type FormSchema = {
@@ -265,7 +266,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       { key: "date", label: "Date", type: "date", required: true },
     ],
     tables: [{
-      key: "expenses", label: "Expenses", minRows: 3, totals: ["amount", "gst", "total"],
+      key: "expenses", label: "Expenses", minRows: 3, totals: ["amount", "gst", "total"], excelImport: true,
       columns: [
         { key: "date", label: "Date", type: "date", width: "11%" },
         { key: "category", label: "Category", width: "11%" },

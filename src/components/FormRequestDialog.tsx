@@ -1,9 +1,10 @@
 // Fill in a form digitally and send it for approval (or edit + resubmit a
 // rejected one). Requested by = the logged-in user, Approved by = Hari (Anu for Asset Submission / Expense Tracking),
 // Authorized by = chosen from the dropdown.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Send, Eye, PencilLine } from "lucide-react";
+import { Plus, Trash2, Send, Eye, PencilLine, FileSpreadsheet, Download, Loader2 } from "lucide-react";
+import { importFormExcel, downloadFormTemplate } from "@/lib/formExcelImport";
 import { FormAttachmentsEditor, type FormAttachment } from "@/components/FormAttachments";
 import FilledFormPreview from "@/components/FilledFormPreview";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +57,30 @@ export default function FormRequestDialog({
   const defaultApproverId = approverOptions?.find((p) => defaultApprovers.some((d) => d.id === p.id))?.id ?? "";
   const schema = schemaForTitle(title);
   const [data, setData] = useState<FormData>(() => emptyFormData(schema));
+  // "Import from Excel" — fills the table rows and the matching fields
+  const excelRef = useRef<HTMLInputElement>(null);
+  const [excelTable, setExcelTable] = useState<string | null>(null);
+  const [excelBusy, setExcelBusy] = useState(false);
+  const onExcelFile = async (file: File | undefined) => {
+    const t = (schema.tables ?? []).find((x) => x.key === excelTable);
+    if (!file || !t) return;
+    setExcelBusy(true);
+    try {
+      const res = await importFormExcel(file, schema, t);
+      if (!res.rows.length && !Object.keys(res.fields).length) { toast.error("Nothing to import was found in that file"); return; }
+      setData((d) => {
+        const kept = (d.tables[t.key] ?? []).filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
+        return { ...d, fields: { ...d.fields, ...res.fields }, tables: { ...d.tables, [t.key]: [...kept, ...res.rows] } };
+      });
+      const nf = Object.keys(res.fields).length;
+      toast.success(`Imported ${res.rows.length} row${res.rows.length === 1 ? "" : "s"}${nf ? ` and ${nf} field${nf === 1 ? "" : "s"}` : ""} — please check before sending`);
+    } catch (e: any) {
+      toast.error("Could not read the file: " + (e?.message ?? ""));
+    } finally {
+      setExcelBusy(false);
+      if (excelRef.current) excelRef.current.value = "";
+    }
+  };
   const [attachments, setAttachments] = useState<FormAttachment[]>([]);
   const [authorizer, setAuthorizer] = useState("");
   const [approver, setApprover] = useState("");   // chosen in the "Approved by" dropdown
@@ -335,11 +360,29 @@ export default function FormRequestDialog({
           )}
           <div className="grid gap-4 sm:grid-cols-2">{schema.fields.map(renderField)}</div>
 
+          <input ref={excelRef} type="file" className="hidden"
+            accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            onChange={(e) => onExcelFile(e.target.files?.[0])} />
           {(schema.tables ?? []).map((t) => {
             const rows = data.tables[t.key] ?? [];
             return (
               <div key={t.key}>
-                <p className="mb-2 text-sm font-semibold text-ink-primary">{t.label}</p>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <p className="mr-auto text-sm font-semibold text-ink-primary">{t.label}</p>
+                  {t.excelImport && (<>
+                    <button type="button" disabled={excelBusy} onClick={() => { setExcelTable(t.key); excelRef.current?.click(); }}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/40 bg-accent-light px-3 text-xs font-medium text-primary hover:bg-accent-light/70 disabled:opacity-50">
+                      {excelBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />} Import from Excel
+                    </button>
+                    <button type="button" onClick={() => downloadFormTemplate(schema, t, data).catch((e) => toast.error(e?.message ?? "Could not create the template"))}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium text-ink-secondary hover:bg-muted">
+                      <Download className="h-3.5 w-3.5" /> Template
+                    </button>
+                  </>)}
+                </div>
+                {t.excelImport && (
+                  <p className="-mt-1 mb-2 text-[11px] text-ink-muted">Upload your expense sheet (.xlsx or .csv) — the rows and details like Name / Claim Month are filled in automatically. Use “Template” for a ready sheet.</p>
+                )}
                 {/* column headings can be renamed — they change on the Word form too */}
                 <div className="mb-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
                   <p className="mb-2 text-[11px] font-medium text-ink-muted">Column headings (tap to rename)</p>
