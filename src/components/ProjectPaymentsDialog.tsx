@@ -24,6 +24,9 @@ type Row = {
   extra_bills?: { path: string; name: string }[] | null;
 };
 type Proj = { id: string; name: string; color: string };
+/** Payment requests raised without a project are tracked under this row. */
+const NO_PROJECT: Proj = { id: "__no_project__", name: "No project (not specified)", color: "#9CA3AF" };
+const pidOf = (r: { project_id: string | null }) => r.project_id ?? NO_PROJECT.id;
 
 /** Approved requests count as spend (paid or still to be paid). */
 export const isSpend = (status: string) => status === "approved";
@@ -61,7 +64,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
     return r;
   };
   const projOf = new Map(projects.map((p) => [p.id, p.name]));
-  const mine = rows.filter((r) => r.project_id && projOf.has(r.project_id));
+  const mine = rows.filter((r) => projOf.has(pidOf(r)));
   const all = totalsOf(mine);
 
   // 1. Summary
@@ -78,7 +81,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   ws.addRow([]);
   head(ws, ["Project", "Requests", "Approved payments", "Spend", "Paid", "Approved, to pay", "Waiting approval", "Rejected"]);
   const per = projects.map((p) => {
-    const pr = mine.filter((r) => r.project_id === p.id);
+    const pr = mine.filter((r) => pidOf(r) === p.id);
     return { p, pr, t: totalsOf(pr), rejected: pr.filter((r) => r.status === "rejected").length };
   }).sort((a, b) => b.t.spend - a.t.spend || a.p.name.localeCompare(b.p.name));
   const first = ws.rowCount + 1;
@@ -93,11 +96,11 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   // 2. Payment logs
   const wl = wb.addWorksheet("Payment logs");
   head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills"]);
-  [...mine].sort((a, b) => (projOf.get(a.project_id!) ?? "").localeCompare(projOf.get(b.project_id!) ?? "") || b.created_at.localeCompare(a.created_at))
+  [...mine].sort((a, b) => (projOf.get(pidOf(a)) ?? "").localeCompare(projOf.get(pidOf(b)) ?? "") || b.created_at.localeCompare(a.created_at))
     .forEach((r) => {
       const imp = isImported(r);
       const row = wl.addRow([
-        new Date(r.created_at), projOf.get(r.project_id!) ?? "", subProjectLabel(r.sub_project), r.purpose, Number(r.amount || 0), STATUS[r.status]?.label ?? r.status,
+        new Date(r.created_at), projOf.get(pidOf(r)) ?? "", subProjectLabel(r.sub_project), r.purpose, Number(r.amount || 0), STATUS[r.status]?.label ?? r.status,
         imp ? "From bank statement" : names[r.requester_id] ?? "", r.verifier_id ? names[r.verifier_id] ?? "" : "",
         r.reviewed_by ? names[r.reviewed_by] ?? "" : "", r.paid_at ? new Date(r.paid_at) : "", r.paid_by ? names[r.paid_by] ?? "" : "",
         r.paid_from ? ACCOUNT_LABEL[r.paid_from] ?? r.paid_from : "", imp ? 0 : 1 + (r.extra_bills?.length ?? 0),
@@ -116,7 +119,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   const keyOf = (r: Row) => subProjectLabel(r.sub_project) || "Not specified";
   const firstS = ws2.rowCount + 1;
   per.forEach(({ p }) => {
-    const pr = spendRows.filter((r) => r.project_id === p.id);
+    const pr = spendRows.filter((r) => pidOf(r) === p.id);
     if (!pr.length) return;
     ws2.addRow([p.name, ...cols.map((c) => sum(pr.filter((r) => keyOf(r) === c)) || ""), sum(pr)]);
   });
@@ -343,17 +346,17 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     },
   });
 
-  const projectRows = rows.filter((r) => r.project_id);
-  const overall = useMemo(() => totalsOf(projectRows), [rows]);
+  const noProject = rows.filter((r) => !r.project_id);
+  // every request counts — ones raised without a project are tracked as "No project"
+  const overall = useMemo(() => totalsOf(rows), [rows]);
   const list = useMemo(() => {
     const byProject = new Map<string, Row[]>();
-    for (const r of projectRows) byProject.set(r.project_id!, [...(byProject.get(r.project_id!) ?? []), r]);
-    return projects
+    for (const r of rows) byProject.set(pidOf(r), [...(byProject.get(pidOf(r)) ?? []), r]);
+    return [...projects, ...(byProject.has(NO_PROJECT.id) ? [NO_PROJECT] : [])]
       .map((p) => ({ p, rows: byProject.get(p.id) ?? [], t: totalsOf(byProject.get(p.id) ?? []) }))
       .filter((x) => !find.trim() || x.p.name.toLowerCase().includes(find.trim().toLowerCase()))
       .sort((a, b) => b.t.spend - a.t.spend || b.rows.length - a.rows.length || a.p.name.localeCompare(b.p.name));
   }, [rows, projects, find]);
-  const noProject = rows.filter((r) => !r.project_id);
   const [exporting, setExporting] = useState(false);
   const doExport = async (subset: Proj[], label: string) => {
     setExporting(true);
@@ -379,7 +382,8 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Overall spend · all projects</p>
               <p className="mt-1 font-heading text-3xl font-bold text-ink-primary">{formatINR(overall.spend)}</p>
               <p className="mb-3 text-xs text-ink-muted">
-                {overall.count} approved payment{overall.count === 1 ? "" : "s"} across {list.filter((x) => x.t.spend > 0).length} project{list.filter((x) => x.t.spend > 0).length === 1 ? "" : "s"}
+                {overall.count} approved payment{overall.count === 1 ? "" : "s"} across {list.filter((x) => x.t.spend > 0 && x.p.id !== NO_PROJECT.id).length} project{list.filter((x) => x.t.spend > 0 && x.p.id !== NO_PROJECT.id).length === 1 ? "" : "s"}
+                {noProject.length > 0 && ` · incl. ${formatINR(sum(noProject.filter((r) => isSpend(r.status))))} with no project`}
               </p>
               <SummaryTiles t={overall} big />
             </div>
@@ -391,7 +395,16 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               ))}
             </div>
 
-            {view === "subprojects" && <SubProjectsView rows={rows} projects={projects} names={names} />}
+            {view === "subprojects" && (<>
+              <div className="flex justify-end">
+                <button type="button" disabled={exporting || !rows.length}
+                  onClick={() => doExport([...projects, ...(noProject.length ? [NO_PROJECT] : [])], "All projects")}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted disabled:opacity-50">
+                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export Excel
+                </button>
+              </div>
+              <SubProjectsView rows={rows} projects={projects} names={names} />
+            </>)}
 
             {view === "projects" && (<>
             {/* Projects */}
@@ -455,12 +468,6 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               {!list.length && <p className="py-8 text-center text-sm text-ink-muted">No projects found.</p>}
             </div>
 
-            {noProject.length > 0 && (
-              <p className="text-xs text-ink-muted">
-                {noProject.length} payment request{noProject.length === 1 ? " was" : "s were"} raised without a project
-                ({formatINR(sum(noProject.filter((r) => isSpend(r.status))))} approved) — not included above.
-              </p>
-            )}
             </>)}
           </div>
         )}
