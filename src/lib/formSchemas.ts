@@ -280,6 +280,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
       ],
     }],
     footerFields: [{ key: "advance", label: "Less: Advance Taken (if any)", type: "number" }],
+    attachments: { max: 20, label: "Bills / receipts (photos, PDF or files)" },
     summary: (d) => {
       const rows = d.tables?.expenses ?? [];
       const total = rows.reduce((s, r) => s + num(r.amount) + num(r.gst), 0);

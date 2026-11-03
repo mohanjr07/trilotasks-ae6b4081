@@ -1,7 +1,7 @@
 // Documents attached to a form request (DC, invoice, photos…) — stored in the
 // private "form-attachments" bucket; the paths live in form_requests.data.attachments.
 import { useState } from "react";
-import { Paperclip, X, FileText, Loader2, ExternalLink, Upload } from "lucide-react";
+import { Paperclip, X, FileText, Loader2, ExternalLink, Upload, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { openFileLink } from "@/lib/nativeFiles";
 import { toast } from "sonner";
@@ -70,12 +70,20 @@ export function FormAttachmentsEditor({ value, onChange, max, label, userId }: {
           </div>
         ))}
         {value.length < max && (
-          <label className={`flex items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-3 text-sm ${uploading ? "opacity-60" : "cursor-pointer hover:bg-muted/40"}`}>
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin text-ink-muted" /> : <Upload className="h-4 w-4 text-ink-muted" />}
-            <span className="text-ink-secondary">{uploading ? "Uploading…" : "Tap to upload a photo, PDF or document"}</span>
-            <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" disabled={uploading}
-              onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
-          </label>
+          <div className="flex gap-2">
+            <label className={`flex min-w-0 flex-1 items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-3 text-sm ${uploading ? "opacity-60" : "cursor-pointer hover:bg-muted/40"}`}>
+              {uploading ? <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-muted" /> : <Upload className="h-4 w-4 shrink-0 text-ink-muted" />}
+              <span className="text-ink-secondary">{uploading ? "Uploading…" : "Upload photos, PDF or files"}</span>
+              <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv" className="hidden" disabled={uploading}
+                onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+            </label>
+            <label className={`flex shrink-0 items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-3 text-sm ${uploading ? "opacity-60" : "cursor-pointer hover:bg-muted/40"}`}>
+              <Camera className="h-4 w-4 text-ink-muted" />
+              <span className="text-ink-secondary">Take photo</span>
+              <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploading}
+                onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+            </label>
+          </div>
         )}
       </div>
     </div>
