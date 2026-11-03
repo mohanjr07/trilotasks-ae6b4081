@@ -3,10 +3,10 @@
 //  them (many at once) and every entry is sent to anu@triloautomation.com.
 //  Only admins, managers and Anu can open this page.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2, Users, Download } from "lucide-react";
+import { Timer, Plus, ShieldCheck, Trash2, Search, Check, X, Loader2, Users, Download, Camera, ImagePlus, Image as ImageIcon } from "lucide-react";
 import { saveFile } from "@/lib/nativeFiles";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +43,7 @@ type Entry = {
   rejected_by?: string | null;
   rejected_at?: string | null;
   reject_reason?: string | null;
+  photo_paths?: string[] | null;
 };
 /** waiting for Hari: not approved and not rejected */
 const isPendingOt = (e: { verified_at: string | null; rejected_at?: string | null }) => !e.verified_at && !e.rejected_at;
@@ -53,6 +54,26 @@ const halfLabel = (h: string) =>
 const FULL_DAY_MIN = 9 * 60;   // a full day of overtime counts as 9 hours
 const hours = (n: number) => `${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })} h`;
 const todayIso = () => format(new Date(), "yyyy-MM-dd");
+const PHOTO_BUCKET = "overtime-photos";
+
+/** Shrink a phone photo (max 1600px, JPEG) so it uploads quickly; falls back to the original. */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new window.Image(); i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+    const scale = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * scale); c.height = Math.round(img.naturalHeight * scale);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.82));
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file;
+  }
+}
 
 export default function OvertimePage() {
   const { user, profile } = useAuth();
@@ -134,6 +155,7 @@ export default function OvertimePage() {
   });
 
   // Hari: reject with a reason (the person who entered it is notified)
+  const [photoPaths, setPhotoPaths] = useState<string[] | null>(null);
   const [rejectIds, setRejectIds] = useState<string[] | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const reject = useMutation({
@@ -279,6 +301,12 @@ export default function OvertimePage() {
                           Entered by {nameOf(r.created_by)}{r.note ? ` · ${r.note}` : ""}
                         </p>
                       </div>
+                      {!!r.photo_paths?.length && (
+                        <button type="button" onClick={() => setPhotoPaths(r.photo_paths!)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-muted">
+                          <ImageIcon className="h-3.5 w-3.5" /> {r.photo_paths!.length}
+                        </button>
+                      )}
                       <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-ink-secondary">{halfLabel(r.half)}</span>
                       {r.start_time && r.end_time && (
                         <span className="text-xs text-ink-secondary whitespace-nowrap">{fmtTime(r.start_time)} – {fmtTime(r.end_time)}</span>
@@ -321,6 +349,8 @@ export default function OvertimePage() {
           })}
         </div>
       )}
+
+      <OvertimePhotosDialog paths={photoPaths} onClose={() => setPhotoPaths(null)} />
 
       <Dialog open={!!rejectIds} onOpenChange={(o) => !o && setRejectIds(null)}>
         <DialogContent className="sm:max-w-md">
@@ -375,7 +405,46 @@ export const fmtTime = (t?: string | null) => {
 type Row = { half: "full" | "other" | ""; start: string; end: string };
 const rowMin = (r?: Row) => (!r ? 0 : r.half === "full" ? FULL_DAY_MIN : r.half === "other" ? spanMin(r.start, r.end) : 0);
 
-function AddOvertimeDialog({ open, onClose, people, onDone, isHari }: {
+function OvertimePhotosDialog({ paths, onClose }: { paths: string[] | null; onClose: () => void }) {
+  const { data: urls = [], isLoading } = useQuery({
+    queryKey: ["ot-photos", paths],
+    queryFn: async () => {
+      const out: string[] = [];
+      for (const p of paths ?? []) {
+        const { data } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(p, 3600);
+        if (data?.signedUrl) out.push(data.signedUrl);
+      }
+      return out;
+    },
+    enabled: !!paths?.length,
+    staleTime: 30 * 60 * 1000,
+  });
+  return (
+    <Dialog open={!!paths} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Overtime photos</DialogTitle>
+          <DialogDescription>Tap a photo to open it full size.</DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>
+        ) : urls.length ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {urls.map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-border">
+                <img src={u} alt={`Photo ${i + 1}`} className="aspect-square w-full object-cover" />
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-ink-muted">Couldn't load the photos.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddOvertimeDialog({ open, onClose, people, onDone, isHari, userId }: {
   isHari?: boolean;
   open: boolean; onClose: () => void; people: Person[]; userId?: string; onDone: () => void;
 }) {
@@ -385,9 +454,19 @@ function AddOvertimeDialog({ open, onClose, people, onDone, isHari }: {
   const [note, setNote] = useState("");
   const [find, setFind] = useState("");
   const [saving, setSaving] = useState(false);
+  // at least one photo is required — from the camera or from files
+  const [photos, setPhotos] = useState<Array<{ file: File; url: string }>>([]);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
+  const addPhotos = (list: FileList | null) => {
+    const imgs = Array.from(list ?? []).filter((f) => f.type.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp)$/i.test(f.name));
+    if (list?.length && !imgs.length) toast.error("Please choose an image");
+    setPhotos((p) => [...p, ...imgs.map((file) => ({ file, url: URL.createObjectURL(file) }))].slice(0, 10));
+  };
+  const removePhoto = (i: number) => setPhotos((p) => { URL.revokeObjectURL(p[i].url); return p.filter((_, j) => j !== i); });
 
   useEffect(() => {
-    if (open) { setDate(todayIso()); setSelected([]); setRows({}); setNote(""); setFind(""); }
+    if (open) { setDate(todayIso()); setSelected([]); setRows({}); setNote(""); setFind(""); setPhotos([]); }
   }, [open]);
 
   const shown = people.filter((p) => !find.trim() || p.full_name.toLowerCase().includes(find.trim().toLowerCase()));
@@ -419,19 +498,37 @@ function AddOvertimeDialog({ open, onClose, people, onDone, isHari }: {
         if (spanMin(r.start, r.end) > 16 * 60) return toast.error(`Check the times for ${name} — more than 16 hours`);
       }
     }
+    if (!photos.length) return toast.error("Attach at least one photo (take one or upload from files)");
+    if (!userId) return toast.error("Please sign in again");
     setSaving(true);
+    const uploaded: string[] = [];
     try {
+      for (const ph of photos) {
+        const blob = await shrinkPhoto(ph.file);
+        const ext = blob.type === "image/jpeg" ? "jpg" : (ph.file.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `${userId}/${date}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, { contentType: blob.type || "image/jpeg" });
+        if (upErr) {
+          if (/bucket/i.test(upErr.message)) throw new Error("Photo storage isn't set up yet — run TRILO_overtime_photos.sql");
+          throw upErr;
+        }
+        uploaded.push(path);
+      }
       const entries = selected.map((id) => ({
         employee_id: id, half: rows[id].half,
         start_time: rows[id].half === "other" ? rows[id].start : null,
         end_time: rows[id].half === "other" ? rows[id].end : null,
       }));
-      const { error } = await (supabase as any).rpc("add_overtime_entries", { p_date: date, p_entries: entries, p_note: note.trim() || null });
-      if (error) throw error;
+      const { error } = await (supabase as any).rpc("add_overtime_entries", { p_date: date, p_entries: entries, p_note: note.trim() || null, p_photos: uploaded });
+      if (error) {
+        if (/p_photos|schema cache|function/i.test(error.message ?? "")) throw new Error("Overtime photos aren't set up yet — run TRILO_overtime_photos.sql");
+        throw error;
+      }
       toast.success(`Overtime entered for ${selected.length} ${selected.length === 1 ? "person" : "people"} — ${isHari ? "sent to Anu" : "sent to Hari for approval"}`);
       onDone();
       onClose();
     } catch (e: any) {
+      if (uploaded.length) supabase.storage.from(PHOTO_BUCKET).remove(uploaded).catch(() => {});
       toast.error("Could not save: " + (e?.message ?? ""));
     } finally {
       setSaving(false);
@@ -538,6 +635,37 @@ function AddOvertimeDialog({ open, onClose, people, onDone, isHari }: {
           )}
 
           <div>
+            <label className="mb-1.5 block text-xs font-medium text-ink-muted">Photo * {photos.length ? `(${photos.length})` : ""}</label>
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+            <input ref={filesRef} type="file" accept="image/*" multiple className="hidden"
+              onChange={(e) => { addPhotos(e.target.files); e.target.value = ""; }} />
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" className="h-10 gap-1.5" onClick={() => cameraRef.current?.click()} disabled={saving}>
+                <Camera className="h-4 w-4" /> Take photo
+              </Button>
+              <Button type="button" variant="outline" className="h-10 gap-1.5" onClick={() => filesRef.current?.click()} disabled={saving}>
+                <ImagePlus className="h-4 w-4" /> Upload from files
+              </Button>
+            </div>
+            {photos.length > 0 ? (
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {photos.map((ph, i) => (
+                  <div key={ph.url} className="relative overflow-hidden rounded-lg border border-border">
+                    <img src={ph.url} alt={`Photo ${i + 1}`} className="aspect-square w-full object-cover" />
+                    <button type="button" onClick={() => removePhoto(i)} disabled={saving}
+                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white" aria-label="Remove photo">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-ink-muted">Required — take a photo or upload one from your files.</p>
+            )}
+          </div>
+
+          <div>
             <label className="mb-1.5 block text-xs font-medium text-ink-muted">Note (optional)</label>
             <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Work done / project" className="h-10" />
           </div>
@@ -545,7 +673,7 @@ function AddOvertimeDialog({ open, onClose, people, onDone, isHari }: {
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={save} disabled={saving} className="gap-1.5">
+          <Button onClick={save} disabled={saving || !photos.length} className="gap-1.5">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {saving ? "Sending…" : `${isHari ? "Send to Anu" : "Send to Hari for approval"}${selected.length ? ` (${selected.length})` : ""}`}
           </Button>
