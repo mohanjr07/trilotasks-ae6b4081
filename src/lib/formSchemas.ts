@@ -37,6 +37,7 @@ export type FormTable = {
   totals?: string[];       // number columns summed in a TOTAL row
   fixedRows?: Array<Record<string, string>>; // a fixed list (checklist) — no adding / removing rows
   excelImport?: boolean;   // "Import from Excel" fills these rows (and the form's fields)
+  rowAttachments?: { required?: boolean; label?: string }; // bills attached to each row (stored in row.__bills)
 };
 
 export type FormSchema = {
@@ -57,7 +58,7 @@ export type FormSchema = {
 export type FormData = {
   fields: Record<string, string>;
   tables: Record<string, Array<Record<string, string>>>;
-  attachments?: Array<{ path: string; name: string; size?: number }>;
+  attachments?: Array<{ path: string; name: string; size?: number; table?: string; row?: number }>;
   headings?: Record<string, Record<string, string>>;   // renamed column headings, per table
 };
 
@@ -100,6 +101,14 @@ const num = (v: string | undefined) => {
   return isFinite(n) ? n : 0;
 };
 export const money = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** Bills attached to one table row (kept as JSON in row.__bills). */
+export const ROW_BILLS = "__bills";
+export function rowBills(r: Record<string, string> | undefined): Array<{ path: string; name: string; size?: number }> {
+  try { const v = JSON.parse(r?.[ROW_BILLS] || "[]"); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+/** A row with something typed in (an empty bills list doesn't count). */
+export const rowHasData = (r: Record<string, string>) =>
+  Object.entries(r).some(([k, v]) => (k === ROW_BILLS ? rowBills(r).length > 0 : String(v ?? "").trim() !== ""));
 export const columnTotal = (rows: Array<Record<string, string>>, col: TableColumn) =>
   rows.reduce((s, r) => s + num(col.compute ? col.compute(r) : r[col.key]), 0);
 
@@ -267,6 +276,7 @@ export const FORM_SCHEMAS: FormSchema[] = [
     ],
     tables: [{
       key: "expenses", label: "Expenses", minRows: 3, totals: ["amount", "gst", "total"], excelImport: true,
+      rowAttachments: { required: true, label: "Bill / receipt for this payment" },
       columns: [
         { key: "date", label: "Date", type: "date", width: "11%" },
         { key: "category", label: "Category", width: "11%" },
@@ -280,7 +290,6 @@ export const FORM_SCHEMAS: FormSchema[] = [
       ],
     }],
     footerFields: [{ key: "advance", label: "Less: Advance Taken (if any)", type: "number" }],
-    attachments: { max: 20, label: "Bills / receipts (photos, PDF or files)" },
     summary: (d) => {
       const rows = d.tables?.expenses ?? [];
       const total = rows.reduce((s, r) => s + num(r.amount) + num(r.gst), 0);

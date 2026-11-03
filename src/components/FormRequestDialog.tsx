@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AutoTextarea } from "@/components/ui/auto-textarea";
 import { toast } from "sonner";
-import { PRODUCTION_EMAIL, headingOf, approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
+import { PRODUCTION_EMAIL, headingOf, rowBills, rowHasData, ROW_BILLS, approverFor, approverChoices, needsApproval, emptyFormData, schemaForTitle, columnTotal, money, type FormData, type FormField } from "@/lib/formSchemas";
 import { useFormPeople } from "@/lib/useFormPeople";
 import type { FormRequestRow } from "@/components/FormDocument";
 
@@ -69,7 +69,7 @@ export default function FormRequestDialog({
       const res = await importFormExcel(file, schema, t);
       if (!res.rows.length && !Object.keys(res.fields).length) { toast.error("Nothing to import was found in that file"); return; }
       setData((d) => {
-        const kept = (d.tables[t.key] ?? []).filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
+        const kept = (d.tables[t.key] ?? []).filter(rowHasData);
         return { ...d, fields: { ...d.fields, ...res.fields }, tables: { ...d.tables, [t.key]: [...kept, ...res.rows] } };
       });
       const nf = Object.keys(res.fields).length;
@@ -183,12 +183,23 @@ export default function FormRequestDialog({
       if (approverOptions && !approver) throw new Error("Choose who will approve this form");
       if (!authorizer && !schema.reviewer) throw new Error("Choose who will authorize this form");
       // drop completely empty table rows
+      const cleanTables = Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter(rowHasData)]));
+      // every payment row needs its bill
+      for (const t of schema.tables ?? []) {
+        if (!t.rowAttachments?.required) continue;
+        const i = (cleanTables[t.key] ?? []).findIndex((r) => !rowBills(r).length);
+        if (i >= 0) throw new Error(`Attach the bill for ${t.label.toLowerCase()} row ${i + 1}${cleanTables[t.key][i].description ? ` (${cleanTables[t.key][i].description})` : ""}`);
+      }
+      // bills attached to rows are also listed in data.attachments (viewer + file access), tagged with their row
+      const rowFiles: FormAttachment[] = (schema.tables ?? []).filter((t) => t.rowAttachments)
+        .flatMap((t) => (cleanTables[t.key] ?? []).flatMap((r, i) => rowBills(r).map((b) => ({ ...b, table: t.key, row: i + 1 }))));
+      const allFiles = [...(schema.attachments ? attachments : []), ...rowFiles];
       const clean: FormData = {
-        ...(schema.attachments ? { attachments } : {}),
+        ...(allFiles.length || schema.attachments ? { attachments: allFiles } : {}),
         ...(data.headings ? { headings: data.headings } : {}),
         ...(projectId && !hasProjectPicker ? { project_id: projectId } : {}),
         fields: data.fields,
-        tables: Object.fromEntries(Object.entries(data.tables).map(([k, rows]) => [k, rows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()))])),
+        tables: cleanTables,
       };
       if (existing) {
         const { error } = await (supabase as any).rpc("resubmit_form_request", { p_id: existing.id, p_data: clean, p_authorizer: authorizer || null, ...(approverOptions ? { p_approver: approver } : {}) });
@@ -434,6 +445,13 @@ export default function FormRequestDialog({
                           </div>
                         ))}
                       </div>
+                      {t.rowAttachments && (
+                        <div className="mt-2">
+                          <FormAttachmentsEditor compact max={5} userId={user?.id ?? ""}
+                            label={`${t.rowAttachments.label ?? "Bill"}${t.rowAttachments.required ? " *" : ""}`}
+                            value={rowBills(r)} onChange={(v) => setCell(t.key, i, ROW_BILLS, JSON.stringify(v))} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

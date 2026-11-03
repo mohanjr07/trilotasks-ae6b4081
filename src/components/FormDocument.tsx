@@ -2,7 +2,7 @@
 // the PDF. Always rendered black-on-white (like paper), even in dark mode.
 import { forwardRef } from "react";
 import { format } from "date-fns";
-import { headingOf, approverFor, needsApproval, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
+import { headingOf, rowBills, rowHasData, approverFor, needsApproval, columnTotal, money, type FormData, type FormSchema } from "@/lib/formSchemas";
 
 export type FormRequestRow = {
   id: string;
@@ -107,7 +107,7 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
 
       {/* Tables */}
       {(schema.tables ?? []).map((t) => {
-        const rows = (d.tables?.[t.key] ?? []).filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
+        const rows = (d.tables?.[t.key] ?? []).filter(rowHasData);
         return (
           <div key={t.key} style={{ marginTop: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{t.label}</div>
@@ -116,15 +116,17 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
                 <tr>
                   {t.serial && <th style={{ ...head, width: 40 }}>S.No</th>}
                   {t.columns.map((c) => <th key={c.key} style={{ ...head, width: c.width }}>{headingOf(request.data as any, t.key, c)}</th>)}
+                  {t.rowAttachments && <th style={{ ...head, width: "12%" }}>Bill</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td style={{ ...cell, color: "#888" }} colSpan={t.columns.length + (t.serial ? 1 : 0)}>—</td></tr>
+                  <tr><td style={{ ...cell, color: "#888" }} colSpan={t.columns.length + (t.serial ? 1 : 0) + (t.rowAttachments ? 1 : 0)}>—</td></tr>
                 ) : rows.map((r, i) => (
                   <tr key={i}>
                     {t.serial && <td style={cell}>{i + 1}</td>}
                     {t.columns.map((c) => <td key={c.key} style={cell}>{c.compute ? c.compute(r) : fmtValue(r[c.key], c.type)}</td>)}
+                    {t.rowAttachments && <td style={{ ...cell, fontSize: 10.5, wordBreak: "break-all" }}>{rowBills(r).map((b) => b.name).join(", ") || "—"}</td>}
                   </tr>
                 ))}
                 {t.totals?.length ? (
@@ -136,6 +138,7 @@ const FormDocument = forwardRef<HTMLDivElement, Props>(function FormDocument({ s
                           : ci === t.columns.findIndex((x) => t.totals!.includes(x.key)) - 1 ? "TOTAL" : ""}
                       </td>
                     ))}
+                    {t.rowAttachments && <td style={head} />}
                   </tr>
                 ) : null}
               </tbody>
