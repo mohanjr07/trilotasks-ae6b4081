@@ -98,12 +98,14 @@ export default function FormRequestsPage() {
   // only approvers / authorizers get the "Waiting for me" tab — regular employees just see their own forms
   const email = (user?.email ?? "").toLowerCase();
   const firstName = ((profile as any)?.full_name ?? "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  // Hari sees every production form (raised by production@ or Production-type) — see TRILO_hari_production_forms.sql
+  const seesProduction = email === "hari@triloautomation.com";
   const isReviewer = isApproverAnywhere || REVIEWER_EMAILS.includes(email) ||
     AUTHORIZER_NAMES.some((n) => n.toLowerCase() === firstName);
   const allowed: TabKey[] = [
     ...(isReviewer ? ["waiting" as const] : []), "mine",
     ...(isApproverAnywhere ? ["handled" as const] : []),
-    ...(isAdmin || isApproverAnywhere ? ["all" as const] : []),
+    ...(isAdmin || isApproverAnywhere || seesProduction ? ["all" as const] : []),
   ];
   const fallback: TabKey = isReviewer && waiting.length ? "waiting" : "mine";
   const activeTab: TabKey = tab && allowed.includes(tab) ? tab : fallback;
@@ -137,7 +139,7 @@ export default function FormRequestsPage() {
     ...(isReviewer ? [{ key: "waiting" as const, label: `Waiting for me${waiting.length ? ` (${waiting.length})` : ""}` }] : []),
     { key: "mine" as const, label: `My forms${mine.length ? ` (${mine.length})` : ""}` },
     ...(isApproverAnywhere ? [{ key: "handled" as const, label: "Approved by me" }] : []),
-    ...(isAdmin || isApproverAnywhere ? [{ key: "all" as const, label: "All" }] : []),
+    ...(isAdmin || isApproverAnywhere || seesProduction ? [{ key: "all" as const, label: "All" }] : []),
   ];
   const filters: { key: StatusFilter; label: string }[] = [
     { key: "any", label: "All" },
