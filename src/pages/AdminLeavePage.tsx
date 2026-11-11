@@ -480,7 +480,9 @@ function ReviewModal({ request, onClose }: { request: any; onClose: () => void }
 function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [employeeId, setEmployeeId] = useState("");
+  // several people can get the same leave in one go
+  const [employeeIds, setEmployeeIds] = useState<string[]>([]);
+  const [empFind, setEmpFind] = useState("");
   const [leaveCategory, setLeaveCategory] = useState("casual_leave");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -505,7 +507,8 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
   const needsTime = isPermission || isOdTime;
 
   const resetForm = () => {
-    setEmployeeId("");
+    setEmployeeIds([]);
+    setEmpFind("");
     setLeaveCategory("casual_leave");
     setStartDate("");
     setEndDate("");
@@ -537,22 +540,21 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
 
   const assign = useMutation({
     mutationFn: async () => {
-      if (!employeeId || !startDate || !reason.trim()) {
-        toast.error("Employee, start date, and reason are required");
-        return;
+      if (!employeeIds.length || !startDate || !reason.trim()) {
+        toast.error("Employee(s), start date, and reason are required");
+        return false;
       }
       if (needsTime) {
         if (!startTime || !endTime) {
           toast.error("Start time and end time are required");
-          return;
+          return false;
         }
         if (startTime >= endTime) {
           toast.error("End time must be after start time");
-          return;
+          return false;
         }
       }
       const payload: Record<string, unknown> = {
-        employee_id: employeeId,
         type: isPermission
           ? "permission"
           : leaveCategory === "on_duty"
@@ -575,14 +577,16 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
         payload.start_time = startTime;
         payload.end_time = endTime;
       }
-      const { error } = await supabase.from("leave_requests").insert([payload as any]);
+      const { error } = await supabase.from("leave_requests").insert(employeeIds.map((id) => ({ ...payload, employee_id: id })) as any);
       if (error) throw error;
+      return true;
     },
-    onSuccess: () => {
+    onSuccess: (ok) => {
+      if (!ok) return;
       queryClient.invalidateQueries({ queryKey: ["admin-leave"] });
       queryClient.invalidateQueries({ queryKey: ["casual-leave-usage"] });
       queryClient.invalidateQueries({ queryKey: ["my-leave"] });
-      toast.success("Leave assigned on behalf of employee");
+      toast.success(employeeIds.length > 1 ? `Leave assigned to ${employeeIds.length} people` : "Leave assigned on behalf of employee");
       resetForm();
       onClose();
     },
@@ -596,7 +600,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-ink-primary/30" onClick={onClose} />
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-            className="relative w-full max-w-[460px] rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
+            className="relative w-full max-w-[460px] max-h-[92dvh] overflow-y-auto rounded-modal bg-card p-5 sm:p-6 shadow-modal mx-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-heading text-xl font-bold text-ink-primary">
                 {isPermission ? "Assign Permission on Behalf" : "Assign Leave on Behalf"}
@@ -606,15 +610,49 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink-primary">Employee *</label>
-                <Select value={employeeId} onValueChange={setEmployeeId}>
-                  <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map((e: any) => (
-                      <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {(() => {
+                  const shown = (employees as any[]).filter((e) => !empFind.trim() || (e.full_name ?? "").toLowerCase().includes(empFind.trim().toLowerCase()));
+                  const allShown = shown.length > 0 && shown.every((e) => employeeIds.includes(e.id));
+                  const toggle = (id: string) => setEmployeeIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+                  return (<>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <label className="text-sm font-medium text-ink-primary">
+                        Employees * {employeeIds.length > 0 && <span className="font-normal text-ink-muted">({employeeIds.length} selected)</span>}
+                      </label>
+                      <div className="flex gap-3 text-xs">
+                        {shown.length > 0 && (
+                          <button type="button" className="text-primary hover:underline"
+                            onClick={() => setEmployeeIds((s) => allShown ? s.filter((id) => !shown.some((e) => e.id === id)) : Array.from(new Set([...s, ...shown.map((e) => e.id)])))}>
+                            {allShown ? "Unselect all" : "Select all"}
+                          </button>
+                        )}
+                        {employeeIds.length > 0 && <button type="button" className="text-ink-muted hover:underline" onClick={() => setEmployeeIds([])}>Clear</button>}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-input">
+                      <div className="relative border-b border-border">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                        <input value={empFind} onChange={(e) => setEmpFind(e.target.value)} placeholder="Search people"
+                          className="h-9 w-full bg-transparent pl-9 pr-3 text-sm outline-none" />
+                      </div>
+                      <div className="max-h-44 overflow-y-auto py-1">
+                        {shown.map((e) => {
+                          const on = employeeIds.includes(e.id);
+                          return (
+                            <button type="button" key={e.id} onClick={() => toggle(e.id)}
+                              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted ${on ? "text-primary font-medium" : "text-ink-primary"}`}>
+                              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>
+                                {on && <CheckCircle2 className="h-3 w-3" />}
+                              </span>
+                              {e.full_name}
+                            </button>
+                          );
+                        })}
+                        {!shown.length && <p className="px-3 py-2 text-sm text-ink-muted">No one found</p>}
+                      </div>
+                    </div>
+                  </>);
+                })()}
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-primary">Leave Category *</label>
@@ -758,7 +796,7 @@ function AssignLeaveModal({ open, onClose }: { open: boolean; onClose: () => voi
               <div className="flex gap-3 pt-2">
                 <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
                 <Button onClick={() => assign.mutate()} disabled={assign.isPending} className="flex-1">
-                  {assign.isPending ? "Assigning..." : isPermission ? "Assign Permission" : "Assign Leave"}
+                  {assign.isPending ? "Assigning..." : `${isPermission ? "Assign Permission" : "Assign Leave"}${employeeIds.length > 1 ? ` (${employeeIds.length})` : ""}`}
                 </Button>
               </div>
             </div>
