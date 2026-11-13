@@ -7,8 +7,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
   Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
-  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange, Receipt,
+  FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange, Receipt, Megaphone,
 } from "lucide-react";
+import AnnouncementPopup from "@/components/AnnouncementPopup";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
@@ -33,6 +34,7 @@ const adminNav: NavItem[] = [
   { label: "Forms and Formats", path: "/production-forms", icon: FileStack },
   { label: "My Forms & Approvals", path: "/form-requests", icon: ClipboardCheck },
   { label: "Users", path: "/users", icon: Users },
+  { label: "Announcements", path: "/announcements", icon: Megaphone },
   { label: "Team Members", path: "/team-members", icon: Workflow },
   { label: "Teams", path: "/teams", icon: Video },
   { label: "Calendar", path: "/calendar", icon: Calendar },
@@ -328,6 +330,7 @@ export default function AppLayout() {
         </header>
         <main className="flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <InstallAppBanner />
+          <AnnouncementPopup />
           <Suspense fallback={<div className="flex justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
             <Outlet />
           </Suspense>
