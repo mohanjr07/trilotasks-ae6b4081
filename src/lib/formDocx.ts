@@ -19,7 +19,11 @@ type Rule = {
   part?: "body" | "header";
   mode?: "after" | "underscores";
 };
-type TableRule = { match: RegExp; table: string; cols: Array<string | null>; serial?: number; compact?: boolean };
+type TableRule = {
+  match: RegExp; table: string; cols: Array<string | null>; serial?: number; compact?: boolean;
+  // the Word template still has old columns → rebuild the table with these headings (skipped once the template has them)
+  reshape?: { headers: string[]; widths: number[]; skipIf: RegExp };
+};
 type DocxMap = {
   rules: Rule[];
   tables?: TableRule[];
@@ -98,7 +102,15 @@ const MAPS: Record<string, DocxMap> = {
       { label: /Project\s*:/, field: "project" },
       { label: /Purpose\s*:/, field: "purpose" },
     ],
-    tables: [{ match: /Actual\s+Drawing/i, table: "checks", cols: ["#", "actual", "checked", "correction", "quality"] }],
+    tables: [{
+      match: /Actual\s+Drawing|Assembly\s*No/i, table: "checks",
+      cols: ["#", "assembly_no", "drawing_no", "description", "status", "critical", "actual", "remarks"],
+      reshape: {
+        headers: ["S.No", "Assembly No", "Drawing No", "Description & Overall Dimension", "Status", "Critical Dimension", "Actual Dimensions", "Remarks"],
+        widths: [7, 11, 11, 19, 11, 13, 13, 15],
+        skipIf: /Assembly\s*No/i,
+      },
+    }],
     signatures: "append",
   },
   production: {
@@ -406,11 +418,56 @@ function applyRule(doc: Document, used: Map<Element, Set<string>>, rule: Rule, v
   }
 }
 
+/** Rebuild a template table with new columns: same rows and cell styles, new headings and widths. */
+function reshapeTable(tbl: Element, headerRe: RegExp, r: { headers: string[]; widths: number[] }) {
+  const doc = tbl.ownerDocument;
+  const grid = kids(tbl, "tblGrid")[0];
+  const oldCols = grid ? kids(grid, "gridCol") : [];
+  const total = oldCols.reduce((s, g) => s + (parseInt(g.getAttributeNS(W, "w") || g.getAttribute("w:w") || "0", 10) || 0), 0) || 9600;
+  const sumW = r.widths.reduce((s, w) => s + w, 0);
+  const tw = r.widths.map((w) => Math.round((total * w) / sumW));
+  if (grid) {
+    oldCols.forEach((g) => grid.removeChild(g));
+    tw.forEach((w) => grid.appendChild(el(doc, "gridCol", { w: String(w) })));
+  }
+  const trs = kids(tbl, "tr");
+  const headerIdx = Math.max(0, trs.findIndex((tr) => headerRe.test(textOf(tr))));
+  trs.forEach((tr, ri) => {
+    const tcs = kids(tr, "tc");
+    if (!tcs.length) return;
+    const body = tcs[Math.min(1, tcs.length - 1)];
+    tcs.forEach((tc) => tr.removeChild(tc));
+    r.headers.forEach((h, ci) => {
+      const tc = (ci === 0 ? tcs[0] : body).cloneNode(true) as Element;
+      let pr = kids(tc, "tcPr")[0];
+      if (!pr) { pr = el(doc, "tcPr"); tc.insertBefore(pr, tc.firstChild); }
+      kids(pr, "gridSpan").concat(kids(pr, "vMerge"), kids(pr, "hMerge")).forEach((x) => pr.removeChild(x));
+      let w = kids(pr, "tcW")[0];
+      if (!w) { w = el(doc, "tcW"); pr.insertBefore(w, pr.firstChild); }
+      w.setAttributeNS(W, "w:w", String(tw[ci])); w.setAttributeNS(W, "w:type", "dxa");
+      setCellText(tc, ri === headerIdx ? h : "");
+      if (ri === headerIdx) {
+        // smaller bold heading text so 8 columns fit
+        for (const run of all(tc, "r")) {
+          let rPr = kids(run, "rPr")[0];
+          if (!rPr) { rPr = el(doc, "rPr"); run.insertBefore(rPr, run.firstChild); }
+          kids(rPr, "sz").concat(kids(rPr, "szCs")).forEach((x) => rPr.removeChild(x));
+          if (!kids(rPr, "b").length) rPr.appendChild(el(doc, "b"));
+          rPr.appendChild(el(doc, "sz", { val: "16" })); rPr.appendChild(el(doc, "szCs", { val: "16" }));
+        }
+      }
+      tr.appendChild(tc);
+    });
+  });
+  fixTableLayout(tbl);
+}
+
 function fillTable(doc: Document, rule: TableRule, allRows: Array<Record<string, string>>, schema: FormSchema, spare = 0,
   headings?: Record<string, Record<string, string>>) {
   const rows = allRows.filter((r) => Object.values(r).some((v) => String(v ?? "").trim()));
   const tbl = all(doc, "tbl").find((t) => rule.match.test(textOf(t)));
   if (!tbl) return;
+  if (rule.reshape && !rule.reshape.skipIf.test(textOf(tbl))) reshapeTable(tbl, rule.match, rule.reshape);
   const trs = kids(tbl, "tr");
   const headerIdx = trs.findIndex((tr) => rule.match.test(textOf(tr)));
   let data = trs.slice(headerIdx + 1).filter((tr) => !/TOTAL/.test(textOf(tr)));
