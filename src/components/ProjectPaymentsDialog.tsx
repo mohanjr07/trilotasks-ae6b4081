@@ -3,7 +3,8 @@
 //  Then every project with its own spend — open one to see its breakdown and payment logs.
 import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -245,7 +246,10 @@ function SubProjectSplit({ rows }: { rows: Row[] }) {
   );
 }
 
-function PaymentLogs({ rows, names, projectName }: { rows: Row[]; names: Record<string, string>; projectName?: (id: string | null) => string }) {
+/** Admins: move a payment to another project (or to "No project"). */
+type MoveTo = { projects: Proj[]; busy: string | null; onMove: (id: string, projectId: string | null) => void };
+
+function PaymentLogs({ rows, names, projectName, moveTo }: { rows: Row[]; names: Record<string, string>; projectName?: (id: string | null) => string; moveTo?: MoveTo }) {
   const [filter, setFilter] = useState<"spend" | "pending" | "rejected" | "all">("all");
   const shown = rows.filter((r) =>
     filter === "all" ? true : filter === "spend" ? isSpend(r.status) : filter === "pending" ? isPending(r.status) : r.status === "rejected");
@@ -297,9 +301,22 @@ function PaymentLogs({ rows, names, projectName }: { rows: Row[]; names: Record<
                     )}
                   </div>
                 </div>
-                <p className={`shrink-0 font-heading text-base font-bold ${r.status === "rejected" ? "text-ink-muted line-through" : "text-ink-primary"}`}>
-                  {formatINR(r.amount)}
-                </p>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <p className={`font-heading text-base font-bold ${r.status === "rejected" ? "text-ink-muted line-through" : "text-ink-primary"}`}>
+                    {formatINR(r.amount)}
+                  </p>
+                  {moveTo && (
+                    <div className="flex items-center gap-1.5">
+                      {moveTo.busy === r.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-muted" />}
+                      <select value={r.project_id ?? ""} disabled={moveTo.busy === r.id} aria-label="Move to project"
+                        onChange={(e) => moveTo.onMove(r.id, e.target.value || null)}
+                        className={`h-8 max-w-[210px] rounded-md border px-2 text-xs ${r.project_id ? "border-input bg-background text-ink-secondary" : "border-primary/50 bg-accent-light text-primary font-medium"}`}>
+                        <option value="">{r.project_id ? "Move to: No project" : "Move to project…"}</option>
+                        {moveTo.projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -319,6 +336,24 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<"projects" | "subprojects">("projects");
   const [find, setFind] = useState("");
+  // admins can move payments between projects (e.g. out of "No project")
+  const { profile } = useAuth();
+  const canMove = profile?.role === "admin" || profile?.role === "super_admin";
+  const qc = useQueryClient();
+  const [moving, setMoving] = useState<string | null>(null);
+  const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
+  const movePayment = async (id: string, projectId: string | null) => {
+    setMoving(id);
+    const { error } = await (supabase as any).rpc("set_payment_project", { p_id: id, p_project: projectId });
+    setMoving(null);
+    if (error) {
+      toast.error(/set_payment_project|schema cache|function/i.test(error.message ?? "") ? "Run TRILO_payment_move_project.sql first" : error.message);
+      return;
+    }
+    toast.success(`Moved to ${projectId ? sortedProjects.find((p) => p.id === projectId)?.name ?? "project" : "No project"}`);
+    qc.invalidateQueries({ queryKey: ["project-expenses"] });
+  };
+  const moveTo = canMove ? { projects: sortedProjects, busy: moving, onMove: movePayment } : undefined;
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["project-expenses"],
@@ -459,7 +494,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                           <SummaryTiles t={t} />
                           <SubProjectSplit rows={pr} />
                         </div>
-                        <PaymentLogs rows={pr} names={names} />
+                        <PaymentLogs rows={pr} names={names} moveTo={moveTo} />
                       </div>
                     )}
                   </div>
