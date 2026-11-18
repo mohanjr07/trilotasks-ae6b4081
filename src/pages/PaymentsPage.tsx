@@ -182,6 +182,24 @@ export default function PaymentsPage() {
     },
     onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
   });
+  // admins: change the project of any request (also after approval / payment) — expense tracking follows it
+  const projectMutation = useMutation({
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string | null }) => {
+      const { error } = await (supabase as any).rpc("set_payment_project", { p_id: id, p_project: projectId });
+      if (error) {
+        if (/set_payment_project|schema cache|function/i.test(error.message ?? "")) throw new Error("run TRILO_payment_move_project.sql first");
+        throw error;
+      }
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ["payment-requests"] });
+      qc.invalidateQueries({ queryKey: ["project-expenses"] });
+      const p = (projects as Array<{ id: string; name: string }>).find((x) => x.id === v.projectId);
+      setSelected((s) => (s && s.id === v.id ? { ...s, project_id: v.projectId, project: p ? { ...(s.project ?? {}), name: p.name } : null } as any : s));
+      toast.success(`Moved to ${p?.name ?? "No project"}`);
+    },
+    onError: (e: any) => toast.error("Failed: " + (e?.message ?? "")),
+  });
   const accountMutation = useMutation({
     mutationFn: async ({ id, account }: { id: string; account: string }) => {
       const { error } = await (supabase as any).rpc("set_payment_account", { p_id: id, p_paid_from: account });
@@ -474,7 +492,18 @@ export default function PaymentsPage() {
                   )}
                   <div className="flex items-center justify-between">
                     <span className="text-ink-muted">Project</span>
-                    <span className="text-ink-primary font-medium truncate max-w-[200px]">{selected.project?.name ?? "—"}</span>
+                    {isAdmin ? (
+                      <Select value={(selected as any).project_id ?? "__none__"} disabled={projectMutation.isPending}
+                        onValueChange={(v) => projectMutation.mutate({ id: selected.id, projectId: v === "__none__" ? null : v })}>
+                        <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose project" /></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          <SelectItem value="__none__">No project</SelectItem>
+                          {(projects as Array<{ id: string; name: string }>).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="text-ink-primary font-medium truncate max-w-[200px]">{selected.project?.name ?? "—"}</span>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-ink-muted">Subproject</span>
