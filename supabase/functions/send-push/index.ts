@@ -143,7 +143,9 @@ Deno.serve(async (req) => {
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", n.user_id)
-      .eq("is_read", false);
+      .eq("is_read", false)
+      // app-icon badge counts only the last 7 days, so old unread ones don't pile up to "999+"
+      .gte("created_at", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString());
 
     let sent = 0;
     const dead: string[] = [];
