@@ -52,11 +52,12 @@ export function preloadRoute(path: string) {
   PAGES[key]().catch(() => started.delete(key));
 }
 
-/** Quietly fetch the given pages first, then all the others, one at a time while the app is idle. */
+/** Quietly fetch the given pages (the bottom-bar tabs), one at a time while the app is idle. */
 export function preloadAllRoutes(first: string[] = []) {
   const conn = (navigator as any).connection;
   if (conn?.saveData) return;                                   // respect "data saver"
-  const queue = [...first, ...Object.keys(PAGES).filter((p) => !first.includes(p))];
+  // only the bottom-bar pages; the rest load the moment their menu link is touched
+  const queue = [...first];
   const idle = (cb: () => void) =>
     (window as any).requestIdleCallback ? (window as any).requestIdleCallback(cb, { timeout: 2000 }) : setTimeout(cb, 200);
   const next = () => {
@@ -65,5 +66,5 @@ export function preloadAllRoutes(first: string[] = []) {
     preloadRoute(p);
     idle(next);
   };
-  setTimeout(() => idle(next), 1200);                            // let the first screen finish first
+  setTimeout(() => idle(next), 2500);                            // let the first screen finish first
 }

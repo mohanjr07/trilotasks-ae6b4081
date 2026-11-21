@@ -367,7 +367,7 @@ export default function AppLayout() {
         {/* Header */}
         {/* Phone header: avatar + greeting / page title, round action buttons */}
         {!isDesktop && (
-        <header className="md:hidden sticky top-0 z-20 pt-safe bg-background/85 backdrop-blur-md">
+        <header className="md:hidden sticky top-0 z-20 pt-safe bg-background">
           <div className="flex items-center gap-3 px-4 py-3">
             <Link to="/profile" aria-label="My profile" className="shrink-0 rounded-full ring-2 ring-card shadow-sm">
               <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-11 !w-11 !text-sm" />
@@ -419,7 +419,7 @@ export default function AppLayout() {
       <nav className="fixed inset-x-3 z-30 md:hidden [transform:translateZ(0)]" style={{ bottom: "calc(var(--sab) + 10px)" }}>
         <div ref={barRef} onPointerDown={onBarDown} onPointerMove={onBarMove} onPointerUp={onBarUp} onPointerCancel={onBarUp}
           style={{ touchAction: "none" }}
-          className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md select-none">
+          className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] select-none">
           {mobileTabs.map((item, idx) => {
             const active = dragIdx !== null ? dragIdx === idx : (location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms")));
             return (

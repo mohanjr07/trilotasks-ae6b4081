@@ -15,12 +15,15 @@ export default function AnimatedPage({ children, className }: { children: ReactN
   );
 }
 
-export const staggerContainer = {
+// Phones: lists appear at once (animating every row one by one makes cheaper phones stutter)
+const isPhone = typeof window !== "undefined" && window.matchMedia?.("(max-width: 767px)").matches;
+
+export const staggerContainer = isPhone ? { hidden: { opacity: 1 }, visible: { opacity: 1 } } : {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.025 } },
 };
 
-export const staggerItem = {
+export const staggerItem = isPhone ? { hidden: { opacity: 1 }, visible: { opacity: 1 } } : {
   hidden: { opacity: 0, y: 6 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.18 } },
 };
