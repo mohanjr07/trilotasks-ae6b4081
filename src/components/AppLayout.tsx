@@ -156,6 +156,15 @@ export default function AppLayout() {
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const firstName = (profile?.full_name ?? "").trim().split(/\s+/)[0] || "there";
   const isHome = ["/dashboard", "/my-dashboard", "/intern-dashboard"].includes(location.pathname);
+  // only ONE header is mounted (phone or desktop) — two NotificationBells would
+  // open the same realtime channel twice and crash the app
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const on = () => setIsDesktop(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
   // Close the phone menu whenever the page changes
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   // Android app: register this phone for push notifications once logged in
@@ -320,6 +329,7 @@ export default function AppLayout() {
       <div className="flex-1 min-w-0 md:ml-60 flex flex-col min-h-screen">
         {/* Header */}
         {/* Phone header: avatar + greeting / page title, round action buttons */}
+        {!isDesktop && (
         <header className="md:hidden sticky top-0 z-20 pt-safe bg-background/85 backdrop-blur-md">
           <div className="flex items-center gap-3 px-4 py-3">
             <Link to="/profile" aria-label="My profile" className="shrink-0 rounded-full ring-2 ring-card shadow-sm">
@@ -343,7 +353,9 @@ export default function AppLayout() {
             </div>
           </div>
         </header>
+        )}
         {/* Desktop header */}
+        {isDesktop && (
         <header className="hidden md:flex sticky top-0 z-20 h-header pt-safe items-center gap-2 border-b border-border bg-card/80 backdrop-blur-sm px-8">
           <h1 className="font-heading text-lg font-semibold text-ink-primary hidden md:block">
             {nav.find((n) => n.path === location.pathname)?.label ?? ""}
@@ -355,6 +367,7 @@ export default function AppLayout() {
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-8 !w-8 !text-xs" />
           </Link>
         </header>
+        )}
         <main className="flex-1 px-4 pt-2 pb-32 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <InstallAppBanner />
           <AnnouncementPopup />
