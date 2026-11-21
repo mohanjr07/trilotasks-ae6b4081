@@ -150,6 +150,11 @@ export default function AppLayout() {
     .map((p) => nav.find((n) => n.path === p))
     .filter(Boolean) as NavItem[];
   const currentLabel = nav.find((n) => n.path === location.pathname)?.label ?? "";
+  // phone header: "Good Morning" on the home tab, the page name elsewhere
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  const firstName = (profile?.full_name ?? "").trim().split(/\s+/)[0] || "there";
+  const isHome = ["/dashboard", "/my-dashboard", "/intern-dashboard"].includes(location.pathname);
   // Close the phone menu whenever the page changes
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
   // Android app: register this phone for push notifications once logged in
@@ -313,22 +318,43 @@ export default function AppLayout() {
       {/* Main content */}
       <div className="flex-1 min-w-0 md:ml-60 flex flex-col min-h-screen">
         {/* Header */}
-        <header className="sticky top-0 z-20 flex h-header pt-safe items-center gap-1 md:gap-2 border-b border-border bg-card/80 backdrop-blur-sm px-4 md:px-8">
-          <button className="md:hidden -ml-2 flex h-10 w-10 items-center justify-center rounded-full text-ink-secondary hover:bg-muted" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
-            <Menu className="h-5 w-5" />
-          </button>
-          <span className="md:hidden font-heading text-base font-semibold text-ink-primary truncate">{currentLabel}</span>
+        {/* Phone header: avatar + greeting / page title, round action buttons */}
+        <header className="md:hidden sticky top-0 z-20 pt-safe bg-background/85 backdrop-blur-md">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <Link to="/profile" aria-label="My profile" className="shrink-0 rounded-full ring-2 ring-card shadow-sm">
+              <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-11 !w-11 !text-sm" />
+            </Link>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="truncate text-[15px] font-semibold text-ink-primary">
+                {isHome ? `${greeting}` : currentLabel || "TaskFlow"}
+              </p>
+              <p className="truncate text-xs text-ink-muted">
+                {isHome ? (profile?.full_name ?? "") : `${greeting}, ${firstName}`}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-sm [&>button]:h-11 [&>button]:w-11"><ThemeToggle /></span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-sm [&>div>button]:h-11 [&>div>button]:w-11"><NotificationBell /></span>
+              <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-ink-primary text-background shadow-md active:scale-95 transition-transform">
+                <Menu className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </header>
+        {/* Desktop header */}
+        <header className="hidden md:flex sticky top-0 z-20 h-header pt-safe items-center gap-2 border-b border-border bg-card/80 backdrop-blur-sm px-8">
           <h1 className="font-heading text-lg font-semibold text-ink-primary hidden md:block">
             {nav.find((n) => n.path === location.pathname)?.label ?? ""}
           </h1>
           <div className="flex-1" />
           <ThemeToggle />
           <NotificationBell />
-          <Link to="/profile" className="-mr-2 md:mr-0 flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted transition-colors" aria-label="My profile">
+          <Link to="/profile" className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-muted transition-colors" aria-label="My profile">
             <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-8 !w-8 !text-xs" />
           </Link>
         </header>
-        <main className="flex-1 px-4 pt-5 pb-24 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
+        <main className="flex-1 px-4 pt-2 pb-32 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <InstallAppBanner />
           <AnnouncementPopup />
           <Suspense fallback={<div className="flex justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
@@ -336,37 +362,32 @@ export default function AppLayout() {
           </Suspense>
         </main>
       </div>
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 md:hidden [transform:translateZ(0)] border-t border-border bg-card/95 backdrop-blur-md shadow-[0_-4px_16px_rgba(0,0,0,0.04)] pb-safe">
-        <div className="grid grid-cols-5 h-16">
+      {/* Mobile bottom tab bar — floating rounded bar, dark pill on the active tab */}
+      <nav className="fixed inset-x-3 z-30 md:hidden [transform:translateZ(0)]" style={{ bottom: "calc(var(--sab) + 10px)" }}>
+        <div className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md">
           {mobileTabs.map((item) => {
             const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms"));
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className="flex flex-col items-center justify-center gap-1 min-w-0"
+                className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[22px]"
                 aria-current={active ? "page" : undefined}
               >
-                <span
-                  className={cn(
-                    "relative flex h-8 w-14 items-center justify-center rounded-full transition-colors",
-                    active ? "bg-accent-light text-primary" : "text-ink-muted"
-                  )}
-                >
+                {active && (
+                  <motion.span layoutId="mobile-tab-pill" className="absolute inset-0 rounded-[22px] bg-ink-primary shadow-md"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }} />
+                )}
+                <span className={cn("relative z-10 flex items-center justify-center", active ? "text-background" : "text-ink-muted")}>
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
                   {pending[item.path] ? (
-                    <span className="absolute -top-1 right-1.5 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+                    <span className="absolute -top-2 -right-3 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
                       {pending[item.path] > 99 ? "99+" : pending[item.path]}
                     </span>
                   ) : null}
                 </span>
-                <span
-                  className={cn(
-                    "w-full truncate text-center text-[11px] leading-none",
-                    active ? "font-semibold text-primary" : "font-medium text-ink-muted"
-                  )}
-                >
+                <span className={cn("relative z-10 w-full truncate px-0.5 text-center text-[10.5px] leading-none",
+                  active ? "font-semibold text-background" : "font-medium text-ink-muted")}>
                   {shortLabel[item.path] ?? item.label}
                 </span>
               </Link>
