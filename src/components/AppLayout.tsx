@@ -433,10 +433,14 @@ export default function AppLayout() {
                 aria-current={active ? "page" : undefined}
               >
                 {active && (
-                  <motion.span layoutId="mobile-tab-pill" className="absolute inset-0 rounded-[22px] bg-ink-primary shadow-md"
-                    transition={{ type: "spring", stiffness: 420, damping: 34 }} />
+                  // while sliding: the pill lifts and grows into a clear "liquid glass" lens
+                  <motion.span layoutId="mobile-tab-pill"
+                    className={cn("absolute inset-0 rounded-[22px]", dragIdx !== null ? "glass-pill" : "bg-ink-primary shadow-md")}
+                    animate={{ scale: dragIdx !== null ? 1.18 : 1, y: dragIdx !== null ? -7 : 0 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 26, mass: 0.8 }} />
                 )}
-                <span className={cn("relative z-10 flex items-center justify-center", active ? "text-background" : "text-ink-muted")}>
+                <span className={cn("relative z-10 flex items-center justify-center transition-transform duration-200",
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-[1.18] text-ink-primary" : active ? "text-background" : "text-ink-muted")}>
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
                   {pending[item.path] ? (
                     <span className="absolute -top-2 -right-3 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
@@ -444,8 +448,9 @@ export default function AppLayout() {
                     </span>
                   ) : null}
                 </span>
-                <span className={cn("relative z-10 w-full truncate px-0.5 text-center text-[10.5px] leading-none",
-                  active ? "font-semibold text-background" : "font-medium text-ink-muted")}>
+                <span className={cn("relative z-10 w-full truncate px-0.5 text-center text-[10.5px] leading-none transition-transform duration-200",
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-110 font-semibold text-ink-primary"
+                    : active ? "font-semibold text-background" : "font-medium text-ink-muted")}>
                   {shortLabel[item.path] ?? item.label}
                 </span>
               </Link>
