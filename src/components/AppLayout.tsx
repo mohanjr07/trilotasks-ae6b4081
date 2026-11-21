@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { usePendingCounts } from "@/hooks/usePendingCounts";
 import { initPush } from "@/lib/push";
 import { Outlet, useLocation, useNavigate, Link } from "react-router-dom";
@@ -158,6 +158,37 @@ export default function AppLayout() {
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const firstName = (profile?.full_name ?? "").trim().split(/\s+/)[0] || "there";
   const isHome = ["/dashboard", "/my-dashboard", "/intern-dashboard"].includes(location.pathname);
+  // bottom bar: press and slide a finger along it to move between tabs (the dark pill follows)
+  const barRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; moved: boolean; idx: number | null } | null>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const tabAt = (x: number) => {
+    const tabs = Array.from(barRef.current?.querySelectorAll<HTMLElement>("[data-tab]") ?? []);
+    const i = tabs.findIndex((t) => { const r = t.getBoundingClientRect(); return x >= r.left && x <= r.right; });
+    return i < 0 ? null : i;
+  };
+  const onBarDown = (e: React.PointerEvent) => { drag.current = { x: e.clientX, moved: false, idx: null }; };
+  const onBarMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    if (!d.moved) {
+      if (Math.abs(e.clientX - d.x) < 10) return;
+      d.moved = true;
+      try { barRef.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+    const i = tabAt(e.clientX);
+    if (i !== null && i !== d.idx) {
+      d.idx = i;
+      setDragIdx(i);
+      try { navigator.vibrate?.(8); } catch { /* not supported */ }
+    }
+  };
+  const onBarUp = () => {
+    const d = drag.current;
+    if (d?.moved && d.idx !== null && mobileTabs[d.idx]) navigate(mobileTabs[d.idx].path);
+    // keep the "was a drag" flag until the click that follows, then clear
+    setTimeout(() => { drag.current = null; setDragIdx(null); }, 0);
+  };
   // only ONE header is mounted (phone or desktop) — two NotificationBells would
   // open the same realtime channel twice and crash the app
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches);
@@ -386,13 +417,18 @@ export default function AppLayout() {
       </div>
       {/* Mobile bottom tab bar — floating rounded bar, dark pill on the active tab */}
       <nav className="fixed inset-x-3 z-30 md:hidden [transform:translateZ(0)]" style={{ bottom: "calc(var(--sab) + 10px)" }}>
-        <div className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md">
-          {mobileTabs.map((item) => {
-            const active = location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms"));
+        <div ref={barRef} onPointerDown={onBarDown} onPointerMove={onBarMove} onPointerUp={onBarUp} onPointerCancel={onBarUp}
+          style={{ touchAction: "none" }}
+          className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card/95 p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md select-none">
+          {mobileTabs.map((item, idx) => {
+            const active = dragIdx !== null ? dragIdx === idx : (location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms")));
             return (
               <Link
                 key={item.path}
                 to={item.path} onMouseEnter={() => preloadRoute(item.path)} onTouchStart={() => preloadRoute(item.path)}
+                data-tab
+                draggable={false}
+                onClick={(e) => { if (drag.current?.moved) e.preventDefault(); }}
                 className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[22px]"
                 aria-current={active ? "page" : undefined}
               >
