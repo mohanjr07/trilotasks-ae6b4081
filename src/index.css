@@ -245,3 +245,32 @@ html, body {
     box-shadow: var(--shadow-lg);
   }
 }
+
+/* ───────── Smooth feel (all screens) ───────── */
+html {
+  -webkit-tap-highlight-color: transparent;   /* no grey flash on tap */
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;                 /* taps react at once: no 300 ms wait, no double-tap zoom */
+}
+/* lists and pop-ups scroll smoothly and don't drag the page behind them */
+.overflow-y-auto, .overflow-auto, .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+/* phones/tablets: a light press-in so every tap is felt straight away */
+@media (hover: none) {
+  button:not(:disabled):active,
+  a[href]:active,
+  [role="button"]:active {
+    transform: scale(0.97);
+  }
+}
+/* people who turned on "reduce motion" get no animations */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import PageSkeleton from "@/components/PageSkeleton";
+import { preloadRoute, preloadAllRoutes } from "@/lib/routePreload";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
@@ -167,6 +169,10 @@ export default function AppLayout() {
   }, []);
   // Close the phone menu whenever the page changes
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  // every new page starts at the top (no landing half-way down the previous page's scroll)
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior }); }, [location.pathname]);
+  // once signed in, quietly download the other pages so they open instantly (bottom-bar tabs first)
+  useEffect(() => { if (profile?.id) preloadAllRoutes(mobileTabs.map((t) => t.path)); }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Android app: register this phone for push notifications once logged in
   useEffect(() => { if (profile?.id) initPush(navigate); }, [profile?.id, navigate]);
   useEffect(() => {
@@ -211,7 +217,7 @@ export default function AppLayout() {
               return (
                 <li key={item.path}>
                   <Link
-                    to={item.path}
+                    to={item.path} onMouseEnter={() => preloadRoute(item.path)} onTouchStart={() => preloadRoute(item.path)}
                     className={cn(
                       "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                       active ? "text-primary" : "text-ink-secondary hover:bg-muted hover:text-ink-primary"
@@ -294,7 +300,7 @@ export default function AppLayout() {
                   return (
                     <li key={item.path}>
                       <Link
-                        to={item.path}
+                        to={item.path} onMouseEnter={() => preloadRoute(item.path)} onTouchStart={() => preloadRoute(item.path)}
                         onClick={() => setSidebarOpen(false)}
                         className={cn(
                           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -371,7 +377,7 @@ export default function AppLayout() {
         <main className="flex-1 px-4 pt-2 pb-32 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
           <InstallAppBanner />
           <AnnouncementPopup />
-          <Suspense fallback={<div className="flex justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
+          <Suspense fallback={<PageSkeleton />}>
             <ErrorBoundary inline key={location.pathname}>
               <Outlet />
             </ErrorBoundary>
@@ -386,7 +392,7 @@ export default function AppLayout() {
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                to={item.path} onMouseEnter={() => preloadRoute(item.path)} onTouchStart={() => preloadRoute(item.path)}
                 className="relative flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[22px]"
                 aria-current={active ? "page" : undefined}
               >
