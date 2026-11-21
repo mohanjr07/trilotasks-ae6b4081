@@ -116,23 +116,24 @@ export default function ProjectsPage() {
 
   return (
     <AnimatedPage>
-      <div className="flex items-center justify-between mb-6">
+      {/* phones: title on its own line, buttons below in equal pills; desktop: one row */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Projects</h1>
           <p className="text-sm text-ink-muted">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate("/project-forms")} className="gap-2">
+          <Button variant="outline" onClick={() => navigate("/project-forms")} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
             <FileStack className="h-4 w-4" /> Forms
           </Button>
           {canSeePayments && (
-            <Button variant="outline" onClick={() => setExpensesOpen(true)} className="gap-2">
+            <Button variant="outline" onClick={() => setExpensesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
               <IndianRupee className="h-4 w-4" /> Expenses
             </Button>
           )}
           {isAdmin && (
-            <Button onClick={() => setCreateOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" /> New Project
+            <Button onClick={() => setCreateOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
+              <Plus className="h-4 w-4" /> <span className="sm:hidden">New</span><span className="hidden sm:inline">New Project</span>
             </Button>
           )}
         </div>
