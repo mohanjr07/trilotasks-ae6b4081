@@ -1,8 +1,9 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<ErrorBoundary><App /></ErrorBoundary>);
 
 // Register the service worker so the website can be installed as a phone app
 if (

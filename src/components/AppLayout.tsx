@@ -10,6 +10,7 @@ import {
   FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange, Receipt, Megaphone,
 } from "lucide-react";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
@@ -358,7 +359,9 @@ export default function AppLayout() {
           <InstallAppBanner />
           <AnnouncementPopup />
           <Suspense fallback={<div className="flex justify-center py-24"><div className="h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
-            <Outlet />
+            <ErrorBoundary inline key={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </Suspense>
         </main>
       </div>
