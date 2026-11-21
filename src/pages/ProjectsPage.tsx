@@ -613,10 +613,10 @@ function ProjectCard({
                               initial={{ opacity: 0, y: 6 }}
                               animate={{ opacity: 1, y: 0 }}
                               onClick={() => setSelectedTask(task)}
-                              className="flex items-center gap-3 rounded-lg bg-muted/30 border border-border p-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+                              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-muted/30 border border-border p-3 cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
                             >
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-ink-primary truncate">{task.title}</p>
+                              <div className="min-w-0 flex-1 max-sm:basis-full">
+                                <p className="text-sm font-semibold text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{task.title}</p>
                                 {task.deadline && (
                                   <p className={`text-[11px] mt-0.5 ${isOverdue ? "text-destructive font-medium" : "text-ink-muted"}`}>
                                     Due {format(new Date(task.deadline), "MMM d, yyyy")}

@@ -179,11 +179,11 @@ export default function CompletedTasksPage() {
                       <button
                         key={`${g.user.id}-${t.id}`}
                         onClick={() => setSelectedTask(t)}
-                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-muted/40 transition-colors text-left"
+                        className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3 hover:bg-muted/40 transition-colors text-left"
                       >
                         <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-ink-primary truncate">{t.title}</p>
+                        <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3rem)]">
+                          <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{t.title}</p>
                           <p className="text-xs text-ink-muted">
                             Completed {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
                             {t.deadline && ` · was due ${format(new Date(t.deadline), "MMM d")}`}
@@ -205,11 +205,11 @@ export default function CompletedTasksPage() {
               key={t.id}
               variants={staggerItem}
               onClick={() => setSelectedTask(t)}
-              className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-muted/40 transition-colors text-left"
+              className="w-full flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5 hover:bg-muted/40 transition-colors text-left"
             >
               <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-ink-primary truncate">{t.title}</p>
+              <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3rem)]">
+                <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{t.title}</p>
                 <p className="text-xs text-ink-muted">
                   Completed {formatDistanceToNow(new Date(t.updated_at), { addSuffix: true })}
                   {t.deadline && ` · was due ${format(new Date(t.deadline), "MMM d")}`}

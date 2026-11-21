@@ -342,14 +342,14 @@ export default function AppLayout() {
               <UserAvatar name={profile?.full_name ?? ""} avatarUrl={profile?.avatar_url} size="sm" className="!h-11 !w-11 !text-sm" />
             </Link>
             <div className="min-w-0 flex-1 leading-tight">
-              <p className="truncate text-[15px] font-semibold text-ink-primary">
+              <p className="truncate text-[15px] max-[389px]:text-[13px] font-semibold text-ink-primary">
                 {isHome ? `${greeting}` : currentLabel || "TaskFlow"}
               </p>
               <p className="truncate text-xs text-ink-muted">
                 {isHome ? (profile?.full_name ?? "") : `${greeting}, ${firstName}`}
               </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2 max-[389px]:gap-1.5">
               <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-sm [&>button]:h-11 [&>button]:w-11"><ThemeToggle /></span>
               <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-card shadow-sm [&>div>button]:h-11 [&>div>button]:w-11"><NotificationBell /></span>
               <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"

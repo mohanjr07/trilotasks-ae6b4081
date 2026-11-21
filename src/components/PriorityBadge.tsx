@@ -8,7 +8,7 @@ const config: Record<string, string> = {
 
 export default function PriorityBadge({ priority }: { priority: string }) {
   return (
-    <span className={cn("inline-flex rounded-pill px-2.5 py-0.5 text-xs font-medium capitalize", config[priority] ?? config.medium)}>
+    <span className={cn("inline-flex shrink-0 whitespace-nowrap rounded-pill px-2.5 py-0.5 text-xs font-medium capitalize", config[priority] ?? config.medium)}>
       {priority}
     </span>
   );

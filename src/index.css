@@ -274,3 +274,9 @@ html {
     scroll-behavior: auto !important;
   }
 }
+
+/* ───────── Phones of every size: nothing spills out of its card ───────── */
+@media (max-width: 767px) {
+  body { overflow-x: clip; }                       /* no sideways wobble (clip keeps the sticky header working) */
+  p, h1, h2, h3, h4, li, td, dd { overflow-wrap: break-word; }   /* long words / IDs wrap inside their box */
+}

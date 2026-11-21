@@ -143,10 +143,10 @@ export default function InternAdminDashboard() {
             <motion.div
               key={task.id}
               variants={staggerItem}
-              className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg p-3 hover:bg-muted transition-colors"
             >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+              <div className="min-w-0 flex-1 max-sm:basis-full">
+                <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{task.title}</p>
                 {task.deadline && (
                   <p className="text-xs text-ink-muted">
                     Due {format(new Date(task.deadline), "MMM d")}
@@ -155,7 +155,7 @@ export default function InternAdminDashboard() {
               </div>
               <PriorityBadge priority={task.priority ?? "medium"} />
               <StatusBadge status={task.status ?? "todo"} />
-              <div className="flex items-center gap-2 text-xs text-ink-muted w-20">
+              <div className="flex items-center gap-2 text-xs text-ink-muted max-sm:min-w-[96px] max-sm:flex-1 sm:w-20">
                 <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}

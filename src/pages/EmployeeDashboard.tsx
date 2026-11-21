@@ -68,14 +68,14 @@ export default function EmployeeDashboard() {
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Active Tasks</h3>
         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-3">
           {activeTasks.map((task) => (
-            <motion.div key={task.id} variants={staggerItem} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+            <motion.div key={task.id} variants={staggerItem} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg p-3 hover:bg-muted transition-colors">
+              <div className="min-w-0 flex-1 max-sm:basis-full">
+                <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{task.title}</p>
                 {task.deadline && <p className="text-xs text-ink-muted">Due {format(new Date(task.deadline), "MMM d")}</p>}
               </div>
               <PriorityBadge priority={task.priority ?? "medium"} />
               <StatusBadge status={task.status ?? "todo"} />
-              <div className="flex items-center gap-2 text-xs text-ink-muted w-20">
+              <div className="flex items-center gap-2 text-xs text-ink-muted max-sm:min-w-[96px] max-sm:flex-1 sm:w-20">
                 <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                   <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress}%` }} transition={{ duration: 0.6 }} className="h-full rounded-full bg-primary" />
                 </div>

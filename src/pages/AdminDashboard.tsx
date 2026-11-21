@@ -165,15 +165,15 @@ export default function AdminDashboard() {
                   key={task.id}
                   variants={staggerItem}
                   onClick={() => setSelectedTask(task)}
-                  className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors cursor-pointer"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg p-3 hover:bg-muted transition-colors cursor-pointer"
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+                  <div className="min-w-0 flex-1 max-sm:basis-full">
+                    <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{task.title}</p>
                     <p className="text-xs text-ink-muted">Assigned by {task.assigner?.full_name ?? "Admin"}</p>
                   </div>
                   <PriorityBadge priority={task.priority ?? "medium"} />
                   <StatusBadge status={task.status ?? "todo"} />
-                  <div className="hidden sm:flex items-center gap-2 text-xs text-ink-muted w-24">
+                  <div className="flex items-center gap-2 text-xs text-ink-muted max-sm:min-w-[96px] max-sm:flex-1 sm:w-24">
                     <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress ?? 0}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
                         className="h-full rounded-full bg-primary" />
@@ -197,17 +197,17 @@ export default function AdminDashboard() {
             const assignees = task.task_assignees?.map((a: any) => a.user) ?? [];
             const primary = assignees[0];
             return (
-              <div key={task.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-muted transition-colors">
+              <div key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg p-3 hover:bg-muted transition-colors">
                 <UserAvatar name={primary?.full_name ?? "?"} avatarUrl={primary?.avatar_url} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink-primary truncate">{task.title}</p>
+                <div className="min-w-0 flex-1 max-sm:basis-[calc(100%-3rem)]">
+                  <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{task.title}</p>
                   <p className="text-xs text-ink-muted">
                     {assignees.length === 0 ? "Unassigned" : assignees.length === 1 ? primary?.full_name : `${primary?.full_name} +${assignees.length - 1} more`}
                   </p>
                 </div>
                 <PriorityBadge priority={task.priority} />
                 <StatusBadge status={task.status} />
-                <div className="hidden sm:flex items-center gap-2 text-xs text-ink-muted w-24">
+                <div className="flex items-center gap-2 text-xs text-ink-muted max-sm:min-w-[96px] max-sm:flex-1 sm:w-24">
                   <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                     <motion.div initial={{ width: 0 }} animate={{ width: `${task.progress}%` }} transition={{ duration: 0.6, ease: "easeOut" }}
                       className="h-full rounded-full bg-primary" />

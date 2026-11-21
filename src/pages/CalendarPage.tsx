@@ -327,9 +327,9 @@ export default function CalendarPage() {
                 <h4 className="text-xs font-semibold text-ink-muted uppercase mb-2">Tasks ({selectedEvents.tasks.length})</h4>
                 <div className="space-y-2">
                   {selectedEvents.tasks.map((t: any) => (
-                    <div key={t.id} className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-ink-primary truncate">{t.title}</p>
+                    <div key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-muted/50 p-3">
+                      <div className="min-w-0 flex-1 max-sm:basis-full">
+                        <p className="text-sm font-medium text-ink-primary break-words max-sm:line-clamp-2 sm:truncate">{t.title}</p>
                         {isAdminOrManager && t.profiles && <p className="text-xs text-ink-muted">{(t.profiles as any)?.full_name}</p>}
                       </div>
                       <StatusBadge status={t.status ?? "todo"} />
