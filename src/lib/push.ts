@@ -48,6 +48,12 @@ export async function initPush(navigate: (path: string) => void): Promise<void> 
       navigate(typeof route === "string" && route.startsWith("/") ? route : "/notifications");
     });
 
+    // Opening the app clears its notifications from the phone's tray, which also
+    // resets the red number on the app icon (it would otherwise stay until the next push).
+    const clearTray = () => { try { Push.removeAllDeliveredNotifications?.()?.catch?.(() => {}); } catch { /* ignore */ } };
+    clearTray();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) clearTray(); });
+
     let perm = await Push.checkPermissions();
     if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
       perm = await Push.requestPermissions();
