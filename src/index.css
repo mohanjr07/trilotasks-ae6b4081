@@ -324,7 +324,13 @@ html {
   .tint-red    { --tint-a: hsl(var(--danger-light));  --tint-b: hsl(var(--danger-light) / .45);  --tint-edge: hsl(var(--destructive) / .14); }
   .tint-violet { --tint-a: hsl(var(--purple-light));  --tint-b: hsl(var(--purple-light) / .45);  --tint-edge: hsl(var(--purple) / .14); }
   /* larger cards (charts, lists): colour fades to white so content stays clean */
-  .tint-soft { background-image: linear-gradient(170deg, var(--tint-a) 0%, hsl(var(--card)) 55%); }
+  /* larger cards (charts, lists): same dark scheme as the boxes — a dark top edge and a light grey wash */
+  .tint-soft { --tint-edge: hsl(60 5% 10% / .10);
+    background-image: linear-gradient(180deg, hsl(60 5% 10% / .07) 0%, hsl(var(--card)) 42%);
+    box-shadow: inset 0 3px 0 hsl(60 5% 10%), 0 1px 3px rgb(0 0 0 / .06); }
+  .dark .tint-soft { --tint-edge: rgb(255 255 255 / .08);
+    background-image: linear-gradient(180deg, hsl(222 28% 19%) 0%, hsl(var(--card)) 45%);
+    box-shadow: inset 0 3px 0 hsl(222 28% 34%); }
 
   /* summary boxes: solid colour, white text */
   .tint-solid { border-color: transparent; color: #fff;
