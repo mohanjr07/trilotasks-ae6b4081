@@ -237,7 +237,7 @@ function Bar({ pct }: { pct: number }) {
   const over = pct > 100;
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-      <div className={`h-full rounded-full ${over ? "bg-destructive" : pct >= 85 ? "bg-warning" : "bg-primary"}`} style={{ width: `${Math.min(100, pct)}%` }} />
+      <div className={`h-full rounded-full ${over ? "bg-destructive" : pct === 100 ? "bg-success" : pct >= 85 ? "bg-warning" : "bg-primary"}`} style={{ width: `${Math.min(100, pct)}%` }} />
     </div>
   );
 }
