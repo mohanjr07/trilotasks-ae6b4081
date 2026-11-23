@@ -45,6 +45,9 @@ const PROJECT_COLORS = [
   "#3b82f6","#ef4444","#14b8a6","#f97316","#84cc16",
 ];
 
+/** Can see the Sales Orders tracker (view only). */
+const SALES_ORDER_VIEWER_EMAILS = ["aiswarya.v@triloautomation.com", "harishkanna@triloautomation.com"];
+
 /** Only these people can create projects and edit a project's details (also enforced in the database). */
 const PROJECT_EDITOR_EMAILS = ["anu@triloautomation.com", "anuvenkatachalam14@gmail.com"];
 
@@ -56,6 +59,8 @@ export default function ProjectsPage() {
   // project payments: admins, plus Hari (view only)
   const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "")
     || EXPENSE_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
+  // these people can also see Sales Orders (view only) — see TRILO_sales_order_viewers.sql
+  const canSeeSalesOrders = SALES_ORDER_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
   // employees and managers: Purchase Orders only (everything else in Expenses stays hidden)
   const poOnly = !canSeePayments && (profile?.role === "employee" || profile?.role === "manager");
   const qc = useQueryClient();
@@ -146,7 +151,7 @@ export default function ProjectsPage() {
               <IndianRupee className="h-4 w-4" /> Expenses
             </Button>
           )}
-          {(canSeePayments || canEditProjects) && (
+          {(canSeePayments || canEditProjects || canSeeSalesOrders) && (
             <Button variant="outline" onClick={() => setSalesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
               <ReceiptText className="h-4 w-4" /> <span className="sm:hidden">SOs</span><span className="hidden sm:inline">Sales Orders</span>
             </Button>
@@ -202,8 +207,8 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {(canSeePayments || canEditProjects) && (
-        <SalesOrdersDialog open={salesOpen} onClose={() => setSalesOpen(false)} projects={projects} canEdit={isAdmin || canEditProjects} />
+      {(canSeePayments || canEditProjects || canSeeSalesOrders) && (
+        <SalesOrdersDialog open={salesOpen} onClose={() => setSalesOpen(false)} projects={projects} canEdit={profile?.role === "admin" || profile?.role === "super_admin" || canEditProjects} />
       )}
       {(canSeePayments || poOnly) && <ProjectExpensesDialog open={expensesOpen} onClose={() => setExpensesOpen(false)} projects={projects} poOnly={poOnly} />}
       {canEditProjects && (
