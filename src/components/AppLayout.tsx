@@ -16,6 +16,7 @@ import { preloadRoute, preloadAllRoutes } from "@/lib/routePreload";
 import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
+import GetStartedIntro from "@/components/GetStartedIntro";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { canSeeOvertime } from "@/pages/OvertimePage";
@@ -415,6 +416,7 @@ export default function AppLayout() {
           </Suspense>
         </main>
       </div>
+      <GetStartedIntro />
       {/* Mobile bottom tab bar — floating dark bar (same dark as the summary boxes), white pill on the active tab */}
       <nav className="fixed inset-x-3 z-30 md:hidden [transform:translateZ(0)]" style={{ bottom: "calc(var(--sab) + 10px)" }}>
         <div ref={barRef} onPointerDown={onBarDown} onPointerMove={onBarMove} onPointerUp={onBarUp} onPointerCancel={onBarUp}
