@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
-  CheckSquare, ArrowLeft, IndianRupee, FileStack,
+  CheckSquare, ArrowLeft, IndianRupee, ReceiptText, FileStack,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -16,6 +16,7 @@ import PriorityBadge from "@/components/PriorityBadge";
 import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
+import SalesOrdersDialog from "@/components/SalesOrderTracker";
 import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expensesOpen, setExpensesOpen] = useState(false);
+  const [salesOpen, setSalesOpen] = useState(false);
 
   const { data: allOrders = [] } = usePurchaseOrders(true);   // empty for people who can't see POs
   const { data: projects = [], isLoading } = useQuery<Project[]>({
@@ -128,13 +130,18 @@ export default function ProjectsPage() {
           <h1 className="font-heading text-2xl sm:text-[28px] font-bold text-ink-primary">Projects</h1>
           <p className="text-sm text-ink-muted">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-sm:[&>button]:min-w-[40%]">
           <Button variant="outline" onClick={() => navigate("/project-forms")} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
             <FileStack className="h-4 w-4" /> Forms
           </Button>
           {canSeePayments && (
             <Button variant="outline" onClick={() => setExpensesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
               <IndianRupee className="h-4 w-4" /> Expenses
+            </Button>
+          )}
+          {(canSeePayments || canEditProjects) && (
+            <Button variant="outline" onClick={() => setSalesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
+              <ReceiptText className="h-4 w-4" /> <span className="sm:hidden">SOs</span><span className="hidden sm:inline">Sales Orders</span>
             </Button>
           )}
           {canEditProjects && (
@@ -188,6 +195,9 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {(canSeePayments || canEditProjects) && (
+        <SalesOrdersDialog open={salesOpen} onClose={() => setSalesOpen(false)} projects={projects} canEdit={isAdmin || canEditProjects} />
+      )}
       {canSeePayments && <ProjectExpensesDialog open={expensesOpen} onClose={() => setExpensesOpen(false)} projects={projects} />}
       {canEditProjects && (
         <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
