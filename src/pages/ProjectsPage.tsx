@@ -44,9 +44,13 @@ const PROJECT_COLORS = [
   "#3b82f6","#ef4444","#14b8a6","#f97316","#84cc16",
 ];
 
+/** Only these people can create projects and edit a project's details (also enforced in the database). */
+const PROJECT_EDITOR_EMAILS = ["anu@triloautomation.com"];
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
   const { isAdmin, user, profile } = useAuth();
+  const canEditProjects = PROJECT_EDITOR_EMAILS.includes((profile?.email ?? "").toLowerCase());
   const navigate = useNavigate();
   // project payments: admins, plus Hari (view only)
   const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "")
@@ -133,7 +137,7 @@ export default function ProjectsPage() {
               <IndianRupee className="h-4 w-4" /> Expenses
             </Button>
           )}
-          {isAdmin && (
+          {canEditProjects && (
             <Button onClick={() => setCreateOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
               <Plus className="h-4 w-4" /> <span className="sm:hidden">New</span><span className="hidden sm:inline">New Project</span>
             </Button>
@@ -150,7 +154,7 @@ export default function ProjectsPage() {
           <FolderKanban className="h-12 w-12 text-ink-muted mb-4" />
           <p className="font-heading text-lg font-semibold text-ink-primary">No projects yet</p>
           <p className="text-sm text-ink-muted mb-4">Create your first project to organise your teams and tasks.</p>
-          {isAdmin && <Button onClick={() => setCreateOpen(true)}>Create Project</Button>}
+          {canEditProjects && <Button onClick={() => setCreateOpen(true)}>Create Project</Button>}
         </div>
       ) : (
         <div className="space-y-4">
@@ -168,6 +172,7 @@ export default function ProjectsPage() {
                 projectPOs={allOrders.filter((o) => o.kind === "vendor" && o.project_id === project.id)}
                 allProfiles={allProfiles}
                 isAdmin={isAdmin}
+                canEdit={canEditProjects}
                 isExpanded={isExpanded}
                 currentUserId={user?.id ?? ""}
                 onToggle={() => toggleExpand(project.id)}
@@ -184,10 +189,10 @@ export default function ProjectsPage() {
       )}
 
       {canSeePayments && <ProjectExpensesDialog open={expensesOpen} onClose={() => setExpensesOpen(false)} projects={projects} />}
-      {isAdmin && (
+      {canEditProjects && (
         <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
       )}
-      {isAdmin && editProject && (
+      {canEditProjects && editProject && (
         <ProjectFormModal open={!!editProject} project={editProject} onClose={() => setEditProject(null)} />
       )}
     </AnimatedPage>
@@ -197,8 +202,9 @@ export default function ProjectsPage() {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
   project, projectTeams, projectMembers, projectPOs = [], allProfiles,
-  isAdmin, isExpanded, currentUserId, onToggle, onEdit, onDelete,
+  isAdmin, canEdit = false, isExpanded, currentUserId, onToggle, onEdit, onDelete,
 }: {
+  canEdit?: boolean;
   project: Project;
   projectPOs?: PO[];
   projectTeams: ProjectTeam[];
@@ -348,7 +354,7 @@ function ProjectCard({
           )}
         </div>
 
-        {isAdmin && (
+        {(isAdmin || canEdit) && (
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -357,9 +363,9 @@ function ProjectCard({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Project</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete Project</DropdownMenuItem>
+                {canEdit && <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Project</DropdownMenuItem>}
+                {isAdmin && <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>}
+                {isAdmin && <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete Project</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -811,10 +817,11 @@ function ProjectFormModal({
     setSaving(true);
     try {
       if (project) {
-        const { error } = await supabase.from("projects")
+        const { data: updated, error } = await supabase.from("projects")
           .update({ name: name.trim(), description: description.trim() || null, color, updated_at: new Date().toISOString() })
-          .eq("id", project.id);
+          .eq("id", project.id).select("id");
         if (error) throw error;
+        if (!updated?.length) throw new Error("You don't have permission to edit projects");
         toast.success("Project updated");
       } else {
         const { data: created, error } = await supabase.from("projects")
