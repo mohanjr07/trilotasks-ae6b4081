@@ -126,8 +126,11 @@ export default function FormRequestsPage() {
   // segregated by project: one section per project (most recent activity first), "No project" last
   const groups = useMemo(() => {
     const m = new Map<string, FormRequestRow[]>();
-    for (const r of list) m.set(r.project_id ?? "", [...(m.get(r.project_id ?? "") ?? []), r]);
-    return Array.from(m.entries()).sort((a, b) => (a[0] === "" ? 1 : b[0] === "" ? -1 : projectNameOf(a[0]).localeCompare(projectNameOf(b[0]))));
+    const newestFirst = [...list].sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
+    for (const r of newestFirst) m.set(r.project_id ?? "", [...(m.get(r.project_id ?? "") ?? []), r]);
+    // projects with the most recent form first (each list is newest first); "No project" last
+    return Array.from(m.entries()).sort((a, b) =>
+      a[0] === "" ? 1 : b[0] === "" ? -1 : (b[1][0]?.submitted_at ?? "").localeCompare(a[1][0]?.submitted_at ?? ""));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list, projectList]);
   const projectCounts = useMemo(() => {
