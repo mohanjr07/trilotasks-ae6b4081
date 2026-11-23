@@ -17,7 +17,8 @@ import { openFileLink } from "@/lib/nativeFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { usePurchaseOrders, POEditDialog, openPODoc, FilePickButtons, PickedFile, type PO } from "@/components/PurchaseOrders";
+import { usePurchaseOrders, POEditDialog, openPODoc, type PO } from "@/components/PurchaseOrders";
+import { FilePickButtons, PickedFile } from "@/components/FilePick";
 import { toast } from "sonner";
 
 const sb = supabase as any;

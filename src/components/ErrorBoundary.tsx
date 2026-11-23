@@ -4,7 +4,7 @@
 import { Component, type ReactNode } from "react";
 
 const isChunkError = (e: unknown) =>
-  /dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk|preload/i.test(String((e as any)?.message ?? e));
+  /dynamically imported module|Importing a module script failed|ChunkLoadError|Loading chunk|preload|_result\.default|reading .default./i.test(String((e as any)?.message ?? e));
 
 function reloadOnce() {
   try {

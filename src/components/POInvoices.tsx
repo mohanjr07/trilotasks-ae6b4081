@@ -12,7 +12,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { openFileLink } from "@/lib/nativeFiles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FilePickButtons, PickedFile, type PO } from "@/components/PurchaseOrders";
+import type { PO } from "@/components/PurchaseOrders";
+import { FilePickButtons, PickedFile } from "@/components/FilePick";
 import { toast } from "sonner";
 
 const sb = supabase as any;
