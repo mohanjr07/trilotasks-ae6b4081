@@ -310,8 +310,9 @@ html {
 }
 .dark .glass-pill::after { background: linear-gradient(to bottom, rgba(255,255,255,0.35), rgba(255,255,255,0)); }
 
-/* ── soft pastel tints for summary boxes and cards ───────────────────────── */
+/* ── soft pastel tints for summary boxes and cards — phones / mobile apps only ── */
 @layer components {
+@media (max-width: 767.98px) {
   .tint-blue, .tint-green, .tint-amber, .tint-red, .tint-violet {
     background-color: hsl(var(--card));
     border: 1px solid var(--tint-edge);
@@ -324,4 +325,5 @@ html {
   .tint-violet { --tint-a: hsl(var(--purple-light));  --tint-b: hsl(var(--purple-light) / .45);  --tint-edge: hsl(var(--purple) / .14); }
   /* larger cards (charts, lists): colour fades to white so content stays clean */
   .tint-soft { background-image: linear-gradient(170deg, var(--tint-a) 0%, hsl(var(--card)) 55%); }
+}
 }

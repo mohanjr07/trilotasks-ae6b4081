@@ -105,7 +105,7 @@ export default function InternDashboard() {
         </motion.div>
       )}
 
-      <div className="rounded-card tint-blue tint-soft p-4 sm:p-5 shadow-card">
+      <div className="rounded-card bg-card tint-blue tint-soft p-4 sm:p-5 shadow-card">
         <h3 className="text-sm font-semibold text-ink-primary mb-4">Active Tasks</h3>
         <motion.div
           variants={staggerContainer}
