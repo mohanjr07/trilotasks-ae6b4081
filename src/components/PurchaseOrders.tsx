@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import POInvoices from "@/components/POInvoices";
 
 const sb = supabase as any;
 const BUCKET = "po-documents";
@@ -429,6 +430,8 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit {s}</Button>
               )}
             </div>
+
+            {isPO && <POInvoices po={po} />}
 
             {isPO && (
               <div>
