@@ -310,8 +310,8 @@ html {
 }
 .dark .glass-pill::after { background: linear-gradient(to bottom, rgba(255,255,255,0.35), rgba(255,255,255,0)); }
 
-/* ── soft pastel tints for summary boxes and cards — phones / mobile apps only ── */
-@layer components {
+/* ── colour for summary boxes and cards — phones / mobile apps only ──
+   (plain CSS, not @layer, so Tailwind doesn't make variant copies of these rules) */
 @media (max-width: 767.98px) {
   .tint-blue, .tint-green, .tint-amber, .tint-red, .tint-violet {
     background-color: hsl(var(--card));
@@ -325,5 +325,22 @@ html {
   .tint-violet { --tint-a: hsl(var(--purple-light));  --tint-b: hsl(var(--purple-light) / .45);  --tint-edge: hsl(var(--purple) / .14); }
   /* larger cards (charts, lists): colour fades to white so content stays clean */
   .tint-soft { background-image: linear-gradient(170deg, var(--tint-a) 0%, hsl(var(--card)) 55%); }
-}
+
+  /* summary boxes: solid colour, white text */
+  .tint-solid { border-color: transparent; color: #fff;
+    background-image: linear-gradient(135deg, rgb(255 255 255 / .14) 0%, rgb(0 0 0 / .10) 100%); }
+  /* one colour for every box: the dark of the menu button / selected tab */
+  .tint-solid.tint-blue, .tint-solid.tint-green, .tint-solid.tint-amber, .tint-solid.tint-red, .tint-solid.tint-violet {
+    background-color: hsl(60 5% 10%); }
+  .dark .tint-solid.tint-blue, .dark .tint-solid.tint-green, .dark .tint-solid.tint-amber, .dark .tint-solid.tint-red, .dark .tint-solid.tint-violet {
+    background-color: hsl(222 28% 19%); border-color: rgb(255 255 255 / .08); }
+  .tint-solid :is(.text-ink-primary, .text-primary, .text-success, .text-warning, .text-destructive, .text-purple) { color: #fff; }
+  .tint-solid :is(.text-ink-secondary) { color: rgb(255 255 255 / .9); }
+  .tint-solid :is(.text-ink-muted) { color: rgb(255 255 255 / .78); }
+  .tint-solid .tint-chip { background-color: rgb(255 255 255 / .12); box-shadow: none; }
+  .tint-solid.tint-blue   .tint-chip svg { color: hsl(224 90% 72%); }
+  .tint-solid.tint-green  .tint-chip svg { color: hsl(142 65% 58%); }
+  .tint-solid.tint-amber  .tint-chip svg { color: hsl(38 95% 60%); }
+  .tint-solid.tint-red    .tint-chip svg { color: hsl(0 85% 68%); }
+  .tint-solid.tint-violet .tint-chip svg { color: hsl(263 85% 75%); }
 }

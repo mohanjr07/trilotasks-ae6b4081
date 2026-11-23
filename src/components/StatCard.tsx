@@ -38,7 +38,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, iconColor
     <motion.div
       variants={staggerItem}
       whileHover={{ y: -2 }}
-      className={cn("rounded-card bg-card p-3.5 sm:p-5 shadow-card transition-shadow hover:shadow-card-hover min-w-0", tint ? `tint-${tint}` : tintOf(iconBg))}
+      className={cn("rounded-card bg-card p-3.5 sm:p-5 shadow-card transition-shadow hover:shadow-card-hover min-w-0 tint-solid", tint ? `tint-${tint}` : tintOf(iconBg))}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -48,7 +48,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, iconColor
           </p>
           {subtitle && <p className="mt-1 text-[11px] sm:text-xs text-ink-muted leading-snug">{subtitle}</p>}
         </div>
-        <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg", iconBg, "max-md:bg-card/80 max-md:shadow-sm")}>
+        <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg tint-chip", iconBg)}>
           <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5", iconColor)} />
         </div>
       </div>
