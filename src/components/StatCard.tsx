@@ -26,12 +26,17 @@ function CountUp({ value }: { value: number }) {
   return <motion.span>{rounded}</motion.span>;
 }
 
+/** The box takes the soft tint of its icon colour (blue / green / amber / red / violet). */
+const tintOf = (iconBg: string) =>
+  /success/.test(iconBg) ? "tint-green" : /warning/.test(iconBg) ? "tint-amber" : /destructive|danger/.test(iconBg) ? "tint-red"
+  : /purple/.test(iconBg) ? "tint-violet" : "tint-blue";
+
 export default function StatCard({ title, value, subtitle, icon: Icon, iconColor = "text-primary", iconBg = "bg-accent-light" }: Props) {
   return (
     <motion.div
       variants={staggerItem}
       whileHover={{ y: -2 }}
-      className="rounded-card bg-card p-3.5 sm:p-5 shadow-card transition-shadow hover:shadow-card-hover min-w-0"
+      className={cn("rounded-card p-3.5 sm:p-5 shadow-card transition-shadow hover:shadow-card-hover min-w-0", tintOf(iconBg))}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -41,7 +46,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, iconColor
           </p>
           {subtitle && <p className="mt-1 text-[11px] sm:text-xs text-ink-muted leading-snug">{subtitle}</p>}
         </div>
-        <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg", iconBg)}>
+        <div className={cn("flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg bg-card/80 shadow-sm")}>
           <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5", iconColor)} />
         </div>
       </div>

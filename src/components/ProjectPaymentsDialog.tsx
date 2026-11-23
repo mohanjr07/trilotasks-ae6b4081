@@ -184,11 +184,11 @@ function SummaryTiles({ t, big }: { t: ReturnType<typeof totalsOf>; big?: boolea
   return (
     <div className="grid grid-cols-3 gap-2 text-sm">
       {[
-        ["Paid", t.paid, "text-success"],
-        ["Approved, to pay", t.toPay, "text-ink-primary"],
-        ["Waiting approval", t.pending, "text-warning"],
-      ].map(([label, val, cls]) => (
-        <div key={label as string} className={`rounded-lg border border-border bg-card ${big ? "p-3" : "p-2.5"}`}>
+        ["Paid", t.paid, "text-success", "tint-green"],
+        ["Approved, to pay", t.toPay, "text-ink-primary", "tint-blue"],
+        ["Waiting approval", t.pending, "text-warning", "tint-amber"],
+      ].map(([label, val, cls, tint]) => (
+        <div key={label as string} className={`rounded-lg ${tint} ${big ? "p-3" : "p-2.5"}`}>
           <p className="text-[11px] text-ink-muted">{label}</p>
           <p className={`font-semibold ${cls}`}>{formatINR(val as number)}</p>
         </div>
