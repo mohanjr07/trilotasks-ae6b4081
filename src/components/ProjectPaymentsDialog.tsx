@@ -143,7 +143,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   [22, 11, 18].forEach((w, i) => { wa.getColumn(i + 1).width = w; });
 
   // 5./6. Sales Orders (vs project spend) and Purchase Orders (vs payments linked to them)
-  for (const kind of ["customer", "vendor"] as OrderKind[]) {
+  for (const kind of ["vendor"] as OrderKind[]) {
     const list = pos.filter((po) => po.kind === kind && projOf.has(po.project_id));
     if (!list.length) continue;
     const sh = KIND_SHORT[kind];
@@ -374,7 +374,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   open: boolean; onClose: () => void; projects: Proj[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [view, setView] = useState<"projects" | "subprojects" | "so" | "po">("projects");
+  const [view, setView] = useState<"projects" | "subprojects" | "po">("projects");
   const [find, setFind] = useState("");
   // admins can move payments between projects (e.g. out of "No project")
   const { profile } = useAuth();
@@ -478,7 +478,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
             </div>
 
             <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
-              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["so", "Sales Orders"], ["po", "Purchase Orders"]] as const).map(([k, l]) => (
+              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["po", "Purchase Orders"]] as const).map(([k, l]) => (
                 <button key={k} type="button" onClick={() => setView(k)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === k ? "bg-primary text-primary-foreground" : "text-ink-secondary hover:text-ink-primary"}`}>{l}</button>
               ))}
@@ -495,8 +495,8 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               <SubProjectsView rows={rows} projects={projects} names={names} />
             </>)}
 
-            {(view === "so" || view === "po") && (
-              <AllPOsView key={view} kind={view === "so" ? "customer" : "vendor"} pos={pos} rows={rows} projects={projects} onOpen={setPoOpen}
+            {view === "po" && (
+              <AllPOsView key={view} kind="vendor" pos={pos} rows={rows} projects={projects} onOpen={setPoOpen}
                 onAdd={canMove ? (projectId, kind) => setPoEdit({ projectId, po: null, kind }) : undefined} />
             )}
 
@@ -553,7 +553,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                           <SummaryTiles t={t} />
                           <SubProjectSplit rows={pr} />
                         </div>
-                        {p.id !== NO_PROJECT.id && (["customer", "vendor"] as OrderKind[]).map((kind) => {
+                        {p.id !== NO_PROJECT.id && (["vendor"] as OrderKind[]).map((kind) => {
                           const mine = pos.filter((po) => po.kind === kind && po.project_id === p.id);
                           if (!mine.length && !canMove) return null;
                           return (
