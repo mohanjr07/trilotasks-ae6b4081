@@ -57,6 +57,7 @@ export default function ProjectsPage() {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expensesOpen, setExpensesOpen] = useState(false);
 
+  const { data: allOrders = [] } = usePurchaseOrders(true);   // empty for people who can't see POs
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["projects"],
     queryFn: async () => {
@@ -164,6 +165,7 @@ export default function ProjectsPage() {
                 project={project}
                 projectTeams={projectTeams}
                 projectMembers={projectMembers}
+                projectPOs={allOrders.filter((o) => o.kind === "vendor" && o.project_id === project.id)}
                 allProfiles={allProfiles}
                 isAdmin={isAdmin}
                 isExpanded={isExpanded}
@@ -194,10 +196,11 @@ export default function ProjectsPage() {
 
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
-  project, projectTeams, projectMembers, allProfiles,
+  project, projectTeams, projectMembers, projectPOs = [], allProfiles,
   isAdmin, isExpanded, currentUserId, onToggle, onEdit, onDelete,
 }: {
   project: Project;
+  projectPOs?: PO[];
   projectTeams: ProjectTeam[];
   projectMembers: ProjectMember[];
   allProfiles: Profile[];
@@ -318,6 +321,16 @@ function ProjectCard({
           </div>
           {project.description && (
             <p className="text-xs text-ink-muted truncate mt-0.5">{project.description}</p>
+          )}
+          {projectPOs.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {projectPOs.map((po) => (
+                <span key={po.id} title={po.party ?? undefined}
+                  className="inline-flex max-w-full items-center gap-1 rounded-pill border border-primary/20 bg-primary/5 px-2 py-0.5 text-[11px] font-medium text-primary">
+                  <span className="truncate">PO {po.po_number}</span>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
