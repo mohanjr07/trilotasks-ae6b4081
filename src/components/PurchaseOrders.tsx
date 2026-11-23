@@ -25,7 +25,7 @@ const BUCKET = "po-documents";
 export type OrderKind = "customer" | "vendor";
 export type PO = {
   id: string; project_id: string; kind: OrderKind; po_number: string; party: string | null;
-  po_date: string | null; value: number | null; notes: string | null; doc_path: string | null; doc_name: string | null;
+  po_date: string | null; value: number | null; taxable_value?: number | null; notes: string | null; doc_path: string | null; doc_name: string | null;
   status: "open" | "closed"; created_at: string;
 };
 /** The payment fields these views need. */
@@ -87,9 +87,9 @@ export async function openPODoc(po: Pick<PO, "doc_path">) {
 }
 
 // ── form ─────────────────────────────────────────────────────────────────────
-export type PODraft = { kind: OrderKind; po_number: string; party: string; po_date: string; value: string; notes: string; file: File | null };
+export type PODraft = { kind: OrderKind; po_number: string; party: string; po_date: string; value: string; taxable: string; notes: string; file: File | null };
 export const emptyPODraft = (kind: OrderKind = "customer"): PODraft =>
-  ({ kind, po_number: "", party: "", po_date: format(new Date(), "yyyy-MM-dd"), value: "", notes: "", file: null });
+  ({ kind, po_number: "", party: "", po_date: format(new Date(), "yyyy-MM-dd"), value: "", taxable: "", notes: "", file: null });
 
 export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft; onChange: (d: PODraft) => void; existingDoc?: string | null }) {
   const set = (patch: Partial<PODraft>) => onChange({ ...value, ...patch });
@@ -109,10 +109,28 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
           <label className="mb-1 block text-xs font-medium text-ink-muted">{s} date</label>
           <Input type="date" value={value.po_date} onChange={(e) => set({ po_date: e.target.value })} className="h-10" />
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-ink-muted">{s} value (₹)</label>
-          <Input type="number" inputMode="decimal" min="0" value={value.value} onChange={(e) => set({ value: e.target.value })} placeholder="0" className="h-10" />
-        </div>
+        {value.kind === "customer" ? (<>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-muted">Taxable value (₹, without GST)</label>
+            <Input type="number" inputMode="decimal" min="0" value={value.taxable} onChange={(e) => set({ taxable: e.target.value })} placeholder="0" className="h-10" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-muted">Invoice value (₹, with GST)</label>
+            <Input type="number" inputMode="decimal" min="0" value={value.value} onChange={(e) => set({ value: e.target.value })} placeholder="0" className="h-10" />
+            {value.value !== "" && value.taxable !== "" && (
+              <p className={`mt-1 text-[11px] ${Number(value.value) < Number(value.taxable) ? "text-destructive" : "text-ink-muted"}`}>
+                {Number(value.value) < Number(value.taxable)
+                  ? "Invoice value can't be less than the taxable value"
+                  : `GST ${inr(Number(value.value) - Number(value.taxable))}`}
+              </p>
+            )}
+          </div>
+        </>) : (
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-muted">{s} value (₹)</label>
+            <Input type="number" inputMode="decimal" min="0" value={value.value} onChange={(e) => set({ value: e.target.value })} placeholder="0" className="h-10" />
+          </div>
+        )}
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-ink-muted">Notes</label>
@@ -144,6 +162,8 @@ export async function savePO(projectId: string, d: PODraft, existing?: PO | null
   const s = KIND_SHORT[d.kind];
   if (!d.po_number.trim()) throw new Error(`Enter the ${s} number`);
   if (d.kind === "customer" && !d.file && !existing?.doc_path) throw new Error("Upload the SO document");
+  if (d.kind === "customer" && d.value !== "" && d.taxable !== "" && Number(d.value) < Number(d.taxable))
+    throw new Error("Invoice value can't be less than the taxable value");
   let doc_path = existing?.doc_path ?? null;
   let doc_name = existing?.doc_name ?? null;
   if (d.file) {
@@ -156,11 +176,12 @@ export async function savePO(projectId: string, d: PODraft, existing?: PO | null
   }
   const row = {
     project_id: projectId, kind: d.kind, po_number: d.po_number.trim(), party: d.party.trim() || null,
-    po_date: d.po_date || null, value: d.value === "" ? null : Number(d.value), notes: d.notes.trim() || null, doc_path, doc_name,
+    po_date: d.po_date || null, value: d.value === "" ? null : Number(d.value), ...(d.kind === "customer" ? { taxable_value: d.taxable === "" ? null : Number(d.taxable) } : {}), notes: d.notes.trim() || null, doc_path, doc_name,
   };
   const q = existing ? sb.from("purchase_orders").update(row).eq("id", existing.id) : sb.from("purchase_orders").insert(row);
   const { error } = await q;
   if (error) {
+    if (/taxable_value/.test(error.message)) throw new Error("Run TRILO_so_taxable_value.sql first");
     if (/purchase_orders/.test(error.message) && /exist|schema/.test(error.message)) throw new Error("Orders aren't set up yet — run TRILO_purchase_orders.sql");
     if (/duplicate|unique/i.test(error.message)) throw new Error(`This project already has that ${s} number`);
     throw error;
@@ -177,7 +198,7 @@ export function POEditDialog({ projectId, projectName, po, kind = "customer", op
   const key = `${open}-${po?.id ?? "new"}-${kind}`;
   if (key !== lastKey) {
     setLastKey(key);
-    setDraft(po ? { kind: po.kind, po_number: po.po_number, party: po.party ?? "", po_date: po.po_date ?? "", value: po.value == null ? "" : String(po.value), notes: po.notes ?? "", file: null } : emptyPODraft(kind));
+    setDraft(po ? { kind: po.kind, po_number: po.po_number, party: po.party ?? "", po_date: po.po_date ?? "", value: po.value == null ? "" : String(po.value), taxable: po.taxable_value == null ? "" : String(po.taxable_value), notes: po.notes ?? "", file: null } : emptyPODraft(kind));
   }
   const label = KIND_LABEL[po?.kind ?? kind];
   const save = async () => {
@@ -298,9 +319,9 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
     [t.balance < 0 ? "Over by" : "Balance", t.value ? inr(Math.abs(t.balance)) : "—", t.balance < 0 ? "text-destructive" : "text-ink-primary"],
     ["Waiting approval", inr(t.pending), "text-warning"],
   ] : [
-    ["SO value", t.value ? inr(t.value) : "—", "text-ink-primary"],
-    ["Project spend so far", inr(t.spent), "text-ink-primary"],
-    [t.balance < 0 ? "Spend over SO by" : "SO value left", t.value ? inr(Math.abs(t.balance)) : "—", t.balance < 0 ? "text-destructive" : "text-success"],
+    ["Invoice value (with GST)", t.value ? inr(t.value) : "—", "text-ink-primary"],
+    ["Taxable value (without GST)", po.taxable_value != null ? inr(Number(po.taxable_value)) : "—", "text-ink-primary"],
+    ["GST", po.taxable_value != null && t.value ? inr(t.value - Number(po.taxable_value)) : "—", "text-ink-primary"],
     ["SO date", po.po_date ? format(new Date(po.po_date), "d MMM yyyy") : "—", "text-ink-primary"],
   ];
 
