@@ -374,7 +374,7 @@ export default function AppLayout() {
         <header className="md:hidden sticky top-0 z-20 pt-safe bg-background">
           <div className="flex items-center gap-3 px-4 py-3">
             <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink-primary text-background shadow-md active:scale-95 transition-transform">
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full gloss-btn text-ink-primary dark:bg-ink-primary dark:text-background shadow-md active:scale-95 transition-transform">
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1 leading-tight">
@@ -440,12 +440,12 @@ export default function AppLayout() {
                 {active && (
                   // while sliding: the pill lifts and grows into a clear "liquid glass" lens
                   <motion.span layoutId="mobile-tab-pill"
-                    className={cn("absolute inset-0 rounded-[22px]", dragIdx !== null ? "glass-pill" : "bg-white shadow-md")}
+                    className={cn("absolute inset-0 rounded-[22px]", dragIdx !== null ? "glass-pill" : "bg-ink-primary dark:bg-white shadow-md")}
                     animate={{ scale: dragIdx !== null ? 1.18 : 1, y: dragIdx !== null ? -7 : 0 }}
                     transition={{ type: "spring", stiffness: 380, damping: 26, mass: 0.8 }} />
                 )}
                 <span className={cn("relative z-10 flex items-center justify-center transition-transform duration-200",
-                  active && dragIdx !== null ? "-translate-y-[7px] scale-[1.18] text-white" : active ? "text-neutral-900" : "text-white/60")}>
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-[1.18] text-ink-primary dark:text-white" : active ? "text-white dark:text-neutral-900" : "text-ink-secondary dark:text-white/60")}>
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
                   {pending[item.path] ? (
                     <span className="absolute -top-2 -right-3 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-[var(--tabbar-bg)]">
@@ -454,8 +454,8 @@ export default function AppLayout() {
                   ) : null}
                 </span>
                 <span className={cn("relative z-10 w-full truncate px-0.5 text-center text-[10.5px] leading-none transition-transform duration-200",
-                  active && dragIdx !== null ? "-translate-y-[7px] scale-110 font-semibold text-white"
-                    : active ? "font-semibold text-neutral-900" : "font-medium text-white/60")}>
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-110 font-semibold text-ink-primary dark:text-white"
+                    : active ? "font-semibold text-white dark:text-neutral-900" : "font-medium text-ink-secondary dark:text-white/60")}>
                   {shortLabel[item.path] ?? item.label}
                 </span>
               </Link>
