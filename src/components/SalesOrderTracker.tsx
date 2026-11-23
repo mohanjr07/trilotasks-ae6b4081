@@ -90,6 +90,21 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
     return { value: a.value + t.value, billed: a.billed + t.billed, received: a.received + t.received };
   }, { value: 0, billed: 0, received: 0 });
   const current = sos.find((o) => o.id === openId) ?? null;
+  const qc = useQueryClient();
+  const removeSO = async (so: PO) => {
+    const t = soTotals(so, entries);
+    const extra = t.invoices + t.receipts ? `\n\nIts ${t.invoices} invoice(s) and ${t.receipts} payment(s) received will be deleted too.` : "";
+    if (!window.confirm(`Delete SO ${so.po_number}? This cannot be undone.${extra}`)) return;
+    const files = [so.doc_path, ...entries.filter((e) => e.so_id === so.id).map((e) => e.doc_path)].filter(Boolean) as string[];
+    const { data, error } = await sb.from("purchase_orders").delete().eq("id", so.id).select("id");
+    if (error) { toast.error(error.message); return; }
+    if (!data?.length) { toast.error("You don't have permission to delete this SO"); return; }
+    if (files.length) supabase.storage.from(BUCKET).remove(files).catch(() => {});
+    toast.success(`SO ${so.po_number} deleted`);
+    if (openId === so.id) setOpenId(null);
+    qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+    qc.invalidateQueries({ queryKey: ["so-entries"] });
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -140,12 +155,20 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
           {shown.map((so) => {
             const t = soTotals(so, entries);
             return (
-              <button key={so.id} type="button" onClick={() => setOpenId(so.id)}
-                className="w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/40">
+              <div key={so.id} role="button" tabIndex={0} onClick={() => setOpenId(so.id)}
+                onKeyDown={(e) => { if (e.key === "Enter") setOpenId(so.id); }}
+                className="w-full cursor-pointer rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/40">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-heading text-sm font-bold text-ink-primary">SO {so.po_number}</span>
                   {so.doc_path && <FileText className="h-3.5 w-3.5 text-ink-muted" />}
                   <span className="ml-auto text-sm font-semibold text-ink-primary">{inr(t.value)}</span>
+                  {canEdit && (
+                    <button type="button" aria-label="Delete SO" title="Delete SO"
+                      onClick={(e) => { e.stopPropagation(); removeSO(so); }}
+                      className="rounded p-1 text-ink-muted hover:bg-destructive-light hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 <p className="mt-0.5 text-xs text-ink-muted">
                   {[so.party, projName[so.project_id], so.po_date ? format(new Date(so.po_date), "d MMM yyyy") : null].filter(Boolean).join(" · ")}
@@ -160,12 +183,12 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
                     <Bar pct={t.receivedPct} tone="recv" />
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
 
-        <SODetailDialog so={current} projectName={current ? projName[current.project_id] : ""} entries={entries} canEdit={canEdit} onClose={() => setOpenId(null)} />
+        <SODetailDialog so={current} projectName={current ? projName[current.project_id] : ""} entries={entries} canEdit={canEdit} onClose={() => setOpenId(null)} onDelete={removeSO} />
       </DialogContent>
     </Dialog>
   );
@@ -175,8 +198,8 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
 type Draft = { kind: SOEntry["kind"]; entry_date: string; ref_no: string; amount: string; taxable: string; notes: string; file: File | null };
 const emptyDraft = (kind: SOEntry["kind"]): Draft => ({ kind, entry_date: format(new Date(), "yyyy-MM-dd"), ref_no: "", amount: "", taxable: "", notes: "", file: null });
 
-export function SODetailDialog({ so, projectName, entries, canEdit, onClose }: {
-  so: PO | null; projectName?: string; entries: SOEntry[]; canEdit: boolean; onClose: () => void;
+export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onDelete }: {
+  so: PO | null; projectName?: string; entries: SOEntry[]; canEdit: boolean; onClose: () => void; onDelete?: (so: PO) => void;
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -250,6 +273,7 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose }: {
           <DialogTitle className="flex flex-wrap items-center gap-2">
             SO {so.po_number}
             {canEdit && <button type="button" onClick={() => setEditSO(true)} className="text-ink-muted hover:text-ink-primary" aria-label="Edit SO"><Pencil className="h-4 w-4" /></button>}
+            {canEdit && onDelete && <button type="button" onClick={() => onDelete(so)} className="text-ink-muted hover:text-destructive" aria-label="Delete SO" title="Delete SO"><Trash2 className="h-4 w-4" /></button>}
           </DialogTitle>
           <DialogDescription>
             {[so.party, projectName, so.po_date ? format(new Date(so.po_date), "d MMM yyyy") : null].filter(Boolean).join(" · ")}
