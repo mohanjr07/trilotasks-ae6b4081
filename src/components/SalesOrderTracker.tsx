@@ -17,7 +17,7 @@ import { openFileLink } from "@/lib/nativeFiles";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { usePurchaseOrders, POEditDialog, openPODoc, type PO } from "@/components/PurchaseOrders";
+import { usePurchaseOrders, POEditDialog, openPODoc, FilePickButtons, PickedFile, type PO } from "@/components/PurchaseOrders";
 import { toast } from "sonner";
 
 const sb = supabase as any;
@@ -335,18 +335,12 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onD
                 <Input value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} className="h-10" />
               </div>
             </div>
-            {draft.file ? (
-              <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-                <FileText className="h-4 w-4 text-ink-muted" /><span className="min-w-0 flex-1 truncate">{draft.file.name}</span>
-                <button type="button" onClick={() => setDraft({ ...draft, file: null })} className="text-ink-muted hover:text-destructive" aria-label="Remove file"><X className="h-4 w-4" /></button>
-              </div>
-            ) : (
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-card px-3 py-2 text-sm text-ink-secondary hover:bg-muted/40">
-                <Upload className="h-4 w-4" /> Attach {draft.kind === "invoice" ? "the invoice" : "proof"} (optional)
-                <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setDraft({ ...draft, file: f }); e.target.value = ""; }} />
-              </label>
-            )}
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-ink-muted">Attach {draft.kind === "invoice" ? "the invoice" : "proof"} (optional)</p>
+              {draft.file
+                ? <PickedFile file={draft.file} onRemove={() => setDraft({ ...draft, file: null })} />
+                : <FilePickButtons onPick={(f) => setDraft({ ...draft, file: f })} />}
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setDraft(null)} disabled={saving}>Cancel</Button>
               <Button size="sm" onClick={save} disabled={saving} className="gap-1.5">{saving && <Loader2 className="h-4 w-4 animate-spin" />} Save</Button>

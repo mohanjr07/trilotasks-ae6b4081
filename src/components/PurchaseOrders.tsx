@@ -6,10 +6,10 @@
 //                           value vs paid, balance and a graph over time.
 //  (Both live in the purchase_orders table: kind = 'customer' → SO, 'vendor' → PO.)
 // ─────────────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { FileText, Plus, Loader2, Upload, X, Pencil, ExternalLink, ClipboardList } from "lucide-react";
+import { FileText, Plus, Loader2, Upload, X, Pencil, ExternalLink, ClipboardList, Camera, ImageIcon } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { openFileLink } from "@/lib/nativeFiles";
@@ -139,20 +139,48 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
       <div>
         <label className="mb-1 block text-xs font-medium text-ink-muted">{s} document{value.kind === "customer" ? " *" : ""}</label>
         {value.file ? (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-            <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
-            <span className="min-w-0 flex-1 truncate">{value.file.name}</span>
-            <button type="button" onClick={() => set({ file: null })} className="text-ink-muted hover:text-destructive" aria-label="Remove file"><X className="h-4 w-4" /></button>
-          </div>
+          <PickedFile file={value.file} onRemove={() => set({ file: null })} />
         ) : (
-          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-3 text-sm hover:bg-muted/40">
-            <Upload className="h-4 w-4 text-ink-muted" />
-            <span className="text-ink-secondary">{existingDoc ? `Replace “${existingDoc}”` : `Upload the ${s} (PDF, photo or file)`}</span>
-            <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) set({ file: f }); e.target.value = ""; }} />
-          </label>
+          <>
+            {existingDoc && <p className="mb-1.5 text-xs text-ink-muted">Current: {existingDoc} — pick a new one to replace it</p>}
+            <FilePickButtons onPick={(f) => set({ file: f })} />
+          </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Take a photo, choose an image from the gallery, or pick a file (PDF, Word, Excel). */
+export function FilePickButtons({ onPick }: { onPick: (f: File) => void }) {
+  const take = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; };
+  const btn = "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-background px-2 py-3 text-xs font-medium text-ink-secondary hover:bg-muted/40";
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <label className={btn}><Camera className="h-5 w-5 text-ink-muted" /> Take photo
+        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={take} /></label>
+      <label className={btn}><ImageIcon className="h-5 w-5 text-ink-muted" /> Choose image
+        <input type="file" accept="image/*" className="hidden" onChange={take} /></label>
+      <label className={btn}><Upload className="h-5 w-5 text-ink-muted" /> Upload file
+        <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={take} /></label>
+    </div>
+  );
+}
+
+/** The chosen file — a thumbnail for images. */
+export function PickedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) { setUrl(null); return; }
+    const u = URL.createObjectURL(file); setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-2 text-sm">
+      {url ? <img src={url} alt="" className="h-14 w-14 shrink-0 rounded object-cover" />
+           : <FileText className="ml-1 h-5 w-5 shrink-0 text-ink-muted" />}
+      <span className="min-w-0 flex-1 truncate">{file.name}</span>
+      <button type="button" onClick={onRemove} className="p-1 text-ink-muted hover:text-destructive" aria-label="Remove file"><X className="h-4 w-4" /></button>
     </div>
   );
 }
