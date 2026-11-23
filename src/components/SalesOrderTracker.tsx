@@ -263,7 +263,10 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onD
     [t.balanceBilling < 0 ? "Billed over SO by" : "Balance billing", Math.abs(t.balanceBilling), t.balanceBilling < 0 ? "text-destructive" : "text-ink-primary"],
     ["Payment received", t.received, "text-success"],
     [t.balance < 0 ? "Received over SO by" : "Balance", Math.abs(t.balance), t.balance < 0 ? "text-destructive" : "text-warning"],
-    ["Billed, not received", t.outstanding, t.outstanding > 0 ? "text-warning" : "text-ink-primary"],
+    // received more than billed → invoices still to raise ("Bill pending"); billed more than received → payment still to come
+    t.outstanding > 0
+      ? ["Payment pending", t.outstanding, "text-warning"]
+      : ["Bill pending", -t.outstanding, -t.outstanding > 0 ? "text-warning" : "text-ink-primary"],
   ];
 
   return (
