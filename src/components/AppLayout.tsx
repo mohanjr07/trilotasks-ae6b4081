@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import GetStartedIntro from "@/components/GetStartedIntro";
+import { syncThemeFromAccount } from "@/lib/theme";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 import { canSeeOvertime } from "@/pages/OvertimePage";
@@ -133,7 +134,9 @@ const shortLabel: Record<string, string> = {
 };
 
 export default function AppLayout() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, user: authUser } = useAuth() as any;
+  // use the theme saved in the account (Settings → Appearance)
+  useEffect(() => { syncThemeFromAccount(authUser?.user_metadata); }, [authUser?.id]);
   const pending = usePendingCounts();   // red number badges: things waiting for me
   const location = useLocation();
   const navigate = useNavigate();

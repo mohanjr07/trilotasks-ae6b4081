@@ -15,7 +15,7 @@
         var cap = window.Capacitor;
         var isApp = !!(cap && (cap.isNativePlatform ? cap.isNativePlatform() : cap.isNative));
         var isPhone = window.matchMedia && window.matchMedia("(max-width: 767.98px)").matches;
-        var dark = t ? t === "dark" : (isApp || isPhone);
+        var dark = (t === "dark" || t === "light") ? t === "dark" : (isApp || isPhone);
         if (dark) document.documentElement.classList.add("dark");
         var m = document.querySelector('meta[name="theme-color"]');
         if (m) m.setAttribute("content", dark ? "#0a0f1b" : "#ffffff");
