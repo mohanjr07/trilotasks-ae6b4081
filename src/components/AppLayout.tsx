@@ -415,11 +415,11 @@ export default function AppLayout() {
           </Suspense>
         </main>
       </div>
-      {/* Mobile bottom tab bar — floating rounded bar, dark pill on the active tab */}
+      {/* Mobile bottom tab bar — floating dark bar (same dark as the summary boxes), white pill on the active tab */}
       <nav className="fixed inset-x-3 z-30 md:hidden [transform:translateZ(0)]" style={{ bottom: "calc(var(--sab) + 10px)" }}>
         <div ref={barRef} onPointerDown={onBarDown} onPointerMove={onBarMove} onPointerUp={onBarUp} onPointerCancel={onBarUp}
           style={{ touchAction: "none" }}
-          className="flex h-[68px] items-center gap-1 rounded-[28px] border border-border bg-card p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] select-none">
+          className="flex h-[68px] items-center gap-1 rounded-[28px] border tabbar-dark p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.28)] select-none">
           {mobileTabs.map((item, idx) => {
             const active = dragIdx !== null ? dragIdx === idx : (location.pathname === item.path || (item.path === "/production-plan" && location.pathname.startsWith("/production-plan/")) || (item.path === "/projects" && location.pathname.startsWith("/project-forms")));
             return (
@@ -435,22 +435,22 @@ export default function AppLayout() {
                 {active && (
                   // while sliding: the pill lifts and grows into a clear "liquid glass" lens
                   <motion.span layoutId="mobile-tab-pill"
-                    className={cn("absolute inset-0 rounded-[22px]", dragIdx !== null ? "glass-pill" : "bg-ink-primary shadow-md")}
+                    className={cn("absolute inset-0 rounded-[22px]", dragIdx !== null ? "glass-pill" : "bg-white shadow-md")}
                     animate={{ scale: dragIdx !== null ? 1.18 : 1, y: dragIdx !== null ? -7 : 0 }}
                     transition={{ type: "spring", stiffness: 380, damping: 26, mass: 0.8 }} />
                 )}
                 <span className={cn("relative z-10 flex items-center justify-center transition-transform duration-200",
-                  active && dragIdx !== null ? "-translate-y-[7px] scale-[1.18] text-ink-primary" : active ? "text-background" : "text-ink-muted")}>
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-[1.18] text-white" : active ? "text-neutral-900" : "text-white/60")}>
                   <item.icon className="h-[20px] w-[20px]" strokeWidth={active ? 2.2 : 1.8} />
                   {pending[item.path] ? (
-                    <span className="absolute -top-2 -right-3 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
+                    <span className="absolute -top-2 -right-3 min-w-[18px] rounded-full bg-destructive px-1 py-0.5 text-center text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-[var(--tabbar-bg)]">
                       {pending[item.path] > 99 ? "99+" : pending[item.path]}
                     </span>
                   ) : null}
                 </span>
                 <span className={cn("relative z-10 w-full truncate px-0.5 text-center text-[10.5px] leading-none transition-transform duration-200",
-                  active && dragIdx !== null ? "-translate-y-[7px] scale-110 font-semibold text-ink-primary"
-                    : active ? "font-semibold text-background" : "font-medium text-ink-muted")}>
+                  active && dragIdx !== null ? "-translate-y-[7px] scale-110 font-semibold text-white"
+                    : active ? "font-semibold text-neutral-900" : "font-medium text-white/60")}>
                   {shortLabel[item.path] ?? item.label}
                 </span>
               </Link>

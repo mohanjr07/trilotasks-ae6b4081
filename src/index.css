@@ -344,3 +344,7 @@ html {
   .tint-solid.tint-red    .tint-chip svg { color: hsl(0 85% 68%); }
   .tint-solid.tint-violet .tint-chip svg { color: hsl(263 85% 75%); }
 }
+
+/* phone bottom tab bar: same dark as the summary boxes */
+.tabbar-dark { --tabbar-bg: hsl(60 5% 10%); background-color: var(--tabbar-bg); border-color: rgb(255 255 255 / .06); }
+.dark .tabbar-dark { --tabbar-bg: hsl(222 28% 19%); border-color: rgb(255 255 255 / .1); }
