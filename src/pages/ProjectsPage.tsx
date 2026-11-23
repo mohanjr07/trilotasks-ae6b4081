@@ -16,6 +16,7 @@ import PriorityBadge from "@/components/PriorityBadge";
 import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
+import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, type PODraft, type PO } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -784,6 +785,11 @@ function ProjectFormModal({
   const [description, setDescription] = useState(project?.description ?? "");
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
+  // Purchase Order: entered with a new project; managed (add / edit) when editing one
+  const [poDraft, setPoDraft] = useState<PODraft>(() => emptyPODraft());
+  const { data: allPOs = [] } = usePurchaseOrders(open && !!project);
+  const [poEdit, setPoEdit] = useState<PO | null>(null);
+  const [poOpen, setPoOpen] = useState(false);
 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error("Project name is required"); return; }
@@ -796,9 +802,19 @@ function ProjectFormModal({
         if (error) throw error;
         toast.success("Project updated");
       } else {
-        const { error } = await supabase.from("projects")
-          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id });
+        const { data: created, error } = await supabase.from("projects")
+          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id })
+          .select("id").single();
         if (error) throw error;
+        if (poDraft.po_number.trim() && created?.id) {
+          try {
+            await savePO(created.id, poDraft);
+            qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+          } catch (e: any) {
+            toast.error("Project created, but the PO could not be saved: " + (e?.message ?? ""));
+          }
+        }
+        setPoDraft(emptyPODraft());
         toast.success("Project created");
       }
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -849,6 +865,20 @@ function ProjectFormModal({
               ))}
             </div>
           </div>
+          {!project ? (
+            <div className="rounded-lg border border-border p-3">
+              <p className="mb-2 text-sm font-medium text-ink-primary">Purchase Order <span className="font-normal text-ink-muted">(optional — more can be added later)</span></p>
+              <PODraftFields value={poDraft} onChange={setPoDraft} />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink-primary">Purchase Orders</label>
+              <POList compact pos={allPOs.filter((p) => p.project_id === project.id)} rows={[]}
+                onOpen={(po) => { setPoEdit(po); setPoOpen(true); }} onAdd={() => { setPoEdit(null); setPoOpen(true); }}
+                empty="No purchase orders for this project yet." />
+              <POEditDialog projectId={project.id} projectName={project.name} po={poEdit} open={poOpen} onClose={() => setPoOpen(false)} />
+            </div>
+          )}
         </div>
         <div className="flex gap-3 mt-6">
           <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>

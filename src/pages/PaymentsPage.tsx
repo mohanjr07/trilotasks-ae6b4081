@@ -505,6 +505,11 @@ export default function PaymentsPage() {
                       <span className="text-ink-primary font-medium truncate max-w-[200px]">{selected.project?.name ?? "—"}</span>
                     )}
                   </div>
+                  <SelectedPO payment={selected as any} isAdmin={isAdmin} onChanged={(po) => {
+                    setSelected((s) => (s && s.id === selected.id ? ({ ...s, po_id: po } as any) : s));
+                    qc.invalidateQueries({ queryKey: ["payment-requests"] });
+                    qc.invalidateQueries({ queryKey: ["project-expenses"] });
+                  }} />
                   <div className="flex items-center justify-between">
                     <span className="text-ink-muted">Subproject</span>
                     <span className="text-ink-primary font-medium">{subProjectLabel(selected.sub_project) || "—"}</span>
@@ -714,6 +719,16 @@ function RequestPaymentModal({
 }) {
   const [projectId, setProjectId] = useState<string>("");
   const [subProject, setSubProject] = useState<string>("");
+  const [poId, setPoId] = useState<string>("");          // optional: the purchase order this payment is against
+  const { data: poOptions = [] } = useQuery({
+    queryKey: ["po-options", projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("project_po_options", { p_project: projectId });
+      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+    },
+  });
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
   const [files, setFiles] = useState<File[]>([]);   // any number of bill files
@@ -723,6 +738,7 @@ function RequestPaymentModal({
   const reset = () => {
     setProjectId("");
     setSubProject("");
+    setPoId("");
     setPurpose("");
     setAmount("");
     setFiles([]);
@@ -765,6 +781,7 @@ function RequestPaymentModal({
         requester_id: userId,
         project_id: projectId || null,
         ...(subProject ? { sub_project: subProject } : {}),   // only sent when chosen
+        ...(poId && projectId ? { po_id: poId } : {}),         // only sent when chosen
         purpose: purpose.trim(),
         amount: Number(amount),
         bill_path: first.path,
@@ -819,7 +836,7 @@ function RequestPaymentModal({
                   <label className="text-xs font-medium text-ink-muted mb-1.5 block">Project</label>
                   <Select
                     value={projectId || "none"}
-                    onValueChange={(v) => setProjectId(v === "none" ? "" : v)}
+                    onValueChange={(v) => { setProjectId(v === "none" ? "" : v); setPoId(""); }}
                   >
                     <SelectTrigger className="h-10"><SelectValue placeholder="Select a project" /></SelectTrigger>
                     <SelectContent>
@@ -830,6 +847,21 @@ function RequestPaymentModal({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {projectId && poOptions.length > 0 && (
+                  <div>
+                    <label className="text-xs font-medium text-ink-muted mb-1.5 block">Purchase Order</label>
+                    <Select value={poId || "none"} onValueChange={(v) => setPoId(v === "none" ? "" : v)}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Select a PO" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Not against a PO</SelectItem>
+                        {poOptions.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}{o.kind === "vendor" ? " (vendor)" : " (customer)"}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <div>
                   <label className="text-xs font-medium text-ink-muted mb-1.5 block">Subproject</label>
@@ -930,5 +962,49 @@ function RequestPaymentModal({
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+
+/** Payment detail: the purchase order it is against (admins can change it, also after approval). */
+function SelectedPO({ payment, isAdmin, onChanged }: {
+  payment: { id: string; project_id: string | null; po_id?: string | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const { data: options = [] } = useQuery({
+    queryKey: ["po-options", payment.project_id],
+    enabled: !!payment.project_id,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("project_po_options", { p_project: payment.project_id });
+      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+    },
+  });
+  if (!payment.project_id || (!options.length && !payment.po_id)) return null;
+  const current = options.find((o) => o.id === payment.po_id);
+  const change = async (v: string) => {
+    const po = v === "__none__" ? null : v;
+    setBusy(true);
+    const { error } = await (supabase as any).rpc("set_payment_po", { p_id: payment.id, p_po: po });
+    setBusy(false);
+    if (error) { toast.error("Failed: " + error.message); return; }
+    toast.success(po ? "Linked to the purchase order" : "Unlinked from the purchase order");
+    onChanged(po);
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-ink-muted">Purchase Order</span>
+      {isAdmin ? (
+        <Select value={payment.po_id ?? "__none__"} disabled={busy} onValueChange={change}>
+          <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose PO" /></SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="__none__">Not against a PO</SelectItem>
+            {options.map((o) => <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      ) : (
+        <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `PO ${current.po_number}` : "—"}</span>
+      )}
+    </div>
   );
 }
