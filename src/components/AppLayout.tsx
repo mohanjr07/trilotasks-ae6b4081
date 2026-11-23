@@ -370,7 +370,7 @@ export default function AppLayout() {
         <header className="md:hidden sticky top-0 z-20 pt-safe bg-background">
           <div className="flex items-center gap-3 px-4 py-3">
             <button onClick={() => setSidebarOpen(true)} aria-label="Open menu"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink-primary text-background shadow-md active:scale-95 transition-transform">
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[hsl(222_10%_25%)] dark:bg-ink-primary text-background shadow-md active:scale-95 transition-transform">
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1 leading-tight">
