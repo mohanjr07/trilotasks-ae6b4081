@@ -20,6 +20,7 @@ import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { openFileLink } from "@/lib/nativeFiles";
+import { POEditDialog } from "@/components/PurchaseOrders";
 
 const BUCKET = "payment-bills";
 
@@ -971,6 +972,7 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
   payment: { id: string; project_id: string | null; po_id?: string | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
   const { data: options = [] } = useQuery({
     queryKey: ["po-options", payment.project_id],
     enabled: !!payment.project_id,
@@ -980,9 +982,10 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
       return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
     },
   });
-  if (!payment.project_id || (!options.some((o) => o.kind === "vendor") && !payment.po_id)) return null;
+  if (!payment.project_id || (!isAdmin && !options.some((o) => o.kind === "vendor") && !payment.po_id)) return null;
   const current = options.find((o) => o.id === payment.po_id);
   const change = async (v: string) => {
+    if (v === "__add__") { setAdding(true); return; }
     const po = v === "__none__" ? null : v;
     setBusy(true);
     const { error } = await (supabase as any).rpc("set_payment_po", { p_id: payment.id, p_po: po });
@@ -994,12 +997,14 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
   return (
     <div className="flex items-center justify-between">
       <span className="text-ink-muted">Purchase Order</span>
+      {isAdmin && <POEditDialog projectId={payment.project_id} kind="vendor" open={adding} onClose={() => setAdding(false)} />}
       {isAdmin ? (
         <Select value={payment.po_id ?? "__none__"} disabled={busy} onValueChange={change}>
           <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose PO" /></SelectTrigger>
           <SelectContent className="max-h-72">
             <SelectItem value="__none__">Not against a PO</SelectItem>
             {options.filter((o) => o.kind === "vendor").map((o) => <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>)}
+            <SelectItem value="__add__" className="text-primary">+ Add a purchase order…</SelectItem>
           </SelectContent>
         </Select>
       ) : (

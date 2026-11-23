@@ -207,6 +207,7 @@ export function POEditDialog({ projectId, projectName, po, kind = "customer", op
       await savePO(projectId, draft, po);
       toast.success(po ? `${label} updated` : `${label} added`);
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
+      qc.invalidateQueries({ queryKey: ["po-options"] });
       onClose();
     } catch (e: any) {
       toast.error(e?.message ?? "Could not save");
