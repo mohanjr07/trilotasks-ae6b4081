@@ -119,7 +119,7 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
         <Textarea value={value.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Scope, terms, payment milestones…" />
       </div>
       <div>
-        <label className="mb-1 block text-xs font-medium text-ink-muted">{s} document</label>
+        <label className="mb-1 block text-xs font-medium text-ink-muted">{s} document{value.kind === "customer" ? " *" : ""}</label>
         {value.file ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
             <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
@@ -143,6 +143,7 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
 export async function savePO(projectId: string, d: PODraft, existing?: PO | null) {
   const s = KIND_SHORT[d.kind];
   if (!d.po_number.trim()) throw new Error(`Enter the ${s} number`);
+  if (d.kind === "customer" && !d.file && !existing?.doc_path) throw new Error("Upload the SO document");
   let doc_path = existing?.doc_path ?? null;
   let doc_name = existing?.doc_name ?? null;
   if (d.file) {

@@ -794,6 +794,7 @@ function ProjectFormModal({
 
   const handleSubmit = async () => {
     if (!name.trim()) { toast.error("Project name is required"); return; }
+    if (!project && poDraft.po_number.trim() && poDraft.kind === "customer" && !poDraft.file) { toast.error("Upload the SO document"); return; }
     setSaving(true);
     try {
       if (project) {
