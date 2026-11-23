@@ -3,9 +3,9 @@ import App from "./App.tsx";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 
-// Loading screen (from index.html) stays on top for 3 seconds every time the app opens,
+// Loading screen (from index.html) stays on top for 2 seconds every time the app opens,
 // while the app starts and loads its data underneath; then it fades out.
-const SPLASH_MS = 3000;
+const SPLASH_MS = 2000;
 const splash = document.querySelector<HTMLElement>("#root > .trilo-loader");
 if (splash) document.body.appendChild(splash);          // keep it when React takes over #root
 
