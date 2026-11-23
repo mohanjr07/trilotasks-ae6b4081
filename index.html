@@ -6,6 +6,21 @@
     <!-- Installable phone app -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#ffffff" />
+    <!-- Default theme: dark on phones and in the mobile apps, light on computers.
+         The light/dark toggle choice is remembered on that device (theme-v2). -->
+    <script>
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("theme-v2"); } catch (e) {}
+        var cap = window.Capacitor;
+        var isApp = !!(cap && (cap.isNativePlatform ? cap.isNativePlatform() : cap.isNative));
+        var isPhone = window.matchMedia && window.matchMedia("(max-width: 767.98px)").matches;
+        var dark = t ? t === "dark" : (isApp || isPhone);
+        if (dark) document.documentElement.classList.add("dark");
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (m) m.setAttribute("content", dark ? "#0a0f1b" : "#ffffff");
+      })();
+    </script>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
