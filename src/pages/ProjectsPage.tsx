@@ -45,7 +45,7 @@ const PROJECT_COLORS = [
 ];
 
 /** Only these people can create projects and edit a project's details (also enforced in the database). */
-const PROJECT_EDITOR_EMAILS = ["anu@triloautomation.com"];
+const PROJECT_EDITOR_EMAILS = ["anu@triloautomation.com", "anuvenkatachalam14@gmail.com"];
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectsPage() {
