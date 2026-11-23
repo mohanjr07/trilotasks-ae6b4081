@@ -16,7 +16,7 @@ import PriorityBadge from "@/components/PriorityBadge";
 import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
-import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, type PODraft, type PO } from "@/components/PurchaseOrders";
+import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -789,6 +789,7 @@ function ProjectFormModal({
   const [poDraft, setPoDraft] = useState<PODraft>(() => emptyPODraft());
   const { data: allPOs = [] } = usePurchaseOrders(open && !!project);
   const [poEdit, setPoEdit] = useState<PO | null>(null);
+  const [poKind, setPoKind] = useState<OrderKind>("customer");
   const [poOpen, setPoOpen] = useState(false);
 
   const handleSubmit = async () => {
@@ -872,11 +873,17 @@ function ProjectFormModal({
             </div>
           ) : (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-primary">Sales Orders</label>
-              <POList compact pos={allPOs.filter((p) => p.project_id === project.id)} rows={[]}
-                onOpen={(po) => { setPoEdit(po); setPoOpen(true); }} onAdd={() => { setPoEdit(null); setPoOpen(true); }}
-                empty="No sales orders for this project yet." />
-              <POEditDialog projectId={project.id} projectName={project.name} po={poEdit} open={poOpen} onClose={() => setPoOpen(false)} />
+              {(["customer", "vendor"] as OrderKind[]).map((kind) => (
+                <div key={kind} className="mb-3">
+                  <label className="mb-1.5 block text-sm font-medium text-ink-primary">{KIND_LABEL[kind]}s</label>
+                  <POList compact pos={allPOs.filter((p) => p.project_id === project.id && p.kind === kind)} rows={[]}
+                    onOpen={(po) => { setPoEdit(po); setPoKind(po.kind); setPoOpen(true); }}
+                    onAdd={() => { setPoEdit(null); setPoKind(kind); setPoOpen(true); }}
+                    addLabel={`Add ${KIND_LABEL[kind].toLowerCase()}`}
+                    empty={`No ${KIND_LABEL[kind].toLowerCase()}s for this project yet.`} />
+                </div>
+              ))}
+              <POEditDialog projectId={project.id} projectName={project.name} po={poEdit} kind={poKind} open={poOpen} onClose={() => setPoOpen(false)} />
             </div>
           )}
         </div>

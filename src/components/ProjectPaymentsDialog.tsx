@@ -5,7 +5,7 @@ import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePurchaseOrders, POList, PODetailDialog, POEditDialog, poTotals, KIND_LABEL, type PO } from "@/components/PurchaseOrders";
+import { usePurchaseOrders, POList, PODetailDialog, POEditDialog, poTotals, KIND_LABEL, KIND_SHORT, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { format } from "date-fns";
 import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -99,7 +99,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
 
   // 2. Payment logs
   const wl = wb.addWorksheet("Payment logs");
-  head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills", "SO"]);
+  head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills", "PO"]);
   [...mine].sort((a, b) => (projOf.get(pidOf(a)) ?? "").localeCompare(projOf.get(pidOf(b)) ?? "") || b.created_at.localeCompare(a.created_at))
     .forEach((r) => {
       const imp = isImported(r);
@@ -142,22 +142,25 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   const at = wa.addRow(["TOTAL", spend.length, sum(spend)]); at.font = { bold: true }; at.getCell(3).numFmt = money;
   [22, 11, 18].forEach((w, i) => { wa.getColumn(i + 1).width = w; });
 
-  // 5. Purchase orders of these projects: value vs paid against them
-  const projPOs = pos.filter((po) => projOf.has(po.project_id));
-  if (projPOs.length) {
-    const wp = wb.addWorksheet("Purchase orders");
-    head(wp, ["SO number", "Type", "Customer / vendor", "Project", "SO date", "SO value", "Paid against SO", "Approved, to pay", "Waiting approval", "Balance", "% used", "Payments"]);
+  // 5./6. Sales Orders (vs project spend) and Purchase Orders (vs payments linked to them)
+  for (const kind of ["customer", "vendor"] as OrderKind[]) {
+    const list = pos.filter((po) => po.kind === kind && projOf.has(po.project_id));
+    if (!list.length) continue;
+    const sh = KIND_SHORT[kind];
+    const wp = wb.addWorksheet(kind === "customer" ? "Sales orders" : "Purchase orders");
+    head(wp, [`${sh} number`, kind === "customer" ? "Customer" : "Vendor", "Project", `${sh} date`, `${sh} value`,
+      kind === "customer" ? "Project spend" : "Paid against PO", "Approved, to pay", "Waiting approval", kind === "customer" ? "SO value left" : "Balance", "% used"]);
     const firstP = wp.rowCount + 1;
-    projPOs.forEach((po) => {
+    list.forEach((po) => {
       const t = poTotals(po, rows);
-      const r = wp.addRow([po.po_number, KIND_LABEL[po.kind], po.party ?? "", projOf.get(po.project_id) ?? "", po.po_date ? new Date(po.po_date) : "",
-        t.value || "", t.spent, t.toPay, t.pending, t.value ? t.balance : "", t.value ? t.pct / 100 : "", t.count]);
-      r.getCell(5).numFmt = "dd-mmm-yyyy";
-      [6, 7, 8, 9, 10].forEach((c) => { r.getCell(c).numFmt = money; });
-      r.getCell(11).numFmt = "0%";
+      const r = wp.addRow([po.po_number, po.party ?? "", projOf.get(po.project_id) ?? "", po.po_date ? new Date(po.po_date) : "",
+        t.value || "", t.spent, t.toPay, t.pending, t.value ? t.balance : "", t.value ? t.pct / 100 : ""]);
+      r.getCell(4).numFmt = "dd-mmm-yyyy";
+      [5, 6, 7, 8, 9].forEach((c) => { r.getCell(c).numFmt = money; });
+      r.getCell(10).numFmt = "0%";
     });
-    [18, 14, 26, 34, 13, 16, 18, 18, 18, 16, 9, 10].forEach((w, i) => { wp.getColumn(i + 1).width = w; });
-    wp.autoFilter = { from: { row: firstP - 1, column: 1 }, to: { row: wp.rowCount, column: 12 } };
+    [18, 26, 34, 13, 16, 18, 18, 18, 16, 9].forEach((w, i) => { wp.getColumn(i + 1).width = w; });
+    wp.autoFilter = { from: { row: firstP - 1, column: 1 }, to: { row: wp.rowCount, column: 10 } };
   }
 
   const buf = await wb.xlsx.writeBuffer();
@@ -270,7 +273,7 @@ function SubProjectSplit({ rows }: { rows: Row[] }) {
 /** Admins: move a payment to another project (or to "No project"). */
 type MoveTo = {
   projects: Proj[]; busy: string | null; onMove: (id: string, projectId: string | null) => void;
-  pos?: PO[]; onLinkPO?: (id: string, poId: string | null) => void;     // admins: link a payment to a sales order
+  pos?: PO[]; onLinkPO?: (id: string, poId: string | null) => void;     // admins: link a payment to a purchase order
 };
 
 function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row[]; names: Record<string, string>; projectName?: (id: string | null) => string; moveTo?: MoveTo; poNumber?: (id?: string | null) => string | null }) {
@@ -312,7 +315,7 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
                       {r.status === "approved" ? (r.paid_at ? "Paid" : "Approved · not paid") : st.label}
                     </span>
                     {poNumber?.(r.po_id) && (
-                      <span className="rounded-full bg-accent-light px-2 py-0.5 text-[11px] font-semibold text-primary">SO {poNumber(r.po_id)}</span>
+                      <span className="rounded-full bg-accent-light px-2 py-0.5 text-[11px] font-semibold text-primary">PO {poNumber(r.po_id)}</span>
                     )}
                     {!isImported(r) && [r.bill_path, ...(r.extra_bills ?? []).map((b) => b.path)].map((path, i, all) => (
                       <button key={path} type="button" onClick={() => openFile(path)}
@@ -343,13 +346,13 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
                       </select>
                     </div>
                   )}
-                  {moveTo?.onLinkPO && r.project_id && (moveTo.pos ?? []).some((po) => po.project_id === r.project_id) && (
+                  {moveTo?.onLinkPO && r.project_id && (moveTo.pos ?? []).some((po) => po.kind === "vendor" && po.project_id === r.project_id) && (
                     <select value={r.po_id ?? ""} disabled={moveTo.busy === r.id} aria-label="Purchase order"
                       onChange={(e) => moveTo.onLinkPO!(r.id, e.target.value || null)}
                       className="h-8 max-w-[210px] rounded-md border border-input bg-background px-2 text-xs text-ink-secondary">
-                      <option value="">Not against an SO</option>
-                      {(moveTo.pos ?? []).filter((po) => po.project_id === r.project_id).map((po) => (
-                        <option key={po.id} value={po.id}>SO {po.po_number}{po.party ? ` · ${po.party}` : ""}</option>
+                      <option value="">Not against a PO</option>
+                      {(moveTo.pos ?? []).filter((po) => po.kind === "vendor" && po.project_id === r.project_id).map((po) => (
+                        <option key={po.id} value={po.id}>PO {po.po_number}{po.party ? ` · ${po.party}` : ""}</option>
                       ))}
                     </select>
                   )}
@@ -371,7 +374,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   open: boolean; onClose: () => void; projects: Proj[];
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [view, setView] = useState<"projects" | "subprojects" | "pos">("projects");
+  const [view, setView] = useState<"projects" | "subprojects" | "so" | "po">("projects");
   const [find, setFind] = useState("");
   // admins can move payments between projects (e.g. out of "No project")
   const { profile } = useAuth();
@@ -395,13 +398,13 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   const poById = useMemo(() => new Map(pos.map((p) => [p.id, p])), [pos]);
   const poNumber = (id?: string | null) => (id ? poById.get(id)?.po_number ?? null : null);
   const [poOpen, setPoOpen] = useState<PO | null>(null);
-  const [poEdit, setPoEdit] = useState<{ projectId: string; po: PO | null } | null>(null);
+  const [poEdit, setPoEdit] = useState<{ projectId: string; po: PO | null; kind: OrderKind } | null>(null);
   const linkPO = async (id: string, poId: string | null) => {
     setMoving(id);
     const { error } = await (supabase as any).rpc("set_payment_po", { p_id: id, p_po: poId });
     setMoving(null);
     if (error) { toast.error(/set_payment_po|schema cache|function/i.test(error.message ?? "") ? "Run TRILO_purchase_orders.sql first" : error.message); return; }
-    toast.success(poId ? `Linked to SO ${poNumber(poId) ?? ""}` : "Unlinked from the SO");
+    toast.success(poId ? `Linked to PO ${poNumber(poId) ?? ""}` : "Unlinked from the PO");
     qc.invalidateQueries({ queryKey: ["project-expenses"] });
   };
   const moveTo = canMove ? { projects: sortedProjects, busy: moving, onMove: movePayment, pos, onLinkPO: linkPO } : undefined;
@@ -475,7 +478,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
             </div>
 
             <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
-              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["pos", "Sales Orders"]] as const).map(([k, l]) => (
+              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["so", "Sales Orders"], ["po", "Purchase Orders"]] as const).map(([k, l]) => (
                 <button key={k} type="button" onClick={() => setView(k)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === k ? "bg-primary text-primary-foreground" : "text-ink-secondary hover:text-ink-primary"}`}>{l}</button>
               ))}
@@ -492,9 +495,9 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
               <SubProjectsView rows={rows} projects={projects} names={names} />
             </>)}
 
-            {view === "pos" && (
-              <AllPOsView pos={pos} rows={rows} projects={projects} onOpen={setPoOpen}
-                onAdd={canMove ? (projectId) => setPoEdit({ projectId, po: null }) : undefined} />
+            {(view === "so" || view === "po") && (
+              <AllPOsView key={view} kind={view === "so" ? "customer" : "vendor"} pos={pos} rows={rows} projects={projects} onOpen={setPoOpen}
+                onAdd={canMove ? (projectId, kind) => setPoEdit({ projectId, po: null, kind }) : undefined} />
             )}
 
             {view === "projects" && (<>
@@ -550,14 +553,19 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                           <SummaryTiles t={t} />
                           <SubProjectSplit rows={pr} />
                         </div>
-                        {p.id !== NO_PROJECT.id && (pos.some((po) => po.project_id === p.id) || canMove) && (
-                          <div>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Purchase orders</p>
-                            <POList pos={pos.filter((po) => po.project_id === p.id)} rows={pr} onOpen={setPoOpen}
-                              onAdd={canMove ? () => setPoEdit({ projectId: p.id, po: null }) : undefined}
-                              empty="No sales orders for this project yet." />
-                          </div>
-                        )}
+                        {p.id !== NO_PROJECT.id && (["customer", "vendor"] as OrderKind[]).map((kind) => {
+                          const mine = pos.filter((po) => po.kind === kind && po.project_id === p.id);
+                          if (!mine.length && !canMove) return null;
+                          return (
+                            <div key={kind}>
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">{KIND_LABEL[kind]}s</p>
+                              <POList pos={mine} rows={pr} onOpen={setPoOpen}
+                                onAdd={canMove ? () => setPoEdit({ projectId: p.id, po: null, kind }) : undefined}
+                                addLabel={`Add ${KIND_LABEL[kind].toLowerCase()}`}
+                                empty={`No ${KIND_LABEL[kind].toLowerCase()}s for this project yet.`} />
+                            </div>
+                          );
+                        })}
                         <PaymentLogs rows={pr} names={names} moveTo={moveTo} poNumber={poNumber} />
                       </div>
                     )}
@@ -573,9 +581,9 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
         <PODetailDialog po={poOpen} rows={rows} names={names}
           projectName={poOpen ? projects.find((x) => x.id === poOpen.project_id)?.name : undefined}
           onClose={() => setPoOpen(null)}
-          onEdit={canMove && poOpen ? () => { setPoEdit({ projectId: poOpen.project_id, po: poOpen }); setPoOpen(null); } : undefined} />
+          onEdit={canMove && poOpen ? () => { setPoEdit({ projectId: poOpen.project_id, po: poOpen, kind: poOpen.kind }); setPoOpen(null); } : undefined} />
         {poEdit && (
-          <POEditDialog open projectId={poEdit.projectId} po={poEdit.po}
+          <POEditDialog open projectId={poEdit.projectId} po={poEdit.po} kind={poEdit.kind}
             projectName={projects.find((x) => x.id === poEdit.projectId)?.name} onClose={() => setPoEdit(null)} />
         )}
       </DialogContent>
@@ -583,50 +591,45 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   );
 }
 
-/** Every sales order across projects, with how much has been paid against each. */
-function AllPOsView({ pos, rows, projects, onOpen, onAdd }: {
-  pos: PO[]; rows: Row[]; projects: Proj[]; onOpen: (po: PO) => void; onAdd?: (projectId: string) => void;
+/** Every Sales Order (vs project spend) or Purchase Order (vs payments linked to it) across projects. */
+function AllPOsView({ kind, pos, rows, projects, onOpen, onAdd }: {
+  kind: OrderKind; pos: PO[]; rows: Row[]; projects: Proj[]; onOpen: (po: PO) => void; onAdd?: (projectId: string, kind: OrderKind) => void;
 }) {
-  const [kind, setKind] = useState<"all" | "customer" | "vendor">("all");
   const [find, setFind] = useState("");
   const [addFor, setAddFor] = useState("");
+  const sh = KIND_SHORT[kind];
   const projName = (id: string) => projects.find((p) => p.id === id)?.name ?? "—";
   const q = find.trim().toLowerCase();
-  const shown = pos.filter((po) => (kind === "all" || po.kind === kind) &&
-    (!q || [po.po_number, po.party, projName(po.project_id)].some((v) => (v ?? "").toLowerCase().includes(q))));
+  const all = pos.filter((po) => po.kind === kind);
+  const shown = all.filter((po) => !q || [po.po_number, po.party, projName(po.project_id)].some((v) => (v ?? "").toLowerCase().includes(q)));
   const totals = shown.reduce((a, po) => { const t = poTotals(po, rows); return { value: a.value + t.value, spent: a.spent + t.spent }; }, { value: 0, spent: 0 });
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">SO value ({shown.length})</p><p className="font-heading text-base font-bold">{formatINR(totals.value)}</p></div>
-        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">Paid against SOs</p><p className="font-heading text-base font-bold text-success">{formatINR(totals.spent)}</p></div>
-        <div className="col-span-2 rounded-lg border border-border bg-card p-3 sm:col-span-1"><p className="text-[11px] text-ink-muted">Balance</p><p className="font-heading text-base font-bold">{formatINR(totals.value - totals.spent)}</p></div>
+        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">{sh} value ({shown.length})</p><p className="font-heading text-base font-bold">{formatINR(totals.value)}</p></div>
+        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">{kind === "customer" ? "Project spend" : "Paid against POs"}</p><p className="font-heading text-base font-bold text-success">{formatINR(totals.spent)}</p></div>
+        <div className="col-span-2 rounded-lg border border-border bg-card p-3 sm:col-span-1"><p className="text-[11px] text-ink-muted">{kind === "customer" ? "SO value left" : "Balance"}</p><p className="font-heading text-base font-bold">{formatINR(totals.value - totals.spent)}</p></div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
-          {([["all", "All"], ["customer", KIND_LABEL.customer], ["vendor", KIND_LABEL.vendor]] as const).map(([k, l]) => (
-            <button key={k} type="button" onClick={() => setKind(k)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${kind === k ? "bg-primary text-primary-foreground" : "text-ink-secondary"}`}>{l}</button>
-          ))}
-        </div>
-        <div className="relative min-w-[160px] flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-          <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search SO no., party or project"
-            className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm outline-none" />
-        </div>
+      {kind === "customer" && (
+        <p className="text-xs text-ink-muted">Sales Orders are not linked to payments — each one is compared with its project's total approved spend.</p>
+      )}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+        <input value={find} onChange={(e) => setFind(e.target.value)} placeholder={`Search ${sh} no., ${kind === "customer" ? "customer" : "vendor"} or project`}
+          className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm outline-none" />
       </div>
       {onAdd && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border p-2">
           <select value={addFor} onChange={(e) => setAddFor(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
-            <option value="">Add an SO to project…</option>
+            <option value="">Add {kind === "customer" ? "a Sales Order" : "a Purchase Order"} to project…</option>
             {[...projects].sort((a, b) => a.name.localeCompare(b.name)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <button type="button" disabled={!addFor} onClick={() => { onAdd(addFor); setAddFor(""); }}
-            className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">Add SO</button>
+          <button type="button" disabled={!addFor} onClick={() => { onAdd(addFor, kind); setAddFor(""); }}
+            className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">Add {sh}</button>
         </div>
       )}
       <POList pos={shown} rows={rows} projectName={projName} onOpen={onOpen}
-        empty={pos.length ? "No sales orders match." : "No sales orders yet. Add one to a project (when creating it, or here)."} />
+        empty={all.length ? `No ${KIND_LABEL[kind].toLowerCase()}s match.` : `No ${KIND_LABEL[kind].toLowerCase()}s yet.`} />
     </div>
   );
 }
