@@ -128,11 +128,13 @@ export default function FormRequestsPage() {
     const m = new Map<string, FormRequestRow[]>();
     const newestFirst = [...list].sort((a, b) => (b.submitted_at ?? "").localeCompare(a.submitted_at ?? ""));
     for (const r of newestFirst) m.set(r.project_id ?? "", [...(m.get(r.project_id ?? "") ?? []), r]);
-    // projects with the most recent form first (each list is newest first); "No project" last
+    // "All projects": one combined list, newest first (project name shown on each row)
+    if (projectFilter === "all") return [["__all__", newestFirst]] as Array<[string, FormRequestRow[]]>;
+    // a project picked: that project's forms, newest first
     return Array.from(m.entries()).sort((a, b) =>
       a[0] === "" ? 1 : b[0] === "" ? -1 : (b[1][0]?.submitted_at ?? "").localeCompare(a[1][0]?.submitted_at ?? ""));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, projectList]);
+  }, [list, projectList, projectFilter]);
   const projectCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of base) m.set(r.project_id ?? "", (m.get(r.project_id ?? "") ?? 0) + 1);
@@ -211,9 +213,9 @@ export default function FormRequestsPage() {
         <div className="space-y-4">
         {groups.map(([pid, rows]) => (
         <div key={pid || "none"}>
-          <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          {pid !== "__all__" && <p className="mb-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">
             {projectNameOf(pid || null)} <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium normal-case tracking-normal">{rows.length}</span>
-          </p>
+          </p>}
         <div className="rounded-xl border border-border bg-card divide-y divide-border">
           {rows.map((r) => (
             <button key={r.id} onClick={() => open(r.id)}
@@ -223,6 +225,7 @@ export default function FormRequestsPage() {
                   {r.form_title}{r.reference_value ? ` · ${r.reference_value}` : ""}{r.revision ? ` · Rev ${String(r.revision).padStart(2, "0")}` : ""}
                 </p>
                 <p className="text-xs text-ink-muted">
+                  {pid === "__all__" && <><span className="font-medium text-ink-secondary">{projectNameOf(r.project_id ?? null)}</span> · </>}
                   Requested by: <span className="font-medium text-ink-secondary">{names[r.requested_by] ?? "—"}</span> · {format(new Date(r.submitted_at), "d MMM yyyy, h:mm a")}{r.approver_id ? <> · Approver: {names[r.approver_id] ?? "—"}</> : null} · Authorizer: {names[r.authorizer_id] ?? "—"}
                 </p>
               </div>
