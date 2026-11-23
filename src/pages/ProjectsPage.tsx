@@ -811,7 +811,7 @@ function ProjectFormModal({
             await savePO(created.id, poDraft);
             qc.invalidateQueries({ queryKey: ["purchase-orders"] });
           } catch (e: any) {
-            toast.error("Project created, but the PO could not be saved: " + (e?.message ?? ""));
+            toast.error("Project created, but the SO could not be saved: " + (e?.message ?? ""));
           }
         }
         setPoDraft(emptyPODraft());
@@ -867,15 +867,15 @@ function ProjectFormModal({
           </div>
           {!project ? (
             <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-sm font-medium text-ink-primary">Purchase Order <span className="font-normal text-ink-muted">(optional — more can be added later)</span></p>
+              <p className="mb-2 text-sm font-medium text-ink-primary">Sales Order <span className="font-normal text-ink-muted">(optional — more can be added later)</span></p>
               <PODraftFields value={poDraft} onChange={setPoDraft} />
             </div>
           ) : (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-ink-primary">Purchase Orders</label>
+              <label className="mb-1.5 block text-sm font-medium text-ink-primary">Sales Orders</label>
               <POList compact pos={allPOs.filter((p) => p.project_id === project.id)} rows={[]}
                 onOpen={(po) => { setPoEdit(po); setPoOpen(true); }} onAdd={() => { setPoEdit(null); setPoOpen(true); }}
-                empty="No purchase orders for this project yet." />
+                empty="No sales orders for this project yet." />
               <POEditDialog projectId={project.id} projectName={project.name} po={poEdit} open={poOpen} onClose={() => setPoOpen(false)} />
             </div>
           )}

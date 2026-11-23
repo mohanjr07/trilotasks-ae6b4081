@@ -719,7 +719,7 @@ function RequestPaymentModal({
 }) {
   const [projectId, setProjectId] = useState<string>("");
   const [subProject, setSubProject] = useState<string>("");
-  const [poId, setPoId] = useState<string>("");          // optional: the purchase order this payment is against
+  const [poId, setPoId] = useState<string>("");          // optional: the sales order this payment is against
   const { data: poOptions = [] } = useQuery({
     queryKey: ["po-options", projectId],
     enabled: !!projectId,
@@ -850,13 +850,13 @@ function RequestPaymentModal({
 
                 {projectId && poOptions.length > 0 && (
                   <div>
-                    <label className="text-xs font-medium text-ink-muted mb-1.5 block">Purchase Order</label>
+                    <label className="text-xs font-medium text-ink-muted mb-1.5 block">Sales Order</label>
                     <Select value={poId || "none"} onValueChange={(v) => setPoId(v === "none" ? "" : v)}>
-                      <SelectTrigger className="h-10"><SelectValue placeholder="Select a PO" /></SelectTrigger>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Select an SO" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Not against a PO</SelectItem>
+                        <SelectItem value="none">Not against an SO</SelectItem>
                         {poOptions.map((o) => (
-                          <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}{o.kind === "vendor" ? " (vendor)" : " (customer)"}</SelectItem>
+                          <SelectItem key={o.id} value={o.id}>SO {o.po_number}{o.party ? ` · ${o.party}` : ""}{o.kind === "vendor" ? " (vendor)" : " (customer)"}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -966,7 +966,7 @@ function RequestPaymentModal({
 }
 
 
-/** Payment detail: the purchase order it is against (admins can change it, also after approval). */
+/** Payment detail: the sales order it is against (admins can change it, also after approval). */
 function SelectedPO({ payment, isAdmin, onChanged }: {
   payment: { id: string; project_id: string | null; po_id?: string | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
 }) {
@@ -988,22 +988,22 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
     const { error } = await (supabase as any).rpc("set_payment_po", { p_id: payment.id, p_po: po });
     setBusy(false);
     if (error) { toast.error("Failed: " + error.message); return; }
-    toast.success(po ? "Linked to the purchase order" : "Unlinked from the purchase order");
+    toast.success(po ? "Linked to the sales order" : "Unlinked from the sales order");
     onChanged(po);
   };
   return (
     <div className="flex items-center justify-between">
-      <span className="text-ink-muted">Purchase Order</span>
+      <span className="text-ink-muted">Sales Order</span>
       {isAdmin ? (
         <Select value={payment.po_id ?? "__none__"} disabled={busy} onValueChange={change}>
-          <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose PO" /></SelectTrigger>
+          <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose SO" /></SelectTrigger>
           <SelectContent className="max-h-72">
-            <SelectItem value="__none__">Not against a PO</SelectItem>
-            {options.map((o) => <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>)}
+            <SelectItem value="__none__">Not against an SO</SelectItem>
+            {options.map((o) => <SelectItem key={o.id} value={o.id}>SO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>)}
           </SelectContent>
         </Select>
       ) : (
-        <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `PO ${current.po_number}` : "—"}</span>
+        <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `SO ${current.po_number}` : "—"}</span>
       )}
     </div>
   );

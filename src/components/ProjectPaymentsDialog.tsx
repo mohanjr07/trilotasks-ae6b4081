@@ -99,7 +99,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
 
   // 2. Payment logs
   const wl = wb.addWorksheet("Payment logs");
-  head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills", "PO"]);
+  head(wl, ["Date", "Project", "Subproject", "Purpose", "Amount", "Status", "Requested by", "Verified by", "Approved by", "Paid on", "Paid by", "Paid from", "Bills", "SO"]);
   [...mine].sort((a, b) => (projOf.get(pidOf(a)) ?? "").localeCompare(projOf.get(pidOf(b)) ?? "") || b.created_at.localeCompare(a.created_at))
     .forEach((r) => {
       const imp = isImported(r);
@@ -146,7 +146,7 @@ async function exportExpensesExcel(projects: Proj[], rows: Row[], names: Record<
   const projPOs = pos.filter((po) => projOf.has(po.project_id));
   if (projPOs.length) {
     const wp = wb.addWorksheet("Purchase orders");
-    head(wp, ["PO number", "Type", "Customer / vendor", "Project", "PO date", "PO value", "Paid against PO", "Approved, to pay", "Waiting approval", "Balance", "% used", "Payments"]);
+    head(wp, ["SO number", "Type", "Customer / vendor", "Project", "SO date", "SO value", "Paid against SO", "Approved, to pay", "Waiting approval", "Balance", "% used", "Payments"]);
     const firstP = wp.rowCount + 1;
     projPOs.forEach((po) => {
       const t = poTotals(po, rows);
@@ -270,7 +270,7 @@ function SubProjectSplit({ rows }: { rows: Row[] }) {
 /** Admins: move a payment to another project (or to "No project"). */
 type MoveTo = {
   projects: Proj[]; busy: string | null; onMove: (id: string, projectId: string | null) => void;
-  pos?: PO[]; onLinkPO?: (id: string, poId: string | null) => void;     // admins: link a payment to a purchase order
+  pos?: PO[]; onLinkPO?: (id: string, poId: string | null) => void;     // admins: link a payment to a sales order
 };
 
 function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row[]; names: Record<string, string>; projectName?: (id: string | null) => string; moveTo?: MoveTo; poNumber?: (id?: string | null) => string | null }) {
@@ -312,7 +312,7 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
                       {r.status === "approved" ? (r.paid_at ? "Paid" : "Approved · not paid") : st.label}
                     </span>
                     {poNumber?.(r.po_id) && (
-                      <span className="rounded-full bg-accent-light px-2 py-0.5 text-[11px] font-semibold text-primary">PO {poNumber(r.po_id)}</span>
+                      <span className="rounded-full bg-accent-light px-2 py-0.5 text-[11px] font-semibold text-primary">SO {poNumber(r.po_id)}</span>
                     )}
                     {!isImported(r) && [r.bill_path, ...(r.extra_bills ?? []).map((b) => b.path)].map((path, i, all) => (
                       <button key={path} type="button" onClick={() => openFile(path)}
@@ -347,9 +347,9 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
                     <select value={r.po_id ?? ""} disabled={moveTo.busy === r.id} aria-label="Purchase order"
                       onChange={(e) => moveTo.onLinkPO!(r.id, e.target.value || null)}
                       className="h-8 max-w-[210px] rounded-md border border-input bg-background px-2 text-xs text-ink-secondary">
-                      <option value="">Not against a PO</option>
+                      <option value="">Not against an SO</option>
                       {(moveTo.pos ?? []).filter((po) => po.project_id === r.project_id).map((po) => (
-                        <option key={po.id} value={po.id}>PO {po.po_number}{po.party ? ` · ${po.party}` : ""}</option>
+                        <option key={po.id} value={po.id}>SO {po.po_number}{po.party ? ` · ${po.party}` : ""}</option>
                       ))}
                     </select>
                   )}
@@ -401,7 +401,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     const { error } = await (supabase as any).rpc("set_payment_po", { p_id: id, p_po: poId });
     setMoving(null);
     if (error) { toast.error(/set_payment_po|schema cache|function/i.test(error.message ?? "") ? "Run TRILO_purchase_orders.sql first" : error.message); return; }
-    toast.success(poId ? `Linked to PO ${poNumber(poId) ?? ""}` : "Unlinked from the PO");
+    toast.success(poId ? `Linked to SO ${poNumber(poId) ?? ""}` : "Unlinked from the SO");
     qc.invalidateQueries({ queryKey: ["project-expenses"] });
   };
   const moveTo = canMove ? { projects: sortedProjects, busy: moving, onMove: movePayment, pos, onLinkPO: linkPO } : undefined;
@@ -475,7 +475,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
             </div>
 
             <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
-              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["pos", "Purchase Orders"]] as const).map(([k, l]) => (
+              {([["projects", "Projects"], ["subprojects", "Subprojects"], ["pos", "Sales Orders"]] as const).map(([k, l]) => (
                 <button key={k} type="button" onClick={() => setView(k)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === k ? "bg-primary text-primary-foreground" : "text-ink-secondary hover:text-ink-primary"}`}>{l}</button>
               ))}
@@ -555,7 +555,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Purchase orders</p>
                             <POList pos={pos.filter((po) => po.project_id === p.id)} rows={pr} onOpen={setPoOpen}
                               onAdd={canMove ? () => setPoEdit({ projectId: p.id, po: null }) : undefined}
-                              empty="No purchase orders for this project yet." />
+                              empty="No sales orders for this project yet." />
                           </div>
                         )}
                         <PaymentLogs rows={pr} names={names} moveTo={moveTo} poNumber={poNumber} />
@@ -583,7 +583,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   );
 }
 
-/** Every purchase order across projects, with how much has been paid against each. */
+/** Every sales order across projects, with how much has been paid against each. */
 function AllPOsView({ pos, rows, projects, onOpen, onAdd }: {
   pos: PO[]; rows: Row[]; projects: Proj[]; onOpen: (po: PO) => void; onAdd?: (projectId: string) => void;
 }) {
@@ -598,8 +598,8 @@ function AllPOsView({ pos, rows, projects, onOpen, onAdd }: {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">PO value ({shown.length})</p><p className="font-heading text-base font-bold">{formatINR(totals.value)}</p></div>
-        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">Paid against POs</p><p className="font-heading text-base font-bold text-success">{formatINR(totals.spent)}</p></div>
+        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">SO value ({shown.length})</p><p className="font-heading text-base font-bold">{formatINR(totals.value)}</p></div>
+        <div className="rounded-lg border border-border bg-card p-3"><p className="text-[11px] text-ink-muted">Paid against SOs</p><p className="font-heading text-base font-bold text-success">{formatINR(totals.spent)}</p></div>
         <div className="col-span-2 rounded-lg border border-border bg-card p-3 sm:col-span-1"><p className="text-[11px] text-ink-muted">Balance</p><p className="font-heading text-base font-bold">{formatINR(totals.value - totals.spent)}</p></div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -611,22 +611,22 @@ function AllPOsView({ pos, rows, projects, onOpen, onAdd }: {
         </div>
         <div className="relative min-w-[160px] flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-          <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search PO no., party or project"
+          <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search SO no., party or project"
             className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-sm outline-none" />
         </div>
       </div>
       {onAdd && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border p-2">
           <select value={addFor} onChange={(e) => setAddFor(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
-            <option value="">Add a PO to project…</option>
+            <option value="">Add an SO to project…</option>
             {[...projects].sort((a, b) => a.name.localeCompare(b.name)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <button type="button" disabled={!addFor} onClick={() => { onAdd(addFor); setAddFor(""); }}
-            className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">Add PO</button>
+            className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">Add SO</button>
         </div>
       )}
       <POList pos={shown} rows={rows} projectName={projName} onOpen={onOpen}
-        empty={pos.length ? "No purchase orders match." : "No purchase orders yet. Add one to a project (when creating it, or here)."} />
+        empty={pos.length ? "No sales orders match." : "No sales orders yet. Add one to a project (when creating it, or here)."} />
     </div>
   );
 }

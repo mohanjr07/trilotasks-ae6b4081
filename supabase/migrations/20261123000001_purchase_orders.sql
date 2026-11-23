@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────────
---  Purchase Orders, tracked against projects and payments
+--  Sales Orders (SO), tracked against projects and payments
 --  • A project can have several POs, of two kinds:
 --      customer — the client's order to us (e.g. CAT's PO for the conveyor)
 --      vendor   — our order on a supplier (e.g. PO to Anand Steels)
@@ -78,7 +78,7 @@ BEGIN
     IF TG_OP = 'UPDATE' AND NEW.project_id IS DISTINCT FROM OLD.project_id THEN
       NEW.po_id := NULL;                                  -- project changed → old PO no longer applies
     ELSE
-      RAISE EXCEPTION 'That purchase order belongs to another project';
+      RAISE EXCEPTION 'That sales order belongs to another project';
     END IF;
   END IF;
   RETURN NEW;
@@ -91,7 +91,7 @@ CREATE TRIGGER trg_payment_po_check BEFORE INSERT OR UPDATE OF po_id, project_id
 CREATE OR REPLACE FUNCTION public.set_payment_po(p_id uuid, p_po uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF NOT public.is_admin(auth.uid()) THEN RAISE EXCEPTION 'Only admins can link payments to purchase orders'; END IF;
+  IF NOT public.is_admin(auth.uid()) THEN RAISE EXCEPTION 'Only admins can link payments to sales orders'; END IF;
   UPDATE payment_requests SET po_id = p_po WHERE id = p_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Payment not found'; END IF;
 END; $$;

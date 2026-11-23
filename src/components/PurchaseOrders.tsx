@@ -25,17 +25,17 @@ export type PO = {
   po_date: string | null; value: number | null; notes: string | null; doc_path: string | null; doc_name: string | null;
   status: "open" | "closed"; created_at: string;
 };
-/** The payment fields the PO views need. */
+/** The payment fields the SO views need. */
 export type POPayment = {
   id: string; po_id?: string | null; project_id: string | null; amount: number; status: string; purpose: string;
   created_at: string; paid_at: string | null; requester_id: string; bill_path?: string | null;
 };
 
-export const KIND_LABEL: Record<PO["kind"], string> = { customer: "Customer PO", vendor: "Vendor PO" };
+export const KIND_LABEL: Record<PO["kind"], string> = { customer: "Customer SO", vendor: "Vendor SO" };
 const inr = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const isPending = (s: string) => s === "pending" || s === "pending_verification";
 
-/** Every PO the user may see (admins, Hari, Anu). Empty list for others or before the SQL is run. */
+/** Every SO the user may see (admins, Hari, Anu). Empty list for others or before the SQL is run. */
 export function usePurchaseOrders(enabled = true) {
   return useQuery({
     queryKey: ["purchase-orders"],
@@ -76,7 +76,7 @@ export async function openPODoc(po: Pick<PO, "doc_path">) {
       return data.signedUrl;
     });
   } catch (e: any) {
-    toast.error("Could not open the PO document: " + (e?.message ?? ""));
+    toast.error("Could not open the SO document: " + (e?.message ?? ""));
   }
 }
 
@@ -99,7 +99,7 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-xs font-medium text-ink-muted">PO number *</label>
+          <label className="mb-1 block text-xs font-medium text-ink-muted">SO number *</label>
           <Input value={value.po_number} onChange={(e) => set({ po_number: e.target.value })} placeholder="e.g. 4500123456" className="h-10" />
         </div>
         <div>
@@ -107,11 +107,11 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
           <Input value={value.party} onChange={(e) => set({ party: e.target.value })} placeholder={value.kind === "customer" ? "e.g. Caterpillar" : "e.g. Anand Steels"} className="h-10" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-ink-muted">PO date</label>
+          <label className="mb-1 block text-xs font-medium text-ink-muted">SO date</label>
           <Input type="date" value={value.po_date} onChange={(e) => set({ po_date: e.target.value })} className="h-10" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-ink-muted">PO value (₹)</label>
+          <label className="mb-1 block text-xs font-medium text-ink-muted">SO value (₹)</label>
           <Input type="number" inputMode="decimal" min="0" value={value.value} onChange={(e) => set({ value: e.target.value })} placeholder="0" className="h-10" />
         </div>
       </div>
@@ -120,7 +120,7 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
         <Textarea value={value.notes} onChange={(e) => set({ notes: e.target.value })} rows={2} placeholder="Scope, terms, payment milestones…" />
       </div>
       <div>
-        <label className="mb-1 block text-xs font-medium text-ink-muted">PO document</label>
+        <label className="mb-1 block text-xs font-medium text-ink-muted">SO document</label>
         {value.file ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
             <FileText className="h-4 w-4 shrink-0 text-ink-muted" />
@@ -130,7 +130,7 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
         ) : (
           <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-background px-3 py-3 text-sm hover:bg-muted/40">
             <Upload className="h-4 w-4 text-ink-muted" />
-            <span className="text-ink-secondary">{existingDoc ? `Replace “${existingDoc}”` : "Upload the PO (PDF, photo or file)"}</span>
+            <span className="text-ink-secondary">{existingDoc ? `Replace “${existingDoc}”` : "Upload the SO (PDF, photo or file)"}</span>
             <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) set({ file: f }); e.target.value = ""; }} />
           </label>
@@ -140,16 +140,16 @@ export function PODraftFields({ value, onChange, existingDoc }: { value: PODraft
   );
 }
 
-/** Insert or update a PO (uploads the document first). */
+/** Insert or update an SO (uploads the document first). */
 export async function savePO(projectId: string, d: PODraft, existing?: PO | null) {
-  if (!d.po_number.trim()) throw new Error("Enter the PO number");
+  if (!d.po_number.trim()) throw new Error("Enter the SO number");
   let doc_path = existing?.doc_path ?? null;
   let doc_name = existing?.doc_name ?? null;
   if (d.file) {
-    if (d.file.size > 25 * 1024 * 1024) throw new Error("The PO document is larger than 25 MB");
+    if (d.file.size > 25 * 1024 * 1024) throw new Error("The SO document is larger than 25 MB");
     const path = `${projectId}/${crypto.randomUUID()}-${d.file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, d.file, { contentType: d.file.type || undefined });
-    if (upErr) throw new Error(/bucket/i.test(upErr.message) ? "PO storage isn't set up yet — run TRILO_purchase_orders.sql" : upErr.message);
+    if (upErr) throw new Error(/bucket/i.test(upErr.message) ? "SO storage isn't set up yet — run TRILO_purchase_orders.sql" : upErr.message);
     if (existing?.doc_path) supabase.storage.from(BUCKET).remove([existing.doc_path]).catch(() => {});
     doc_path = path; doc_name = d.file.name;
   }
@@ -161,7 +161,7 @@ export async function savePO(projectId: string, d: PODraft, existing?: PO | null
   const { error } = await q;
   if (error) {
     if (/purchase_orders/.test(error.message) && /exist|schema/.test(error.message)) throw new Error("Purchase orders aren't set up yet — run TRILO_purchase_orders.sql");
-    if (/duplicate|unique/i.test(error.message)) throw new Error("This project already has that PO number");
+    if (/duplicate|unique/i.test(error.message)) throw new Error("This project already has that SO number");
     throw error;
   }
 }
@@ -193,14 +193,14 @@ export function POEditDialog({ projectId, projectName, po, open, onClose }: {
     <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{po ? "Edit purchase order" : "Add purchase order"}</DialogTitle>
+          <DialogTitle>{po ? "Edit sales order" : "Add sales order"}</DialogTitle>
           {projectName && <DialogDescription>{projectName}</DialogDescription>}
         </DialogHeader>
         <PODraftFields value={draft} onChange={setDraft} existingDoc={po?.doc_name} />
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="gap-1.5">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />} {po ? "Save" : "Add PO"}
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />} {po ? "Save" : "Add SO"}
           </Button>
         </div>
       </DialogContent>
@@ -218,7 +218,7 @@ function Bar({ pct }: { pct: number }) {
   );
 }
 
-/** Cards of POs with value, spent and balance; tap one to open its detail. */
+/** Cards of SOs with value, spent and balance; tap one to open its detail. */
 export function POList({ pos, rows, projectName, onOpen, onAdd, empty, compact }: {
   pos: PO[]; rows: POPayment[]; projectName?: (id: string) => string; onOpen: (po: PO) => void; onAdd?: () => void; empty?: string;
   compact?: boolean;   // just number, party and value (no payment totals)
@@ -231,7 +231,7 @@ export function POList({ pos, rows, projectName, onOpen, onAdd, empty, compact }
           <button key={po.id} type="button" onClick={() => onOpen(po)}
             className="w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/40">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="font-heading text-sm font-bold text-ink-primary">PO {po.po_number}</span>
+              <span className="font-heading text-sm font-bold text-ink-primary">SO {po.po_number}</span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${po.kind === "customer" ? "bg-accent-light text-primary" : "bg-warning-light text-warning"}`}>{KIND_LABEL[po.kind]}</span>
               {po.status === "closed" && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-ink-muted">Closed</span>}
               {po.doc_path && <FileText className="h-3.5 w-3.5 text-ink-muted" />}
@@ -248,10 +248,10 @@ export function POList({ pos, rows, projectName, onOpen, onAdd, empty, compact }
           </button>
         );
       })}
-      {!pos.length && <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-ink-muted">{empty ?? "No purchase orders yet."}</p>}
+      {!pos.length && <p className="rounded-lg border border-dashed border-border py-4 text-center text-xs text-ink-muted">{empty ?? "No sales orders yet."}</p>}
       {onAdd && (
         <button type="button" onClick={onAdd} className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-          <Plus className="h-4 w-4" /> Add purchase order
+          <Plus className="h-4 w-4" /> Add sales order
         </button>
       )}
     </div>
@@ -287,7 +287,7 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
           <>
             <DialogHeader>
               <DialogTitle className="flex flex-wrap items-center gap-2">
-                <ClipboardList className="h-5 w-5" /> PO {po.po_number}
+                <ClipboardList className="h-5 w-5" /> SO {po.po_number}
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${po.kind === "customer" ? "bg-accent-light text-primary" : "bg-warning-light text-warning"}`}>{KIND_LABEL[po.kind]}</span>
               </DialogTitle>
               <DialogDescription>
@@ -297,8 +297,8 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
-                ["PO value", t.value ? inr(t.value) : "—", "text-ink-primary"],
-                ["Paid against PO", inr(t.spent), "text-success"],
+                ["SO value", t.value ? inr(t.value) : "—", "text-ink-primary"],
+                ["Paid against SO", inr(t.spent), "text-success"],
                 [t.balance < 0 ? "Over by" : "Balance", t.value ? inr(Math.abs(t.balance)) : "—", t.balance < 0 ? "text-destructive" : "text-ink-primary"],
                 ["Waiting approval", inr(t.pending), "text-warning"],
               ].map(([l, v, c]) => (
@@ -311,12 +311,12 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
             {t.value > 0 && (
               <div>
                 <Bar pct={t.pct} />
-                <p className="mt-1 text-right text-xs text-ink-muted">{t.pct}% of the PO used{t.toPay ? ` · ${inr(t.toPay)} approved, not yet paid` : ""}</p>
+                <p className="mt-1 text-right text-xs text-ink-muted">{t.pct}% of the SO used{t.toPay ? ` · ${inr(t.toPay)} approved, not yet paid` : ""}</p>
               </div>
             )}
 
             <div className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Paid against this PO over time</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Paid against this SO over time</p>
               {chart.length ? (
                 <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -333,13 +333,13 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
                         tickFormatter={(v) => (v >= 1e5 ? `${(v / 1e5).toFixed(1)}L` : v >= 1e3 ? `${Math.round(v / 1e3)}k` : String(v))}
                         domain={[0, (max: number) => Math.max(max, t.value || 0) * 1.08]} />
                       <Tooltip formatter={(v: number) => [inr(v), "Paid so far"]} labelFormatter={(l) => l || "Start"} />
-                      {t.value > 0 && <ReferenceLine y={t.value} stroke="hsl(var(--destructive))" strokeDasharray="6 4" label={{ value: `PO ${inr(t.value)}`, position: "insideTopRight", fontSize: 11 }} />}
+                      {t.value > 0 && <ReferenceLine y={t.value} stroke="hsl(var(--destructive))" strokeDasharray="6 4" label={{ value: `SO ${inr(t.value)}`, position: "insideTopRight", fontSize: 11 }} />}
                       <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#poFill)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="py-6 text-center text-sm text-ink-muted">No approved payments against this PO yet.</p>
+                <p className="py-6 text-center text-sm text-ink-muted">No approved payments against this SO yet.</p>
               )}
             </div>
 
@@ -348,16 +348,16 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
             <div className="flex flex-wrap gap-2">
               {po.doc_path && (
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openPODoc(po)}>
-                  <FileText className="h-4 w-4" /> {po.doc_name ?? "PO document"} <ExternalLink className="h-3.5 w-3.5" />
+                  <FileText className="h-4 w-4" /> {po.doc_name ?? "SO document"} <ExternalLink className="h-3.5 w-3.5" />
                 </Button>
               )}
               {onEdit && (
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit PO</Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit SO</Button>
               )}
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Payments against this PO ({list.length})</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Payments against this SO ({list.length})</p>
               <div className="divide-y divide-border rounded-lg border border-border">
                 {list.map((r) => (
                   <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
