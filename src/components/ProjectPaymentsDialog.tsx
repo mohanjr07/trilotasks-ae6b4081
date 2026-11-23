@@ -370,15 +370,18 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
   );
 }
 
-export default function ProjectExpensesDialog({ open, onClose, projects }: {
+export default function ProjectExpensesDialog({ open, onClose, projects, poOnly = false }: {
   open: boolean; onClose: () => void; projects: Proj[];
+  /** employees / managers: only the Purchase Orders view (no overall spend, projects or subprojects) */
+  poOnly?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const [view, setView] = useState<"projects" | "subprojects" | "po">("projects");
+  const [viewState, setView] = useState<"projects" | "subprojects" | "po">("projects");
+  const view = poOnly ? "po" : viewState;
   const [find, setFind] = useState("");
   // admins can move payments between projects (e.g. out of "No project")
   const { profile } = useAuth();
-  const canMove = profile?.role === "admin" || profile?.role === "super_admin";
+  const canMove = !poOnly && (profile?.role === "admin" || profile?.role === "super_admin");
   const qc = useQueryClient();
   const [moving, setMoving] = useState<string | null>(null);
   const sortedProjects = useMemo(() => [...projects].sort((a, b) => a.name.localeCompare(b.name)), [projects]);
@@ -410,9 +413,15 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
   const moveTo = canMove ? { projects: sortedProjects, busy: moving, onMove: movePayment, pos, onLinkPO: linkPO } : undefined;
 
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ["project-expenses"],
+    queryKey: ["project-expenses", poOnly ? "po-only" : "all"],
     enabled: open,
     queryFn: async () => {
+      if (poOnly) {
+        // only the payments linked to purchase orders (see TRILO_po_view_for_staff.sql)
+        const { data, error } = await (supabase as any).rpc("po_payment_rows");
+        if (error) return [] as Row[];
+        return (data ?? []) as Row[];
+      }
       const { data, error } = await (supabase as any)
         .from("payment_requests")
         .select("*")
@@ -458,14 +467,15 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-4xl max-h-[92dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><IndianRupee className="h-5 w-5" /> Project expenses</DialogTitle>
-          <DialogDescription>Spend = approved payment requests. Open a project to see its payment logs.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><IndianRupee className="h-5 w-5" /> {poOnly ? "Purchase Orders" : "Project expenses"}</DialogTitle>
+          <DialogDescription>{poOnly ? "Purchase Orders of every project and the payments made against them." : "Spend = approved payment requests. Open a project to see its payment logs."}</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-ink-muted" /></div>
         ) : (
           <div className="space-y-4">
+            {!poOnly && (<>
             {/* Overall spend — all projects */}
             <div className="rounded-xl border border-border bg-accent-light/40 p-4">
               <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Overall spend · all projects</p>
@@ -483,6 +493,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects }: {
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${view === k ? "bg-primary text-primary-foreground" : "text-ink-secondary hover:text-ink-primary"}`}>{l}</button>
               ))}
             </div>
+            </>)}
 
             {view === "subprojects" && (<>
               <div className="flex justify-end">

@@ -56,6 +56,8 @@ export default function ProjectsPage() {
   // project payments: admins, plus Hari (view only)
   const canSeePayments = ["admin", "super_admin"].includes(profile?.role ?? "")
     || EXPENSE_VIEWER_EMAILS.includes((profile?.email ?? "").toLowerCase());
+  // employees and managers: Purchase Orders only (everything else in Expenses stays hidden)
+  const poOnly = !canSeePayments && (profile?.role === "employee" || profile?.role === "manager");
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
@@ -134,6 +136,11 @@ export default function ProjectsPage() {
           <Button variant="outline" onClick={() => navigate("/project-forms")} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
             <FileStack className="h-4 w-4" /> Forms
           </Button>
+          {poOnly && (
+            <Button variant="outline" onClick={() => setExpensesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
+              <IndianRupee className="h-4 w-4" /> Purchase Orders
+            </Button>
+          )}
           {canSeePayments && (
             <Button variant="outline" onClick={() => setExpensesOpen(true)} className="h-10 flex-1 gap-2 rounded-full sm:flex-none sm:rounded-md">
               <IndianRupee className="h-4 w-4" /> Expenses
@@ -198,7 +205,7 @@ export default function ProjectsPage() {
       {(canSeePayments || canEditProjects) && (
         <SalesOrdersDialog open={salesOpen} onClose={() => setSalesOpen(false)} projects={projects} canEdit={isAdmin || canEditProjects} />
       )}
-      {canSeePayments && <ProjectExpensesDialog open={expensesOpen} onClose={() => setExpensesOpen(false)} projects={projects} />}
+      {(canSeePayments || poOnly) && <ProjectExpensesDialog open={expensesOpen} onClose={() => setExpensesOpen(false)} projects={projects} poOnly={poOnly} />}
       {canEditProjects && (
         <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
       )}
