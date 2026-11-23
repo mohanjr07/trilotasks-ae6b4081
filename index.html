@@ -55,10 +55,37 @@
   <meta name="twitter:title" content="TaskFlow">
   <meta property="og:description" content="Trilo Automation Task Flow">
   <meta name="twitter:description" content="Trilo Automation Task Flow">
+    <!-- App loading screen: Trilo emblem inside a spinning ring (also used by the app while signing in) -->
+    <link rel="preload" as="image" href="/loader-emblem.png" />
+    <style>
+      .trilo-loader { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #f7f6f3; }
+      html.dark .trilo-loader { background: #0a0f1b; }
+      .trilo-loader__box { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
+      .trilo-loader__ring { position: absolute; inset: 0; border-radius: 50%;
+        background: conic-gradient(from 0deg, rgba(17,17,17,0) 0deg, rgba(17,17,17,.10) 120deg, rgba(17,17,17,.55) 250deg, #111 340deg, #111 352deg, rgba(17,17,17,0) 353deg);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12px));
+                mask: radial-gradient(farthest-side, transparent calc(100% - 13px), #000 calc(100% - 12px));
+        animation: trilo-spin 1s linear infinite; }
+      .trilo-loader__track { position: absolute; inset: 0; border-radius: 50%; border: 12px solid rgba(17,17,17,.06); }
+      html.dark .trilo-loader__ring { background: conic-gradient(from 0deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,.10) 120deg, rgba(255,255,255,.55) 250deg, #fff 340deg, #fff 352deg, rgba(255,255,255,0) 353deg); }
+      html.dark .trilo-loader__track { border-color: rgba(255,255,255,.07); }
+      .trilo-loader__logo { width: 64px; height: auto; animation: trilo-breathe 1.6s ease-in-out infinite; }
+      .trilo-loader__text { font: 500 11px/1 system-ui, -apple-system, sans-serif; letter-spacing: .28em; text-transform: uppercase; color: rgba(17,17,17,.45); }
+      html.dark .trilo-loader__text { color: rgba(255,255,255,.5); }
+      @keyframes trilo-spin { to { transform: rotate(360deg); } }
+      @keyframes trilo-breathe { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.94); opacity: .85; } }
+      @media (prefers-reduced-motion: reduce) { .trilo-loader__ring { animation-duration: 2.4s; } .trilo-loader__logo { animation: none; } }
+    </style>
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- shown until the app starts (replaced by React) -->
+      <div class="trilo-loader" role="status" aria-label="Loading">
+        <div class="trilo-loader__box"><span class="trilo-loader__track"></span><span class="trilo-loader__ring"></span><img class="trilo-loader__logo" src="/loader-emblem.png" alt="Trilo" /></div>
+        <div class="trilo-loader__text">Loading</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,41 +1,13 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import TriloLoader from "@/components/TriloLoader";
 
 type Props = {
   children: React.ReactNode;
   allowedRoles?: ("admin" | "manager" | "employee" | "intern" | "super_admin")[];
 };
 
-const LoadingScreen = () => (
-  <div className="flex min-h-screen items-center justify-center bg-background">
-    <div className="flex flex-col items-center gap-6">
-      <div className="relative flex items-center justify-center">
-        {/* Outer spinning ring */}
-        <span
-          className="absolute rounded-full border-2 border-t-transparent animate-spin"
-          style={{
-            width: 120,
-            height: 120,
-            borderColor: "#818cf8 transparent transparent transparent",
-          }}
-        />
-        {/* Inner pulsing ring */}
-        <span
-          className="absolute rounded-full animate-ping"
-          style={{
-            width: 100,
-            height: 100,
-            border: "1px solid #818cf840",
-            animationDuration: "1.5s",
-          }}
-        />
-      </div>
-      <p className="text-sm text-muted-foreground tracking-widest uppercase animate-pulse select-none">
-        Loading…
-      </p>
-    </div>
-  </div>
-);
+const LoadingScreen = () => <TriloLoader />;
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const { session, profile, loading } = useAuth();

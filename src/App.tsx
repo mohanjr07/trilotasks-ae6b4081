@@ -15,6 +15,7 @@ const Router =
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import TriloLoader from "@/components/TriloLoader";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
@@ -76,10 +77,10 @@ const queryClient = new QueryClient({
 
 function RootRedirect() {
   const { session, profile, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <TriloLoader />;
   if (!session) return <Navigate to="/login" replace />;
   // signed in but the profile is still loading (slow / flaky network on a phone) — wait, don't send to login
-  if (!profile) return null;
+  if (!profile) return <TriloLoader />;
   if (profile.role === "employee") return <Navigate to="/my-dashboard" replace />;
   if (profile.role === "intern") return <Navigate to="/intern-dashboard" replace />;
   return <Navigate to="/dashboard" replace />;
