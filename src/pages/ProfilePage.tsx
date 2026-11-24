@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import AppUpdateBanner from "@/components/AppUpdateBanner";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -68,6 +69,7 @@ export default function ProfilePage() {
   return (
     <AnimatedPage>
       <div className="max-w-2xl mx-auto">
+        <AppUpdateBanner className="mb-4" />
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           className="rounded-card bg-card p-4 sm:p-6 shadow-card mb-6">
           <div className="flex items-center gap-4 mb-6">

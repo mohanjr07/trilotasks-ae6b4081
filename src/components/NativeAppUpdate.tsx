@@ -12,6 +12,7 @@ import { isNativeApp, PUBLIC_SITE } from "@/lib/platform";
 import { openExternal } from "@/lib/nativeFiles";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { onOpenAppUpdate, setAppUpdateState } from "@/lib/appUpdate";
 
 type Latest = { versionCode: number; versionName: string; apk: string; notes?: string; force?: boolean };
 
@@ -28,17 +29,20 @@ async function fetchLatest(): Promise<Latest | null> {
 }
 
 export default function NativeAppUpdate() {
-  const [latest, setLatest] = useState<Latest | null>(null);
+  const [latest, setLatest] = useState<Latest | null>(null);          // shown in the pop-up
+  const [known, setKnown] = useState<Latest | null>(null);            // newer build exists (even if snoozed)
   const [started, setStarted] = useState(false);
   const [pct, setPct] = useState<number | null>(null);      // in-app download progress
   const [err, setErr] = useState("");
   const isAndroid = isNativeApp && /android/i.test(navigator.userAgent);
 
   useEffect(() => {
+    setAppUpdateState({ isAndroidApp: isAndroid, installed: isAndroid ? installedBuild() : 0 });
     if (!isAndroid) return;
     const check = async () => {
       const l = await fetchLatest();
-      if (!l || !(l.versionCode > installedBuild())) return;
+      if (!l || !(l.versionCode > installedBuild())) { setKnown(null); setAppUpdateState({ latest: null }); return; }
+      setKnown(l); setAppUpdateState({ latest: l });
       let snoozed = false;
       // "Later" hides the prompt for 6 hours (a forced update always shows)
       try {
@@ -53,6 +57,9 @@ export default function NativeAppUpdate() {
     document.addEventListener("visibilitychange", onVisible);
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, [isAndroid]);
+
+  // bell / Settings / Profile → "Update now" reopens the pop-up
+  useEffect(() => onOpenAppUpdate(() => { if (known) { setStarted(false); setErr(""); setPct(null); setLatest(known); } }), [known]);
 
   if (!latest) return null;
   const apkUrl = latest.apk.startsWith("http") ? latest.apk : `${PUBLIC_SITE}${latest.apk}?v=${latest.versionCode}`;

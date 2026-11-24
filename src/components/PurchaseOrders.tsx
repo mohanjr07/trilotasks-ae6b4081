@@ -212,7 +212,7 @@ export function POEditDialog({ projectId, projectName, po, kind = "customer", op
   };
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !saving && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>{po ? `Edit ${label.toLowerCase()}` : `Add ${label.toLowerCase()}`}</DialogTitle>
           {projectName && <DialogDescription>{projectName}</DialogDescription>}
@@ -325,7 +325,7 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
 
   return (
     <Dialog open={!!po} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         {po && t && (
           <>
             <DialogHeader>
@@ -390,8 +390,8 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
 
             <div className="flex flex-wrap gap-2">
               {po.doc_path && (
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openPODoc(po)}>
-                  <FileText className="h-4 w-4" /> {po.doc_name ?? `${s} document`} <ExternalLink className="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" className="max-w-full gap-1.5" onClick={() => openPODoc(po)}>
+                  <FileText className="h-4 w-4 shrink-0" /> <span className="min-w-0 truncate">{po.doc_name ?? `${s} document`}</span> <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                 </Button>
               )}
               {onEdit && (

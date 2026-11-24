@@ -419,7 +419,11 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
       if (poOnly) {
         // only the payments linked to purchase orders (see TRILO_po_view_for_staff.sql)
         const { data, error } = await (supabase as any).rpc("po_payment_rows");
-        if (error) return [] as Row[];
+        if (error) {
+          toast.error(/po_payment_rows|schema cache|function/i.test(error.message ?? "")
+            ? "Payments against POs can't be shown yet — run TRILO_po_view_for_staff.sql" : error.message);
+          return [] as Row[];
+        }
         return (data ?? []) as Row[];
       }
       const { data, error } = await (supabase as any)

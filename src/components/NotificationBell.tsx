@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { planNotificationRoute } from "@/lib/productionPlan";
+import AppUpdateBanner from "@/components/AppUpdateBanner";
+import { updateVisible, useAppUpdate } from "@/lib/appUpdate";
 import { Bell } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,7 +82,9 @@ export default function NotificationBell() {
     enabled: !!user,
   });
 
-  const unreadCount = notifications.filter((n: any) => !n.is_read).length;
+  const appUpdate = updateVisible(useAppUpdate());   // closed with ✕ → not counted
+  const unreadNotes = notifications.filter((n: any) => !n.is_read).length;
+  const unreadCount = unreadNotes + (appUpdate ? 1 : 0);   // a waiting app update counts too
 
   // Request Web Notification permission on first load (browser fallback).
   // In Electron this is a no-op — the native path needs no permission prompt.
@@ -200,7 +204,7 @@ export default function NotificationBell() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <h3 className="text-sm font-semibold text-ink-primary">Notifications</h3>
-              {unreadCount > 0 && (
+              {unreadNotes > 0 && (
                 <button
                   onClick={() => markAllRead.mutate()}
                   className="text-xs text-primary hover:underline"
@@ -210,7 +214,8 @@ export default function NotificationBell() {
               )}
             </div>
             <div className="max-h-[380px] overflow-y-auto">
-              {notifications.length === 0 ? (
+              <AppUpdateBanner compact className="border-b border-border" />
+              {notifications.length === 0 && !appUpdate ? (
                 <div className="py-8 text-center text-sm text-ink-muted">
                   No notifications yet
                 </div>

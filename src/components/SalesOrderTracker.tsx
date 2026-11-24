@@ -109,7 +109,7 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[92dvh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[92dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ReceiptText className="h-5 w-5" /> Sales Orders</DialogTitle>
           <DialogDescription>Billing and payments received against each customer Sales Order.</DialogDescription>
@@ -272,7 +272,7 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onD
 
   return (
     <Dialog open={!!so} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             SO {so.po_number}
@@ -300,8 +300,8 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onD
         </div>
 
         {so.doc_path && (
-          <Button variant="outline" size="sm" className="w-fit gap-1.5" onClick={() => openPODoc(so)}>
-            <FileText className="h-4 w-4" /> {so.doc_name ?? "SO document"} <ExternalLink className="h-3.5 w-3.5" />
+          <Button variant="outline" size="sm" className="w-fit max-w-full gap-1.5" onClick={() => openPODoc(so)}>
+            <FileText className="h-4 w-4 shrink-0" /> <span className="min-w-0 truncate">{so.doc_name ?? "SO document"}</span> <ExternalLink className="h-3.5 w-3.5 shrink-0" />
           </Button>
         )}
 
