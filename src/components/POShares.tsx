@@ -79,10 +79,11 @@ export function expandWholePOPayments<T extends PayLike>(rows: T[], pos: PO[], a
 /** Save the split: replaces the PO's shares (nothing saved = PO belongs to its own project only). */
 export async function saveAllocations(poId: string, rows: AllocDraft[]) {
   const { error: delErr } = await sb.from("po_allocations").delete().eq("po_id", poId);
-  if (delErr) throw new Error(/po_allocations/.test(delErr.message) ? "Run TRILO_po_shared_projects.sql first" : delErr.message);
+  if (delErr) throw new Error(/po_allocations/.test(delErr.message) && /does not exist|schema cache|find the table/i.test(delErr.message)
+    ? "Run TRILO_po_shared_projects.sql first" : delErr.message);
   if (rows.length < 2) return;
   const { error } = await sb.from("po_allocations").insert(rows.map((r) => ({ po_id: poId, project_id: r.project_id, amount: Number(r.amount) })));
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(/row-level security/i.test(error.message) ? "Only admins and Anu can split a PO between projects" : error.message);
 }
 
 export function validateAllocations(rows: AllocDraft[], poValue: string): string | null {
