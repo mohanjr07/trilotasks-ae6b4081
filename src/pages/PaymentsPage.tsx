@@ -721,15 +721,17 @@ function RequestPaymentModal({
   const [projectId, setProjectId] = useState<string>("");
   const [subProject, setSubProject] = useState<string>("");
   const [poId, setPoId] = useState<string>("");          // optional: the purchase order this payment is against
+  const [poWhole, setPoWhole] = useState(false);         // shared PO: payment for the whole PO (split across its projects)
   const { data: poOptions = [] } = useQuery({
     queryKey: ["po-options", projectId],
     enabled: !!projectId,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("project_po_options", { p_project: projectId });
-      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
-      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
+      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
     },
   });
+  const selectedPOShared = !!poOptions.find((o) => o.id === poId)?.shared;
   const [purpose, setPurpose] = useState("");
   const [amount, setAmount] = useState("");
   const [files, setFiles] = useState<File[]>([]);   // any number of bill files
@@ -783,6 +785,7 @@ function RequestPaymentModal({
         project_id: projectId || null,
         ...(subProject ? { sub_project: subProject } : {}),   // only sent when chosen
         ...(poId && projectId ? { po_id: poId } : {}),         // only sent when chosen
+        ...(poId && projectId && selectedPOShared && poWhole ? { po_whole: true } : {}),
         purpose: purpose.trim(),
         amount: Number(amount),
         bill_path: first.path,
@@ -852,15 +855,22 @@ function RequestPaymentModal({
                 {projectId && poOptions.some((o) => o.kind === "vendor") && (
                   <div>
                     <label className="text-xs font-medium text-ink-muted mb-1.5 block">Purchase Order</label>
-                    <Select value={poId || "none"} onValueChange={(v) => setPoId(v === "none" ? "" : v)}>
+                    <Select value={poId || "none"} onValueChange={(v) => { setPoId(v === "none" ? "" : v); setPoWhole(false); }}>
                       <SelectTrigger className="h-10"><SelectValue placeholder="Select a PO" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Not against a PO</SelectItem>
                         {poOptions.filter((o) => o.kind === "vendor").map((o) => (
-                          <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>
+                          <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}{o.shared ? " · shared" : ""}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {selectedPOShared && (
+                      <div className="mt-2 grid grid-cols-1 gap-1.5 rounded-md border border-border bg-muted/30 p-2 text-sm">
+                        <p className="text-xs text-ink-muted">This PO is used for more than one project. This payment is for:</p>
+                        <label className="flex items-center gap-2"><input type="radio" checked={!poWhole} onChange={() => setPoWhole(false)} /> Only this project</label>
+                        <label className="flex items-center gap-2"><input type="radio" checked={poWhole} onChange={() => setPoWhole(true)} /> The whole PO — split across its projects</label>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -969,21 +979,31 @@ function RequestPaymentModal({
 
 /** Payment detail: the purchase order it is against (admins can change it, also after approval). */
 function SelectedPO({ payment, isAdmin, onChanged }: {
-  payment: { id: string; project_id: string | null; po_id?: string | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
+  payment: { id: string; project_id: string | null; po_id?: string | null; po_whole?: boolean | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [whole, setWhole] = useState(!!payment.po_whole);
   const { data: options = [] } = useQuery({
     queryKey: ["po-options", payment.project_id],
     enabled: !!payment.project_id,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("project_po_options", { p_project: payment.project_id });
-      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
-      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null }>;
+      if (error) return [] as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
+      return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
     },
   });
   if (!payment.project_id || (!isAdmin && !options.some((o) => o.kind === "vendor") && !payment.po_id)) return null;
   const current = options.find((o) => o.id === payment.po_id);
+  const setScope = async (w: boolean) => {
+    setBusy(true);
+    const { error } = await (supabase as any).rpc("set_payment_po_whole", { p_id: payment.id, p_whole: w });
+    setBusy(false);
+    if (error) { toast.error(/set_payment_po_whole|function/i.test(error.message) ? "Run TRILO_po_shared_projects.sql first" : "Failed: " + error.message); return; }
+    setWhole(w);
+    toast.success(w ? "Counted for the whole PO (split across its projects)" : "Counted for this project only");
+    onChanged(payment.po_id ?? null);
+  };
   const change = async (v: string) => {
     if (v === "__add__") { setAdding(true); return; }
     const po = v === "__none__" ? null : v;
@@ -995,6 +1015,7 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
     onChanged(po);
   };
   return (
+    <>
     <div className="flex items-center justify-between">
       <span className="text-ink-muted">Purchase Order</span>
       {isAdmin && <POEditDialog projectId={payment.project_id} kind="vendor" open={adding} onClose={() => setAdding(false)} />}
@@ -1011,5 +1032,22 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
         <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `PO ${current.po_number}` : "—"}</span>
       )}
     </div>
+    {current?.shared && (
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-ink-muted">Counts for</span>
+        {isAdmin ? (
+          <Select value={whole ? "whole" : "project"} disabled={busy} onValueChange={(v) => setScope(v === "whole")}>
+            <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="project">This project only</SelectItem>
+              <SelectItem value="whole">Whole PO (split across projects)</SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <span className="text-ink-primary font-medium">{whole ? "Whole PO (split)" : "This project only"}</span>
+        )}
+      </div>
+    )}
+    </>
   );
 }

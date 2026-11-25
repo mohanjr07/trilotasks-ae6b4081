@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import POInvoices from "@/components/POInvoices";
+import { POSharesEditor, POSplitView, saveAllocations, usePOAllocations, validateAllocations, type AllocDraft } from "@/components/POShares";
 import { FilePickButtons, PickedFile } from "@/components/FilePick";
 export { FilePickButtons, PickedFile };
 
@@ -34,7 +35,7 @@ export type PO = {
 /** The payment fields these views need. */
 export type POPayment = {
   id: string; po_id?: string | null; project_id: string | null; amount: number; status: string; purpose: string;
-  created_at: string; paid_at: string | null; requester_id: string; bill_path?: string | null;
+  created_at: string; paid_at: string | null; requester_id: string; bill_path?: string | null; po_whole?: boolean | null;
 };
 
 export const KIND_LABEL: Record<OrderKind, string> = { customer: "Sales Order", vendor: "Purchase Order" };
@@ -175,14 +176,16 @@ export async function savePO(projectId: string, d: PODraft, existing?: PO | null
     project_id: projectId, kind: d.kind, po_number: d.po_number.trim(), party: d.party.trim() || null,
     po_date: d.po_date || null, value: d.value === "" ? null : Number(d.value), ...(d.kind === "customer" ? { taxable_value: d.taxable === "" ? null : Number(d.taxable) } : {}), notes: d.notes.trim() || null, doc_path, doc_name,
   };
-  const q = existing ? sb.from("purchase_orders").update(row).eq("id", existing.id) : sb.from("purchase_orders").insert(row);
-  const { error } = await q;
+  const q = existing ? sb.from("purchase_orders").update(row).eq("id", existing.id).select("id").single()
+                     : sb.from("purchase_orders").insert(row).select("id").single();
+  const { data: saved, error } = await q;
   if (error) {
     if (/taxable_value/.test(error.message)) throw new Error("Run TRILO_so_taxable_value.sql first");
     if (/purchase_orders/.test(error.message) && /exist|schema/.test(error.message)) throw new Error("Orders aren't set up yet — run TRILO_purchase_orders.sql");
     if (/duplicate|unique/i.test(error.message)) throw new Error(`This project already has that ${s} number`);
     throw error;
   }
+  return (saved?.id ?? existing?.id) as string;
 }
 
 export function POEditDialog({ projectId, projectName, po, kind = "customer", open, onClose }: {
@@ -192,16 +195,40 @@ export function POEditDialog({ projectId, projectName, po, kind = "customer", op
   const [draft, setDraft] = useState<PODraft>(() => emptyPODraft(kind));
   const [saving, setSaving] = useState(false);
   const [lastKey, setLastKey] = useState("");
+  // one PO for several projects (Purchase Orders only)
+  const { data: allocs = [] } = usePOAllocations(open);
+  const [shared, setShared] = useState(false);
+  const [shareRows, setShareRows] = useState<AllocDraft[]>([]);
+  const [allocKey, setAllocKey] = useState("");
   const key = `${open}-${po?.id ?? "new"}-${kind}`;
+  if (open && `${key}-${allocs.length}` !== allocKey) {
+    setAllocKey(`${key}-${allocs.length}`);
+    const mine = po ? allocs.filter((a) => a.po_id === po.id) : [];
+    setShared(mine.length > 1);
+    setShareRows(mine.length > 1 ? mine.map((a) => ({ project_id: a.project_id, amount: String(a.amount) })) : []);
+  }
   if (key !== lastKey) {
     setLastKey(key);
     setDraft(po ? { kind: po.kind, po_number: po.po_number, party: po.party ?? "", po_date: po.po_date ?? "", value: po.value == null ? "" : String(po.value), taxable: po.taxable_value == null ? "" : String(po.taxable_value), notes: po.notes ?? "", file: null } : emptyPODraft(kind));
   }
   const label = KIND_LABEL[po?.kind ?? kind];
+  const isVendor = (po?.kind ?? kind) === "vendor";
+  const toggleShared = (on: boolean) => {
+    setShared(on);
+    if (on && shareRows.length < 2) setShareRows([{ project_id: projectId, amount: draft.value }, { project_id: "", amount: "" }]);
+  };
   const save = async () => {
+    if (isVendor && shared) {
+      const msg = validateAllocations(shareRows, draft.value);
+      if (msg) { toast.error(msg); return; }
+    }
     setSaving(true);
     try {
-      await savePO(projectId, draft, po);
+      const id = await savePO(projectId, draft, po);
+      if (isVendor && id && (shared || (po && allocs.some((a) => a.po_id === po.id)))) {
+        await saveAllocations(id, shared ? shareRows : []);
+        qc.invalidateQueries({ queryKey: ["po-allocations"] });
+      }
       toast.success(po ? `${label} updated` : `${label} added`);
       qc.invalidateQueries({ queryKey: ["purchase-orders"] });
       qc.invalidateQueries({ queryKey: ["po-options"] });
@@ -218,6 +245,15 @@ export function POEditDialog({ projectId, projectName, po, kind = "customer", op
           {projectName && <DialogDescription>{projectName}</DialogDescription>}
         </DialogHeader>
         <PODraftFields value={draft} onChange={setDraft} existingDoc={po?.doc_name} />
+        {isVendor && (
+          <div className="space-y-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-primary">
+              <input type="checkbox" checked={shared} onChange={(e) => toggleShared(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+              Used for more than one project
+            </label>
+            {shared && <POSharesEditor rows={shareRows} onChange={setShareRows} poValue={draft.value} />}
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={save} disabled={saving} className="gap-1.5">
@@ -245,17 +281,20 @@ export function POList({ pos, rows, projectName, onOpen, onAdd, addLabel, empty,
   onAdd?: () => void; addLabel?: string; empty?: string;
   compact?: boolean;   // just number, party and value (no totals)
 }) {
+  const { data: allocs = [] } = usePOAllocations();
   return (
     <div className="space-y-2">
       {pos.map((po) => {
         const t = poTotals(po, rows);
         const s = KIND_SHORT[po.kind];
+        const sharedWith = allocs.filter((a) => a.po_id === po.id).length;
         return (
           <button key={po.id} type="button" onClick={() => onOpen(po)}
             className="w-full rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-muted/40">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="font-heading text-sm font-bold text-ink-primary">{s} {po.po_number}</span>
               {po.status === "closed" && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-ink-muted">Closed</span>}
+              {sharedWith > 1 && <span className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-semibold text-primary">Shared · {sharedWith} projects</span>}
               {po.doc_path && <FileText className="h-3.5 w-3.5 text-ink-muted" />}
               <span className="ml-auto text-xs text-ink-muted">
                 {compact || po.kind === "customer" ? (po.value != null ? inr(Number(po.value)) : "") : `${t.count} payment${t.count === 1 ? "" : "s"}`}
@@ -398,6 +437,8 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={onEdit}><Pencil className="h-4 w-4" /> Edit {s}</Button>
               )}
             </div>
+
+            {isPO && <POSplitView po={po} rows={rows} />}
 
             {isPO && <POInvoices po={po} />}
 

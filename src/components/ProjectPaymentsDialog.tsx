@@ -5,6 +5,7 @@ import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePOAllocations, expandWholePOPayments, posOfProject } from "@/components/POShares";
 import { usePurchaseOrders, POList, PODetailDialog, POEditDialog, poTotals, KIND_LABEL, KIND_SHORT, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { format } from "date-fns";
 import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
@@ -25,6 +26,8 @@ type Row = {
   paid_at: string | null; paid_by: string | null; bill_path: string; receipt_path: string | null; paid_from?: string | null;
   extra_bills?: { path: string; name: string }[] | null;
   po_id?: string | null;
+  po_whole?: boolean | null;   // payment for the whole (shared) PO — split across its projects
+  _shareOf?: string;           // a project's share of such a payment (not a real row)
 };
 type Proj = { id: string; name: string; color: string };
 /** Payment requests raised without a project are tracked under this row. */
@@ -335,7 +338,7 @@ function PaymentLogs({ rows, names, projectName, moveTo, poNumber }: { rows: Row
                   <p className={`font-heading text-base font-bold ${r.status === "rejected" ? "text-ink-muted line-through" : "text-ink-primary"}`}>
                     {formatINR(r.amount)}
                   </p>
-                  {moveTo && (
+                  {moveTo && !r._shareOf && (
                     <div className="flex items-center gap-1.5">
                       {moveTo.busy === r.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-muted" />}
                       <select value={r.project_id ?? ""} disabled={moveTo.busy === r.id} aria-label="Move to project"
@@ -448,21 +451,25 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
     },
   });
 
-  const noProject = rows.filter((r) => !r.project_id);
+  // whole-PO payments of a shared PO are split across its projects for the project figures
+  const { data: allocs = [] } = usePOAllocations(open);
+  const rowsAll = rows;
+  const projRows = useMemo(() => expandWholePOPayments(rowsAll, pos, allocs) as Row[], [rowsAll, pos, allocs]);
+  const noProject = projRows.filter((r) => !r.project_id);
   // every request counts — ones raised without a project are tracked as "No project"
-  const overall = useMemo(() => totalsOf(rows), [rows]);
+  const overall = useMemo(() => totalsOf(projRows), [projRows]);
   const list = useMemo(() => {
     const byProject = new Map<string, Row[]>();
-    for (const r of rows) byProject.set(pidOf(r), [...(byProject.get(pidOf(r)) ?? []), r]);
+    for (const r of projRows) byProject.set(pidOf(r), [...(byProject.get(pidOf(r)) ?? []), r]);
     return [...projects, ...(byProject.has(NO_PROJECT.id) ? [NO_PROJECT] : [])]
       .map((p) => ({ p, rows: byProject.get(p.id) ?? [], t: totalsOf(byProject.get(p.id) ?? []) }))
       .filter((x) => !find.trim() || x.p.name.toLowerCase().includes(find.trim().toLowerCase()))
       .sort((a, b) => b.t.spend - a.t.spend || b.rows.length - a.rows.length || a.p.name.localeCompare(b.p.name));
-  }, [rows, projects, find]);
+  }, [projRows, projects, find]);
   const [exporting, setExporting] = useState(false);
   const doExport = async (subset: Proj[], label: string) => {
     setExporting(true);
-    try { await exportExpensesExcel(subset, rows, names, label, pos); }
+    try { await exportExpensesExcel(subset, projRows, names, label, pos); }
     catch (e: any) { toast.error("Could not export: " + (e?.message ?? "")); }
     finally { setExporting(false); }
   };
@@ -507,7 +514,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
                   {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export Excel
                 </button>
               </div>
-              <SubProjectsView rows={rows} projects={projects} names={names} />
+              <SubProjectsView rows={projRows} projects={projects} names={names} />
             </>)}
 
             {view === "po" && (
@@ -569,12 +576,12 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
                           <SubProjectSplit rows={pr} />
                         </div>
                         {p.id !== NO_PROJECT.id && (["vendor"] as OrderKind[]).map((kind) => {
-                          const mine = pos.filter((po) => po.kind === kind && po.project_id === p.id);
+                          const mine = posOfProject(p.id, pos, allocs).filter((po) => po.kind === kind);
                           if (!mine.length && !canMove) return null;
                           return (
                             <div key={kind}>
                               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">{KIND_LABEL[kind]}s</p>
-                              <POList pos={mine} rows={pr} onOpen={setPoOpen}
+                              <POList pos={mine} rows={rowsAll} onOpen={setPoOpen}
                                 onAdd={canMove ? () => setPoEdit({ projectId: p.id, po: null, kind }) : undefined}
                                 addLabel={`Add ${KIND_LABEL[kind].toLowerCase()}`}
                                 empty={`No ${KIND_LABEL[kind].toLowerCase()}s for this project yet.`} />

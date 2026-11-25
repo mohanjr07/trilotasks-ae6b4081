@@ -17,6 +17,7 @@ import StatusBadge from "@/components/StatusBadge";
 import TaskDetailModal from "@/components/TaskDetailModal";
 import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
 import SalesOrdersDialog from "@/components/SalesOrderTracker";
+import { posOfProject, usePOAllocations } from "@/components/POShares";
 import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +72,7 @@ export default function ProjectsPage() {
   const [salesOpen, setSalesOpen] = useState(false);
 
   const { data: allOrders = [] } = usePurchaseOrders(true);   // empty for people who can't see POs
+  const { data: poAllocs = [] } = usePOAllocations(true);    // POs shared with other projects show on those too
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["projects"],
     queryFn: async () => {
@@ -188,7 +190,7 @@ export default function ProjectsPage() {
                 project={project}
                 projectTeams={projectTeams}
                 projectMembers={projectMembers}
-                projectPOs={allOrders.filter((o) => o.kind === "vendor" && o.project_id === project.id)}
+                projectPOs={posOfProject(project.id, allOrders, poAllocs).filter((o) => o.kind === "vendor")}
                 allProfiles={allProfiles}
                 isAdmin={isAdmin}
                 canEdit={canEditProjects}
