@@ -172,3 +172,44 @@ export function POSplitView({ po, rows }: { po: PO; rows: SplitRow[] }) {
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  One payment covering 2–3 Purchase Orders (payment_po_splits).
+//  The payment is mapped to each PO with an exact amount; each PO counts only
+//  its part. (TRILO_payment_multi_po.sql)
+// ─────────────────────────────────────────────────────────────────────────────
+export type POSplit = { id?: string; payment_id: string; po_id: string; amount: number };
+
+export function usePaymentPOSplits(enabled = true) {
+  return useQuery({
+    queryKey: ["payment-po-splits"],
+    enabled,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await sb.from("payment_po_splits").select("*");
+      if (error) return [] as POSplit[];
+      return (data ?? []) as POSplit[];
+    },
+  });
+}
+
+/** A payment split across several POs → one line per PO with its part
+ *  (counted for the PO's project when the PO isn't one of the payment's own project). */
+export function expandMultiPOPayments<T extends PayLike>(rows: T[], splits: POSplit[], pos: PO[], allocs: POAlloc[]): Array<T & { _shareOf?: string }> {
+  if (!splits.length) return rows;
+  const by = new Map<string, POSplit[]>();
+  for (const s of splits) by.set(s.payment_id, [...(by.get(s.payment_id) ?? []), s]);
+  const out: Array<T & { _shareOf?: string }> = [];
+  for (const r of rows) {
+    const mine = by.get(r.id);
+    if (!mine || mine.length < 2) { out.push(r); continue; }
+    for (const s of mine) {
+      const po = pos.find((p) => p.id === s.po_id);
+      const ofPaymentProject = !!po && (po.project_id === r.project_id || allocs.some((a) => a.po_id === po.id && a.project_id === r.project_id));
+      out.push({ ...r, id: `${r.id}#${s.po_id}`, po_id: s.po_id, po_whole: false, amount: Number(s.amount),
+        project_id: ofPaymentProject || !po ? r.project_id : po.project_id,
+        purpose: `${r.purpose} · part for PO ${po?.po_number ?? ""}`.trim(), _shareOf: r.id });
+    }
+  }
+  return out;
+}

@@ -5,7 +5,7 @@ import { SUB_PROJECTS, subProjectLabel } from "@/lib/subProjects";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePOAllocations, expandWholePOPayments, posOfProject } from "@/components/POShares";
+import { usePOAllocations, expandWholePOPayments, posOfProject, usePaymentPOSplits, expandMultiPOPayments } from "@/components/POShares";
 import { usePurchaseOrders, POList, PODetailDialog, POEditDialog, poTotals, KIND_LABEL, KIND_SHORT, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { format } from "date-fns";
 import { FileText, Receipt, Loader2, IndianRupee, ChevronDown, ChevronRight, Search, Download } from "lucide-react";
@@ -453,7 +453,9 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
 
   // whole-PO payments of a shared PO are split across its projects for the project figures
   const { data: allocs = [] } = usePOAllocations(open);
-  const rowsAll = rows;
+  // a payment mapped to several POs → one line per PO with its part
+  const { data: poSplits = [] } = usePaymentPOSplits(open);
+  const rowsAll = useMemo(() => expandMultiPOPayments(rows, poSplits, pos, allocs) as Row[], [rows, poSplits, pos, allocs]);
   const projRows = useMemo(() => expandWholePOPayments(rowsAll, pos, allocs) as Row[], [rowsAll, pos, allocs]);
   const noProject = projRows.filter((r) => !r.project_id);
   // every request counts — ones raised without a project are tracked as "No project"
@@ -518,7 +520,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
             </>)}
 
             {view === "po" && (
-              <AllPOsView key={view} kind="vendor" pos={pos} rows={rows} projects={projects} onOpen={setPoOpen}
+              <AllPOsView key={view} kind="vendor" pos={pos} rows={rowsAll} projects={projects} onOpen={setPoOpen}
                 onAdd={canMove ? (projectId, kind) => setPoEdit({ projectId, po: null, kind }) : undefined} />
             )}
 
@@ -600,7 +602,7 @@ export default function ProjectExpensesDialog({ open, onClose, projects, poOnly 
             </>)}
           </div>
         )}
-        <PODetailDialog po={poOpen} rows={rows} names={names}
+        <PODetailDialog po={poOpen} rows={rowsAll} names={names}
           projectName={poOpen ? projects.find((x) => x.id === poOpen.project_id)?.name : undefined}
           onClose={() => setPoOpen(null)}
           onEdit={canMove && poOpen ? () => { setPoEdit({ projectId: poOpen.project_id, po: poOpen, kind: poOpen.kind }); setPoOpen(null); } : undefined} />

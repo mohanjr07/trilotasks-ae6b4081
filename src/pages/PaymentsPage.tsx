@@ -20,7 +20,9 @@ import UserAvatar from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { openFileLink } from "@/lib/nativeFiles";
-import { POEditDialog } from "@/components/PurchaseOrders";
+import { POEditDialog, usePurchaseOrders } from "@/components/PurchaseOrders";
+import PaymentPOSplitDialog from "@/components/PaymentPOSplitDialog";
+import { usePaymentPOSplits } from "@/components/POShares";
 
 const BUCKET = "payment-bills";
 
@@ -979,11 +981,15 @@ function RequestPaymentModal({
 
 /** Payment detail: the purchase order it is against (admins can change it, also after approval). */
 function SelectedPO({ payment, isAdmin, onChanged }: {
-  payment: { id: string; project_id: string | null; po_id?: string | null; po_whole?: boolean | null }; isAdmin: boolean; onChanged: (poId: string | null) => void;
+  payment: { id: string; project_id: string | null; po_id?: string | null; po_whole?: boolean | null; amount: number; purpose?: string }; isAdmin: boolean; onChanged: (poId: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [whole, setWhole] = useState(!!payment.po_whole);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const { data: allSplits = [] } = usePaymentPOSplits();
+  const { data: allPOs = [] } = usePurchaseOrders();
+  const mySplits = allSplits.filter((s) => s.payment_id === payment.id);
   const { data: options = [] } = useQuery({
     queryKey: ["po-options", payment.project_id],
     enabled: !!payment.project_id,
@@ -993,7 +999,7 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
       return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
     },
   });
-  if (!payment.project_id || (!isAdmin && !options.some((o) => o.kind === "vendor") && !payment.po_id)) return null;
+  if (!payment.project_id || (!isAdmin && !options.some((o) => o.kind === "vendor") && !payment.po_id && mySplits.length < 2)) return null;
   const current = options.find((o) => o.id === payment.po_id);
   const setScope = async (w: boolean) => {
     setBusy(true);
@@ -1006,6 +1012,7 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
   };
   const change = async (v: string) => {
     if (v === "__add__") { setAdding(true); return; }
+    if (v === "__split__") { setSplitOpen(true); return; }
     const po = v === "__none__" ? null : v;
     setBusy(true);
     const { error } = await (supabase as any).rpc("set_payment_po", { p_id: payment.id, p_po: po });
@@ -1019,12 +1026,19 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
     <div className="flex items-center justify-between">
       <span className="text-ink-muted">Purchase Order</span>
       {isAdmin && <POEditDialog projectId={payment.project_id} kind="vendor" open={adding} onClose={() => setAdding(false)} />}
-      {isAdmin ? (
+      {isAdmin && <PaymentPOSplitDialog payment={payment} open={splitOpen} onClose={() => setSplitOpen(false)} onSaved={() => onChanged(null)} />}
+      {mySplits.length > 1 ? (
+        <span className="flex items-center gap-2">
+          <span className="text-ink-primary font-medium">{mySplits.length} POs</span>
+          {isAdmin && <button type="button" onClick={() => setSplitOpen(true)} className="text-xs font-medium text-primary hover:underline">Edit split</button>}
+        </span>
+      ) : isAdmin ? (
         <Select value={payment.po_id ?? "__none__"} disabled={busy} onValueChange={change}>
           <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="Choose PO" /></SelectTrigger>
           <SelectContent className="max-h-72">
             <SelectItem value="__none__">Not against a PO</SelectItem>
             {options.filter((o) => o.kind === "vendor").map((o) => <SelectItem key={o.id} value={o.id}>PO {o.po_number}{o.party ? ` · ${o.party}` : ""}</SelectItem>)}
+            <SelectItem value="__split__" className="text-primary">Split across several POs…</SelectItem>
             <SelectItem value="__add__" className="text-primary">+ Add a purchase order…</SelectItem>
           </SelectContent>
         </Select>
@@ -1032,7 +1046,20 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
         <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `PO ${current.po_number}` : "—"}</span>
       )}
     </div>
-    {current?.shared && (
+    {mySplits.length > 1 && (
+      <div className="space-y-1 rounded-md bg-muted/40 p-2 text-xs">
+        {mySplits.map((s) => {
+          const p = allPOs.find((x) => x.id === s.po_id);
+          return (
+            <div key={s.po_id} className="flex justify-between gap-2">
+              <span className="min-w-0 truncate text-ink-secondary">PO {p?.po_number ?? "—"}{p?.party ? ` · ${p.party}` : ""}</span>
+              <span className="font-semibold text-ink-primary">{formatINR(Number(s.amount))}</span>
+            </div>
+          );
+        })}
+      </div>
+    )}
+    {mySplits.length < 2 && current?.shared && (
       <div className="flex items-center justify-between gap-2">
         <span className="text-ink-muted">Counts for</span>
         {isAdmin ? (
