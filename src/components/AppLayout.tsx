@@ -17,6 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import GetStartedIntro from "@/components/GetStartedIntro";
+import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import { syncThemeFromAccount } from "@/lib/theme";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -149,9 +150,12 @@ export default function AppLayout() {
   const isIntern = profile?.role === "intern";
   const baseNav = isAdmin ? adminNav : isManager ? managerNav : isIntern ? internNav : employeeNav;
   // Overtime: admins, managers and Anu (whatever her role)
-  const nav = canSeeOvertime(profile as any) && !baseNav.some((n) => n.path === "/overtime")
+  const navWithOvertime = canSeeOvertime(profile as any) && !baseNav.some((n) => n.path === "/overtime")
     ? baseNav.flatMap((n) => (n.path === "/payments" ? [n, { label: "Overtime", path: "/overtime", icon: Timer }] : [n]))
     : baseNav;
+  // Payslips: only Anu until they are switched on for everyone (app_flags.payslips_live)
+  const { allowed: payslipsAllowed } = useCanSeePayslips(profile?.email);
+  const nav = payslipsAllowed ? navWithOvertime : navWithOvertime.filter((n) => n.path !== "/payslips");
   const roleKey = isAdmin ? "admin" : isManager ? "manager" : isIntern ? "intern" : "employee";
   const mobileTabs = mobileTabPaths[roleKey]
     .map((p) => nav.find((n) => n.path === p))

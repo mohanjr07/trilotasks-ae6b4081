@@ -16,6 +16,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import TriloLoader from "@/components/TriloLoader";
+import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
@@ -74,6 +75,15 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/** Payslips: only Anu until they are switched on for everyone. */
+function PayslipsGate({ children }: { children: React.ReactNode }) {
+  const { profile } = useAuth();
+  const { allowed, isLoading } = useCanSeePayslips((profile as any)?.email);
+  if (isLoading) return <TriloLoader />;
+  if (!allowed) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
 
 function RootRedirect() {
   const { session, profile, loading } = useAuth();
@@ -137,7 +147,7 @@ const App = () => (
               <Route path="/intern-tasks" element={<ProtectedRoute allowedRoles={["intern"]}><TasksPage myTasksOnly /></ProtectedRoute>} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/payments" element={<PaymentsPage />} />
-              <Route path="/payslips" element={<PayslipsPage />} />
+              <Route path="/payslips" element={<PayslipsGate><PayslipsPage /></PayslipsGate>} />
               <Route path="/announcements" element={<AnnouncementsPage />} />
               <Route path="/overtime" element={<OvertimePage />} />
               <Route path="/production-plan" element={<ProductionPlanPage />} />
