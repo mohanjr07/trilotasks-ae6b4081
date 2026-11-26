@@ -17,7 +17,7 @@ import { toast } from "sonner";
 const BUCKET = "payment-bills";
 const ACCOUNT_LABEL: Record<string, string> = { cash: "Cash", expense: "Expense account", chennai: "Chennai account", bangalore: "Bangalore account" };
 /** Non-admins who can see project expense tracking (view only). Keep in sync with is_expense_viewer() in the database. */
-export const EXPENSE_VIEWER_EMAILS = ["hari@triloautomation.com"];
+export const EXPENSE_VIEWER_EMAILS = ["hari@triloautomation.com", "anu@triloautomation.com"];
 export const formatINR = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
 type Row = {
