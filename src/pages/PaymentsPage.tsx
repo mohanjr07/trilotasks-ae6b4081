@@ -508,7 +508,7 @@ export default function PaymentsPage() {
                       <span className="text-ink-primary font-medium truncate max-w-[200px]">{selected.project?.name ?? "—"}</span>
                     )}
                   </div>
-                  <SelectedPO payment={selected as any} isAdmin={isAdmin} onChanged={(po) => {
+                  <SelectedPO payment={selected as any} isAdmin={isAdmin} canSplit={isAdmin || isPayer} onChanged={(po) => {
                     setSelected((s) => (s && s.id === selected.id ? ({ ...s, po_id: po } as any) : s));
                     qc.invalidateQueries({ queryKey: ["payment-requests"] });
                     qc.invalidateQueries({ queryKey: ["project-expenses"] });
@@ -980,8 +980,8 @@ function RequestPaymentModal({
 
 
 /** Payment detail: the purchase order it is against (admins can change it, also after approval). */
-function SelectedPO({ payment, isAdmin, onChanged }: {
-  payment: { id: string; project_id: string | null; po_id?: string | null; po_whole?: boolean | null; amount: number; purpose?: string }; isAdmin: boolean; onChanged: (poId: string | null) => void;
+function SelectedPO({ payment, isAdmin, canSplit = isAdmin, onChanged }: {
+  payment: { id: string; project_id: string | null; po_id?: string | null; po_whole?: boolean | null; amount: number; purpose?: string }; isAdmin: boolean; canSplit?: boolean; onChanged: (poId: string | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -999,7 +999,7 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
       return (data ?? []) as Array<{ id: string; po_number: string; kind: string; party: string | null; shared?: boolean }>;
     },
   });
-  if (!payment.project_id || (!isAdmin && !options.some((o) => o.kind === "vendor") && !payment.po_id && mySplits.length < 2)) return null;
+  if (!payment.project_id || (!isAdmin && !canSplit && !options.some((o) => o.kind === "vendor") && !payment.po_id && mySplits.length < 2)) return null;
   const current = options.find((o) => o.id === payment.po_id);
   const setScope = async (w: boolean) => {
     setBusy(true);
@@ -1026,11 +1026,11 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
     <div className="flex items-center justify-between">
       <span className="text-ink-muted">Purchase Order</span>
       {isAdmin && <POEditDialog projectId={payment.project_id} kind="vendor" open={adding} onClose={() => setAdding(false)} />}
-      {isAdmin && <PaymentPOSplitDialog payment={payment} open={splitOpen} onClose={() => setSplitOpen(false)} onSaved={() => onChanged(null)} />}
+      {canSplit && <PaymentPOSplitDialog payment={payment} open={splitOpen} onClose={() => setSplitOpen(false)} onSaved={() => onChanged(null)} />}
       {mySplits.length > 1 ? (
         <span className="flex items-center gap-2">
           <span className="text-ink-primary font-medium">{mySplits.length} POs</span>
-          {isAdmin && <button type="button" onClick={() => setSplitOpen(true)} className="text-xs font-medium text-primary hover:underline">Edit split</button>}
+          {canSplit && <button type="button" onClick={() => setSplitOpen(true)} className="text-xs font-medium text-primary hover:underline">Edit split</button>}
         </span>
       ) : isAdmin ? (
         <Select value={payment.po_id ?? "__none__"} disabled={busy} onValueChange={change}>
@@ -1043,7 +1043,10 @@ function SelectedPO({ payment, isAdmin, onChanged }: {
           </SelectContent>
         </Select>
       ) : (
-        <span className="text-ink-primary font-medium truncate max-w-[200px]">{current ? `PO ${current.po_number}` : "—"}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-ink-primary font-medium truncate max-w-[160px]">{current ? `PO ${current.po_number}` : "—"}</span>
+          {canSplit && <button type="button" onClick={() => setSplitOpen(true)} className="text-xs font-medium text-primary hover:underline">Split across POs</button>}
+        </span>
       )}
     </div>
     {mySplits.length > 1 && (

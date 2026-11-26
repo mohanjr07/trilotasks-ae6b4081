@@ -1,11 +1,11 @@
 // Admins: map one payment to several Purchase Orders, with the exact amount for each.
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { usePurchaseOrders } from "@/components/PurchaseOrders";
+import type { PO } from "@/components/PurchaseOrders";
 import { usePaymentPOSplits, useProjectNames } from "@/components/POShares";
 import { toast } from "sonner";
 
@@ -13,10 +13,18 @@ const inr = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maxi
 type Line = { po_id: string; amount: string };
 
 export default function PaymentPOSplitDialog({ payment, open, onClose, onSaved }: {
-  payment: { id: string; amount: number; purpose?: string; po_id?: string | null }; open: boolean; onClose: () => void; onSaved?: () => void;
+  payment: { id: string; amount?: number; purpose?: string; po_id?: string | null }; open: boolean; onClose: () => void; onSaved?: () => void;
 }) {
   const qc = useQueryClient();
-  const { data: pos = [] } = usePurchaseOrders(open);
+  const { data: pos = [] } = useQuery({
+    queryKey: ["purchase-orders"],
+    enabled: open,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("purchase_orders").select("*").order("po_date", { ascending: false, nullsFirst: false });
+      return (error ? [] : data ?? []) as PO[];
+    },
+  });
   const { data: splits = [] } = usePaymentPOSplits(open);
   const { data: projects = [] } = useProjectNames(open);
   const [lines, setLines] = useState<Line[]>([]);
@@ -33,7 +41,9 @@ export default function PaymentPOSplitDialog({ payment, open, onClose, onSaved }
   const vendorPOs = pos.filter((p) => p.kind === "vendor");
   const projName = (id: string) => projects.find((p) => p.id === id)?.name ?? "";
   const total = lines.reduce((s, l) => s + Number(l.amount || 0), 0);
-  const diff = Number(payment.amount) - total;
+  // amount of the payment (when opened from a PO's list, it is the total of its existing split)
+  const payAmount = payment.amount ?? splits.filter((s) => s.payment_id === payment.id).reduce((a, s) => a + Number(s.amount), 0);
+  const diff = Number(payAmount) - total;
   const set = (i: number, patch: Partial<Line>) => setLines(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
   const save = async (clear = false) => {
@@ -43,7 +53,7 @@ export default function PaymentPOSplitDialog({ payment, open, onClose, onSaved }
       if (rows.some((l) => !l.po_id)) { toast.error("Pick a PO on every line"); return; }
       if (new Set(rows.map((l) => l.po_id)).size !== rows.length) { toast.error("Each PO can be listed only once"); return; }
       if (rows.some((l) => !(Number(l.amount) > 0))) { toast.error("Enter the amount for each PO"); return; }
-      if (Math.abs(diff) > 1) { toast.error(`The PO amounts must add up to the payment ${inr(Number(payment.amount))}`); return; }
+      if (Math.abs(diff) > 1) { toast.error(`The PO amounts must add up to the payment ${inr(Number(payAmount))}`); return; }
     }
     setSaving(true);
     const { error } = await (supabase as any).rpc("set_payment_po_splits", {
@@ -66,7 +76,7 @@ export default function PaymentPOSplitDialog({ payment, open, onClose, onSaved }
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Split payment across POs</DialogTitle>
-          <DialogDescription>{payment.purpose ? `${payment.purpose} · ` : ""}{inr(Number(payment.amount))} — enter how much of it goes to each Purchase Order.</DialogDescription>
+          <DialogDescription>{payment.purpose ? `${payment.purpose} · ` : ""}{inr(Number(payAmount))} — enter how much of it goes to each Purchase Order.</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           {lines.map((l, i) => (

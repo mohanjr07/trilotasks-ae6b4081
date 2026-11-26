@@ -19,6 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import POInvoices from "@/components/POInvoices";
+import PaymentPOSplitDialog from "@/components/PaymentPOSplitDialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { Split } from "lucide-react";
 import { POSharesEditor, POSplitView, saveAllocations, usePOAllocations, validateAllocations, type AllocDraft } from "@/components/POShares";
 import { FilePickButtons, PickedFile } from "@/components/FilePick";
 export { FilePickButtons, PickedFile };
@@ -331,6 +334,10 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
 }) {
   const t = po ? poTotals(po, rows) : null;
   const isPO = po?.kind === "vendor";
+  // admins and Anu can map one payment to several POs
+  const { profile } = useAuth() as any;
+  const canSplit = ["admin", "super_admin"].includes(profile?.role ?? "") || (profile?.email ?? "").toLowerCase() === "anu@triloautomation.com";
+  const [splitFor, setSplitFor] = useState<{ id: string; amount?: number; purpose?: string; po_id?: string | null } | null>(null);
   const s = po ? KIND_SHORT[po.kind] : "";
   const list = useMemo(() => (po && isPO ? rows.filter((r) => r.po_id === po.id).sort((a, b) => b.created_at.localeCompare(a.created_at)) : []), [po, isPO, rows]);
   // running total of approved payments against the PO, day by day
@@ -442,6 +449,7 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
 
             {isPO && <POInvoices po={po} />}
 
+            {splitFor && <PaymentPOSplitDialog payment={splitFor} open onClose={() => setSplitFor(null)} />}
             {isPO && (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Payments against this PO ({list.length})</p>
@@ -460,6 +468,17 @@ export function PODetailDialog({ po, rows, names, projectName, onClose, onEdit }
                         {r.status === "approved" ? (r.paid_at ? "Paid" : "Approved") : r.status === "rejected" ? "Rejected" : "Waiting"}
                       </span>
                       <span className={`font-heading text-sm font-bold ${r.status === "rejected" ? "text-ink-muted line-through" : "text-ink-primary"}`}>{inr(r.amount)}</span>
+                      {canSplit && (
+                        <button type="button" title="Split this payment across several POs"
+                          onClick={() => {
+                            const orig = (r as any)._shareOf as string | undefined;
+                            setSplitFor(orig ? { id: orig, purpose: r.purpose.split(" · part for PO")[0] }
+                                             : { id: r.id, amount: Number(r.amount), purpose: r.purpose, po_id: r.po_id ?? null });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-ink-secondary hover:bg-muted">
+                          <Split className="h-3 w-3" /> {(r as any)._shareOf ? "Edit split" : "Split"}
+                        </button>
+                      )}
                     </div>
                   ))}
                   {!list.length && <p className="px-3 py-4 text-center text-sm text-ink-muted">No payments linked yet. Link a payment from Payments or from the project's payment logs.</p>}
