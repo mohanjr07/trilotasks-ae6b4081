@@ -39,6 +39,7 @@ type Project = {
   color: string; status: string; created_at: string;
   converted?: boolean | null; lead_id?: string | null;   // TRILO_leads.sql
   project_number?: string | null;                         // TRILO_project_numbers.sql
+  sub_project_number?: string | null;                     // TRILO_sub_project_number.sql
 };
 type ProjectTeam = { id: string; project_id: string; name: string };
 type ProjectMember = {
@@ -424,7 +425,7 @@ function ProjectCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="font-heading text-base font-bold text-ink-primary leading-snug">{project.name}</h2>
             {showNames && project.project_number && (
-              <span className="rounded-pill border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-semibold text-primary">#{project.project_number}</span>
+              <span className="rounded-pill border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-semibold text-primary">#{project.project_number}{project.sub_project_number ? ` / ${project.sub_project_number}` : ""}</span>
             )}
             {showNames && canSetNumber && !project.project_number && (
               <button type="button" onClick={(e) => { e.stopPropagation(); setNumberOpen(true); }}
@@ -967,7 +968,11 @@ function ProjectFormModal({
   const [name, setName] = useState(project?.name ?? draft?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? draft?.description ?? "");
   const [number, setNumber] = useState(project?.project_number ?? "");
-  const numberPatch = number.trim() !== (project?.project_number ?? "") ? { project_number: number.trim() || null } : {};
+  const [subNumber, setSubNumber] = useState(project?.sub_project_number ?? "");
+  const numberPatch = {
+    ...(number.trim() !== (project?.project_number ?? "") ? { project_number: number.trim() || null } : {}),
+    ...(subNumber.trim() !== (project?.sub_project_number ?? "") ? { sub_project_number: subNumber.trim() || null } : {}),
+  };
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
   // Purchase Order: entered with a new project; managed (add / edit) when editing one
@@ -1038,8 +1043,14 @@ function ProjectFormModal({
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. VLM, Project Alpha" className="h-10" autoFocus />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink-primary">Project Number</label>
-            <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. TA-2026-014" className="h-10" />
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <label className="block text-sm font-medium text-ink-primary">Project Number
+                <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. TA-2026-014" className="mt-1.5 h-10" />
+              </label>
+              <label className="block w-32 text-sm font-medium text-ink-primary">Sub project no.
+                <Input value={subNumber} onChange={(e) => setSubNumber(e.target.value)} placeholder="e.g. 01" className="mt-1.5 h-10" />
+              </label>
+            </div>
             <p className="mt-1 text-xs text-ink-muted">Most people see only this number — the name is shown to admins and the sales team.</p>
           </div>
           <div>
@@ -1313,14 +1324,15 @@ function AssignMemberModal({
 function ProjectNumberDialog({ project, showName, onClose }: { project: Project; showName: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const [value, setValue] = useState(project.project_number ?? "");
+  const [sub, setSub] = useState(project.sub_project_number ?? "");
   const [saving, setSaving] = useState(false);
   const save = async () => {
     setSaving(true);
-    const { error } = await (supabase as any).rpc("set_project_number", { p_project: project.id, p_number: value.trim() || null });
+    const { error } = await (supabase as any).rpc("set_project_number", { p_project: project.id, p_number: value.trim() || null, p_sub: sub.trim() || null });
     setSaving(false);
     if (error) {
       const m = error.message ?? "";
-      toast.error(/number_taken|duplicate|unique/i.test(m) ? `Project number ${value.trim()} is already used` : /does not exist|schema cache/i.test(m) ? "Run TRILO_project_numbers.sql first." : m);
+      toast.error(/Enter the project number/i.test(m) ? "Enter the project number first" : /number_taken|duplicate|unique/i.test(m) ? `${value.trim()}${sub.trim() ? " / " + sub.trim() : ""} is already used` : /does not exist|schema cache|function/i.test(m) ? "Run TRILO_sub_project_number.sql first." : m);
       return;
     }
     toast.success("Project number saved");
@@ -1331,11 +1343,19 @@ function ProjectNumberDialog({ project, showName, onClose }: { project: Project;
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Project number</DialogTitle>
+          <DialogTitle>Project & sub project number</DialogTitle>
           <DialogDescription>{showName ? project.name : "This project"}</DialogDescription>
         </DialogHeader>
-        <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. TA-2026-014" className="h-10"
-          onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <label className="block text-xs font-medium text-ink-secondary">Project number
+            <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. TA-2026-014" className="mt-1 h-10"
+              onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+          </label>
+          <label className="block w-28 text-xs font-medium text-ink-secondary">Sub project no.
+            <Input value={sub} onChange={(e) => setSub(e.target.value)} placeholder="e.g. 01" className="mt-1 h-10"
+              onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+          </label>
+        </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={save} disabled={saving}>Save</Button>

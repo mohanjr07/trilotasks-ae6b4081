@@ -18,7 +18,11 @@ export function canSeeProjectNames(profile?: { role?: string | null; email?: str
 }
 
 /** What people who can't see names see. */
-export const projectNumberLabel = (num?: string | null) => (num && String(num).trim()) || "Project (no number)";
+export const projectNumberLabel = (num?: string | null, sub?: string | null) => {
+  const n = (num && String(num).trim()) || "";
+  const s = (sub && String(sub).trim()) || "";
+  return n ? (s ? `${n} / ${s}` : n) : "Project (no number)";
+};
 
 let showNames = false;
 /** Set from the layout once the signed-in profile is known; returns true if it changed. */
@@ -33,7 +37,7 @@ const PROJECTS_PATH = /\/rest\/v1\/projects$/;
 const FORM_NAMES_PATH = /\/rest\/v1\/rpc\/form_project_names$/;
 
 function maskRow(row: any) {
-  if (row && typeof row === "object" && "name" in row) row.name = projectNumberLabel(row.project_number);
+  if (row && typeof row === "object" && "name" in row) row.name = projectNumberLabel(row.project_number, row.sub_project_number);
 }
 
 /** Every Supabase request goes through here: hide project names for people who can't see them. */
@@ -56,10 +60,10 @@ export function installProjectNameMask() {
       const embedKeys: string[] = [];
       let newSelect = select;
       if (select) {
-        if (PROJECTS_PATH.test(path) && select !== "*" && !/(^|,)\s*project_number\b/.test(select)) newSelect = select + ",project_number";
+        if (PROJECTS_PATH.test(path) && select !== "*" && !/(^|,)\s*project_number\b/.test(select)) newSelect = select + ",project_number,sub_project_number";
         newSelect = (newSelect ?? "").replace(/(?:(\w+):)?projects(!\w+)?\(([^)]*)\)/g, (m, alias, hint, cols) => {
           embedKeys.push(alias || "projects");
-          return cols.trim() === "*" || /\bproject_number\b/.test(cols) ? m : `${alias ? alias + ":" : ""}projects${hint ?? ""}(${cols},project_number)`;
+          return cols.trim() === "*" || /\bproject_number\b/.test(cols) ? m : `${alias ? alias + ":" : ""}projects${hint ?? ""}(${cols},project_number,sub_project_number)`;
         });
         if (newSelect !== select) url.searchParams.set("select", newSelect!);
       }
