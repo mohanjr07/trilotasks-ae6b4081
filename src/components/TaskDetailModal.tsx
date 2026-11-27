@@ -317,8 +317,8 @@ export default function TaskDetailModal({ task, onClose }: { task: any; onClose:
   const { data: allProjects = [] } = useQuery({
     queryKey: ["projects-for-move"],
     queryFn: async () => {
-      const { data } = await supabase.from("projects").select("id, name, color").order("name");
-      return data ?? [];
+      const { data } = await supabase.from("projects").select("*").order("name");
+      return ((data ?? []) as any[]).filter((p) => p.converted !== false);
     },
     enabled: (moveOpen || editMode) && isAdmin,
   });

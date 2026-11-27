@@ -132,8 +132,9 @@ export default function CreateTaskModal({ open, onClose, preselectedAssignee }: 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: async () => {
-      const { data } = await supabase.from("projects").select("id, name, color").eq("status", "active").order("name");
-      return data ?? [];
+      const { data } = await supabase.from("projects").select("*").eq("status", "active").order("name");
+      // projects not yet converted take no tasks
+      return ((data ?? []) as any[]).filter((p) => p.converted !== false);
     },
     enabled: open,
   });

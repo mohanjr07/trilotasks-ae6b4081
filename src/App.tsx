@@ -37,6 +37,7 @@ const TeamsPage = lazy(() => import("@/pages/TeamsPage"));
 const NotesPage = lazy(() => import("@/pages/NotesPage"));
 const InternDashboard = lazy(() => import("@/pages/InternDashboard"));
 const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const LeadsPage = lazy(() => import("@/pages/LeadsPage"));
 const OrganisationFlowPage = lazy(() => import("@/pages/OrganisationFlowPage"));
 const ProductionFormsPage = lazy(() => import("@/pages/ProductionFormsPage"));
 const FormRequestsPage = lazy(() => import("@/pages/FormRequestsPage"));
@@ -116,6 +117,7 @@ const App = () => (
               <Route path="/dashboard" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminDashboard /></ProtectedRoute>} />
               <Route path="/tasks" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TasksPage /></ProtectedRoute>} />
               <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/leads" element={<LeadsPage />} />
               <Route path="/project-forms" element={<ProjectFormsPage />} />
               <Route path="/project-forms/:id" element={<ProjectFormsPage />} />
               {/* Organisation Flow — visible to every signed-in role.

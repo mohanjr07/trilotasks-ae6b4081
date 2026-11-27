@@ -1,11 +1,12 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { canSeeLeads, leadProjectDraft, type Lead } from "@/lib/leadsAccess";
 import { motion, AnimatePresence } from "framer-motion";
 import { CalendarDays,
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
   CheckSquare, ArrowLeft, IndianRupee, ReceiptText, FileStack,
-  FolderOpen,
+  FolderOpen, Handshake, Lock, CheckCircle2,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -34,6 +35,7 @@ import { toast } from "sonner";
 type Project = {
   id: string; name: string; description: string | null;
   color: string; status: string; created_at: string;
+  converted?: boolean | null; lead_id?: string | null;   // TRILO_leads.sql
 };
 type ProjectTeam = { id: string; project_id: string; name: string };
 type ProjectMember = {
@@ -73,6 +75,28 @@ export default function ProjectsPage() {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expensesOpen, setExpensesOpen] = useState(false);
   const [salesOpen, setSalesOpen] = useState(false);
+  // Leads → project requests (Anu creates the project for a converted lead)
+  const isLeadsUser = canSeeLeads(profile as any);
+  const canConvert = isLeadsUser || canEditProjects;
+  const [fromLead, setFromLead] = useState<Lead | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data: leadRequests = [] } = useQuery<Lead[]>({
+    queryKey: ["lead-project-requests"],
+    enabled: canEditProjects || isLeadsUser,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("lead_project_requests");
+      if (error) return [];
+      return (data ?? []) as Lead[];
+    },
+  });
+  useEffect(() => {
+    const id = searchParams.get("request");
+    if (!id || !leadRequests.length) return;
+    const l = leadRequests.find((x) => x.id === id);
+    if (l && canEditProjects) setFromLead(l);
+    searchParams.delete("request");
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, leadRequests, canEditProjects]);
 
   const { data: allOrders = [] } = usePurchaseOrders(true);   // empty for people who can't see POs
   const { data: poAllocs = [] } = usePOAllocations(true);    // POs shared with other projects show on those too
@@ -169,6 +193,27 @@ export default function ProjectsPage() {
         </div>
       </div>
 
+      {leadRequests.length > 0 && (
+        <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3">
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink-primary">
+            <Handshake className="h-4 w-4" /> Project requests from Leads ({leadRequests.length})
+          </p>
+          <div className="space-y-2">
+            {leadRequests.map((l) => (
+              <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-card px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink-primary">{l.name}{l.location ? ` · ${l.location}` : ""}</p>
+                  <p className="truncate text-xs text-ink-muted">{(l.products ?? "").replace(/\n/g, ", ")}</p>
+                </div>
+                {canEditProjects
+                  ? <Button size="sm" className="h-8 gap-1" onClick={() => setFromLead(l)}><Plus className="h-3.5 w-3.5" /> Create project</Button>
+                  : <span className="text-xs text-ink-muted">Waiting for Anu</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />)}
@@ -197,6 +242,7 @@ export default function ProjectsPage() {
                 allProfiles={allProfiles}
                 isAdmin={isAdmin}
                 canEdit={canEditProjects}
+                canConvert={canConvert}
                 isExpanded={isExpanded}
                 currentUserId={user?.id ?? ""}
                 onToggle={() => toggleExpand(project.id)}
@@ -219,6 +265,9 @@ export default function ProjectsPage() {
       {canEditProjects && (
         <ProjectFormModal open={createOpen} onClose={() => setCreateOpen(false)} />
       )}
+      {canEditProjects && fromLead && (
+        <ProjectFormModal key={fromLead.id} open lead={fromLead} onClose={() => setFromLead(null)} />
+      )}
       {canEditProjects && editProject && (
         <ProjectFormModal open={!!editProject} project={editProject} onClose={() => setEditProject(null)} />
       )}
@@ -229,9 +278,10 @@ export default function ProjectsPage() {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
   project, projectTeams, projectMembers, projectPOs = [], allProfiles,
-  isAdmin, canEdit = false, isExpanded, currentUserId, onToggle, onEdit, onDelete,
+  isAdmin, canEdit = false, canConvert = false, isExpanded, currentUserId, onToggle, onEdit, onDelete,
 }: {
   canEdit?: boolean;
+  canConvert?: boolean;
   project: Project;
   projectPOs?: PO[];
   projectTeams: ProjectTeam[];
@@ -335,7 +385,18 @@ function ProjectCard({
   const isMemberOfProject = projectMembers.some((m) => m.user_id === currentUserId);
   // meetings + MOM: project members and admins
   const [meetingsOpen, setMeetingsOpen] = useState(false);
-  const canMeet = isAdmin || isMemberOfProject;
+  // a project that isn't converted yet is only its details — no teams, members, tasks
+  const converted = project.converted !== false;
+  const [converting, setConverting] = useState(false);
+  const markConverted = async (value: boolean) => {
+    setConverting(true);
+    const { error } = await (supabase as any).rpc("set_project_converted", { p_project: project.id, p_value: value });
+    setConverting(false);
+    if (error) { toast.error(/does not exist|schema cache/i.test(error.message) ? "Run TRILO_leads.sql first." : error.message); return; }
+    toast.success(value ? "Project converted — teams and tasks are open" : "Marked as not converted");
+    qc.invalidateQueries({ queryKey: ["projects"] });
+  };
+  const canMeet = (isAdmin || isMemberOfProject) && converted;
   // a person in two teams of the project is listed once
   const uniqueMembers = Array.from(new Map(projectMembers.map((m) => [m.user_id, { user_id: m.user_id, name: m.user?.full_name ?? "Member" }])).values());
   const [docsOpen, setDocsOpen] = useState(false);
@@ -351,17 +412,22 @@ function ProjectCard({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="font-heading text-base font-bold text-ink-primary leading-snug">{project.name}</h2>
-            <span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
+            {!converted && (
+              <span className="inline-flex items-center gap-1 rounded-pill border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                <Lock className="h-3 w-3" /> Not converted
+              </span>
+            )}
+            {converted && <><span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
               {projectMembers.length} member{projectMembers.length !== 1 ? "s" : ""}
             </span>
             <span className="text-xs text-ink-muted bg-muted px-2 py-0.5 rounded-pill">
               {projectTeams.length} team{projectTeams.length !== 1 ? "s" : ""}
-            </span>
+            </span></>}
           </div>
           {project.description && (
             <p className="text-xs text-ink-muted truncate mt-0.5">{project.description}</p>
           )}
-          {projectPOs.length > 0 && (
+          {converted && projectPOs.length > 0 && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {projectPOs.map((po) => (
                 <span key={po.id} title={po.party ?? undefined}
@@ -421,7 +487,7 @@ function ProjectCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {canEdit && <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Project</DropdownMenuItem>}
-                {isAdmin && <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>}
+                {isAdmin && converted && <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>}
                 {isAdmin && <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete Project</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -433,7 +499,23 @@ function ProjectCard({
 
       {/* Expanded content */}
       <AnimatePresence>
-        {isExpanded && (
+        {isExpanded && !converted && (
+          <div className="border-t border-border px-5 py-4">
+            {project.description
+              ? <p className="whitespace-pre-line text-sm text-ink-secondary">{project.description}</p>
+              : <p className="text-sm text-ink-muted">No details yet.</p>}
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+              <Lock className="h-4 w-4 text-ink-muted" />
+              <p className="flex-1 text-xs text-ink-secondary">Teams, members and tasks open once this project is marked <b>Converted</b>.</p>
+              {canConvert && (
+                <Button size="sm" className="h-8 gap-1" disabled={converting} onClick={(e) => { e.stopPropagation(); markConverted(true); }}>
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Converted
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+        {isExpanded && converted && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -851,14 +933,15 @@ function MemberChip({
 
 // ─── Project Form Modal ───────────────────────────────────────────────────────
 function ProjectFormModal({
-  open, project, onClose,
+  open, project, lead, onClose,
 }: {
-  open: boolean; project?: Project; onClose: () => void;
+  open: boolean; project?: Project; lead?: Lead | null; onClose: () => void;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const [name, setName] = useState(project?.name ?? "");
-  const [description, setDescription] = useState(project?.description ?? "");
+  const draft = lead ? leadProjectDraft(lead) : null;
+  const [name, setName] = useState(project?.name ?? draft?.name ?? "");
+  const [description, setDescription] = useState(project?.description ?? draft?.description ?? "");
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
   // Purchase Order: entered with a new project; managed (add / edit) when editing one
@@ -882,7 +965,9 @@ function ProjectFormModal({
         toast.success("Project updated");
       } else {
         const { data: created, error } = await supabase.from("projects")
-          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id })
+          // from a converted lead: linked to it and converted (teams/tasks open); otherwise details only
+          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id,
+                    ...(lead ? { lead_id: lead.id, converted: true } : {}) } as any)
           .select("id").single();
         if (error) throw error;
         if (poDraft.po_number.trim() && created?.id) {
@@ -897,6 +982,8 @@ function ProjectFormModal({
         toast.success("Project created");
       }
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["lead-project-requests"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
       onClose();
     } catch (e: any) {
       toast.error(e.message);
@@ -915,7 +1002,7 @@ function ProjectFormModal({
       >
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-heading text-xl font-bold text-ink-primary">
-            {project ? "Edit Project" : "New Project"}
+            {project ? "Edit Project" : lead ? "New Project from Lead" : "New Project"}
           </h2>
           <button onClick={onClose} className="text-ink-muted hover:text-ink-primary"><X className="h-5 w-5" /></button>
         </div>

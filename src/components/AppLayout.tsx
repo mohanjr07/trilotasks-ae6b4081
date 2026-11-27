@@ -6,7 +6,7 @@ import InstallAppBanner from "@/components/InstallAppBanner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, CheckSquare, Users, Calendar, BarChart3,
-  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network,
+  Settings, User, Bell, LogOut, Menu, X, Video, StickyNote, ClipboardList, FolderKanban, Network, Handshake,
   FileStack, ClipboardCheck, Cake, Package, CheckCircle2, Folder, Target, Contact, Workflow, Wallet, Fingerprint, Timer, CalendarRange, Receipt, Megaphone,
 } from "lucide-react";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
@@ -18,6 +18,7 @@ import UserAvatar from "@/components/UserAvatar";
 import NotificationBell from "@/components/NotificationBell";
 import GetStartedIntro from "@/components/GetStartedIntro";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
+import { canSeeLeads } from "@/lib/leadsAccess";
 import { syncThemeFromAccount } from "@/lib/theme";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -155,7 +156,11 @@ export default function AppLayout() {
     : baseNav;
   // Payslips: only Anu until they are switched on for everyone (app_flags.payslips_live)
   const { allowed: payslipsAllowed } = useCanSeePayslips(profile?.email);
-  const nav = payslipsAllowed ? navWithOvertime : navWithOvertime.filter((n) => n.path !== "/payslips");
+  const navPay = payslipsAllowed ? navWithOvertime : navWithOvertime.filter((n) => n.path !== "/payslips");
+  // Leads: admins + the sales team, right after Projects
+  const nav = canSeeLeads(profile as any)
+    ? navPay.flatMap((n) => (n.path === "/projects" ? [n, { label: "Leads", path: "/leads", icon: Handshake }] : [n]))
+    : navPay;
   const roleKey = isAdmin ? "admin" : isManager ? "manager" : isIntern ? "intern" : "employee";
   const mobileTabs = mobileTabPaths[roleKey]
     .map((p) => nav.find((n) => n.path === p))
