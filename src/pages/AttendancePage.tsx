@@ -59,7 +59,10 @@ function fmtTime(t: string | null | undefined) {
 }
 /** Anything worked beyond 9 hours in a day is overtime. */
 const OT_AFTER = 9;
-const otOf = (h: number | null | undefined) => (h != null && Number(h) > OT_AFTER ? Number(h) - OT_AFTER : 0);
+/** Overtime is tracked only for machine IDs H01 – H11. */
+const hasOvertime = (id?: string | null) => /^H\s*0?([1-9]|1[01])$/i.test((id ?? "").trim());
+const otHours = (h: number | null | undefined) => (h != null && Number(h) > OT_AFTER ? Number(h) - OT_AFTER : 0);
+const otOf = (r: { employee_id?: string | null; total_hours: number | null | undefined }) => (hasOvertime(r.employee_id) ? otHours(r.total_hours) : 0);
 /** Clock time when overtime starts: punch-in + 9 hours. */
 function otStart(punchIn: string | null | undefined) {
   if (!punchIn) return "";
@@ -67,8 +70,8 @@ function otStart(punchIn: string | null | undefined) {
   const t = h * 60 + m + OT_AFTER * 60;
   return fmtTime(`${Math.floor(t / 60) % 24}:${String(t % 60).padStart(2, "0")}`);
 }
-function OtCell({ r }: { r: { total_hours: number | null; punch_in: string | null } }) {
-  const ot = otOf(r.total_hours);
+function OtCell({ r }: { r: { employee_id: string; total_hours: number | null; punch_in: string | null } }) {
+  const ot = otOf(r);
   if (!ot) return <span className="text-ink-muted">—</span>;
   return (
     <span>
@@ -212,7 +215,7 @@ export default function AttendancePage() {
       return m;
     },
   });
-  const otFor = (id: string) => otQ.data?.[id];
+  const otFor = (id: string) => (hasOvertime(id) ? otQ.data?.[id] : undefined);   // only H01 – H11
 
   const monthlyQ = useQuery({
     queryKey: ["attendance-monthly", month, company],
@@ -330,7 +333,7 @@ export default function AttendancePage() {
           { header: "Overtime from", key: "ot_from", width: 13 },
         ];
         const rows = dailyRows.map((r) => ({ ...r, name: nameOf(r), in: fmtTime(r.punch_in), out: fmtTime(r.punch_out),
-          ot: otOf(r.total_hours) ? Math.round(otOf(r.total_hours) * 100) / 100 : "", ot_from: otOf(r.total_hours) ? otStart(r.punch_in) : "" }));
+          ot: otOf(r) ? Math.round(otOf(r) * 100) / 100 : "", ot_from: otOf(r) ? otStart(r.punch_in) : "" }));
         const label = isAdminView ? date : month;
         await exportRowsToExcel(`attendance-daily-${label}${company === "all" ? "" : "-" + company}`, "Daily", `Attendance — ${isAdminView ? fmtDate(date) : format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
       } else if (view === "dates") {
@@ -500,8 +503,8 @@ export default function AttendancePage() {
                     <div className="rounded-lg bg-success/10 px-2.5 py-1.5"><span className="text-ink-muted">In </span><span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_in)}</span></div>
                     <div className="rounded-lg bg-muted px-2.5 py-1.5"><span className="text-ink-muted">Out </span>{r.punch_out ? <span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_out)}</span> : <Missing />}</div>
                   </div>
-                  {otOf(r.total_hours) > 0 && (
-                    <p className="mt-1.5 text-xs"><span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Overtime {fmtHours(otOf(r.total_hours))}</span>
+                  {otOf(r) > 0 && (
+                    <p className="mt-1.5 text-xs"><span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Overtime {fmtHours(otOf(r))}</span>
                       <span className="ml-1.5 text-ink-muted">after {otStart(r.punch_in)}</span></p>
                   )}
                 </li>
