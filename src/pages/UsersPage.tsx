@@ -99,8 +99,19 @@ export default function UsersPage() {
         body: { userId: id },
         headers,
       });
-      if (error) throw error;
+      if (error) {
+        // show the server's reason, not "non-2xx status code"
+        let msg = error.message;
+        try { const b = await (error as any).context?.json?.(); if (b?.error) msg = b.error; } catch { /* keep msg */ }
+        throw new Error(msg);
+      }
       if (data?.error) throw new Error(data.error);
+    },
+    onError: (e: any) => {
+      const m = e?.message ?? "";
+      toast.error(/foreign key|violates|Database error deleting user/i.test(m)
+        ? "Can't delete yet — this user is still linked to records. Run TRILO_user_delete_fix.sql once, then try again."
+        : "Could not delete user: " + m, { duration: 8000 });
     },
     onSuccess: async (_, deletedUserId) => {
       queryClient.setQueryData<any[]>(["users-profiles"], (current = []) =>

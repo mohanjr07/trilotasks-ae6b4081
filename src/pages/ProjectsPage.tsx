@@ -336,6 +336,8 @@ function ProjectCard({
   // meetings + MOM: project members and admins
   const [meetingsOpen, setMeetingsOpen] = useState(false);
   const canMeet = isAdmin || isMemberOfProject;
+  // a person in two teams of the project is listed once
+  const uniqueMembers = Array.from(new Map(projectMembers.map((m) => [m.user_id, { user_id: m.user_id, name: m.user?.full_name ?? "Member" }])).values());
   const [docsOpen, setDocsOpen] = useState(false);
 
   return (
@@ -384,13 +386,13 @@ function ProjectCard({
           {docsOpen && (
             <div onClick={(e) => e.stopPropagation()}>
               <ProjectDocumentsDialog open onClose={() => setDocsOpen(false)} projectId={project.id} projectName={project.name} isMember={isMemberOfProject}
-                members={projectMembers.map((m) => ({ user_id: m.user_id, name: m.user?.full_name ?? "Member" }))} />
+                members={uniqueMembers} />
             </div>
           )}
           {meetingsOpen && (
             <div onClick={(e) => e.stopPropagation()}>
               <ProjectMeetingsDialog open onClose={() => setMeetingsOpen(false)} projectId={project.id} projectName={project.name}
-                members={projectMembers.map((m) => ({ user_id: m.user_id, name: m.user?.full_name ?? "Member" }))} />
+                members={uniqueMembers} />
             </div>
           )}
         </div>
