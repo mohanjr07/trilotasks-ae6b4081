@@ -8,7 +8,9 @@ import { useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CheckCircle2, FolderKanban, Handshake, Loader2, MoreVertical, Pencil, Plus, Search, Trash2, Undo2, X } from "lucide-react";
+import { CheckCircle2, FileText, FolderKanban, Handshake, History, Loader2, MoreVertical, Pencil, Plus, Search, Trash2, Undo2, X } from "lucide-react";
+import { openFileLink } from "@/lib/nativeFiles";
+import { FilePickButtons, PickedFile } from "@/components/FilePick";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import AnimatedPage from "@/components/AnimatedPage";
@@ -23,6 +25,7 @@ import { toast } from "sonner";
 const sb = supabase as any;
 type Tab = "PD" | "PC" | "PROJ";
 type Projection = { id: string; month_label: string; month_start: string; customer: string; pg: string | null; po_value: number | null; po_receipt: boolean; remarks: string | null; sort: number | null };
+type Revision = { id: string; lead_id: string; rev_no: number; rev_date: string; quoted_value: number | null; final_quoted_value: number | null; products: string | null; notes: string | null; file_path: string | null; file_name: string | null; created_at: string };
 type Summary = { id: string; section: string; label: string; value: number | null; sort: number | null };
 
 const STATUSES = ["IN PROGRESS", "ON HOLD", "WORK IN PROGRESS", "COMPLETED", "LOST"];
@@ -46,15 +49,18 @@ function useLeadsData(enabled: boolean) {
     queryKey: ["leads"],
     enabled,
     queryFn: async () => {
-      const [l, p, s, pr] = await Promise.all([
+      const [l, p, s, pr, rv] = await Promise.all([
         sb.from("leads").select("*").order("sort", { ascending: true, nullsFirst: false }).order("created_at"),
         sb.from("lead_projections").select("*").order("month_start").order("sort", { ascending: true, nullsFirst: false }),
         sb.from("lead_summary").select("*").order("sort", { ascending: true, nullsFirst: false }),
         sb.from("projects").select("*"),
+        sb.from("lead_revisions").select("lead_id, rev_no"),       // TRILO_lead_revisions.sql
       ]);
-      if (l.error) return { error: errText(l.error), leads: [] as Lead[], projections: [] as Projection[], summary: [] as Summary[], projects: [] as any[] };
+      const latestRev: Record<string, number> = {};
+      for (const x of (rv.data ?? []) as Array<{ lead_id: string; rev_no: number }>) latestRev[x.lead_id] = Math.max(latestRev[x.lead_id] ?? -1, x.rev_no);
+      if (l.error) return { error: errText(l.error), leads: [] as Lead[], projections: [] as Projection[], summary: [] as Summary[], projects: [] as any[], latestRev, revisionsReady: false };
       return { error: null as string | null, leads: (l.data ?? []) as Lead[], projections: (p.data ?? []) as Projection[], summary: (s.data ?? []) as Summary[],
-        projects: ((pr.data ?? []) as any[]).filter((x) => x.lead_id) };
+        projects: ((pr.data ?? []) as any[]).filter((x) => x.lead_id), latestRev, revisionsReady: !rv.error };
     },
   });
 }
@@ -86,20 +92,27 @@ export default function LeadsPage() {
       ) : tab === "PROJ" ? (
         <Projections rows={data?.projections ?? []} summary={data?.summary ?? []} />
       ) : (
-        <Enquiries sheet={tab} leads={leads.filter((l) => l.sheet === tab)} summary={(data?.summary ?? []).filter((s) => s.section === tab)} projects={data?.projects ?? []} />
+        <Enquiries sheet={tab} leads={leads.filter((l) => l.sheet === tab)} summary={(data?.summary ?? []).filter((s) => s.section === tab)} projects={data?.projects ?? []} latestRev={data?.latestRev ?? {}} />
       )}
     </AnimatedPage>
   );
 }
 
 // ── PD / PC enquiries ───────────────────────────────────────────────────────
-function Enquiries({ sheet, leads, summary, projects }: { sheet: "PD" | "PC"; leads: Lead[]; summary: Summary[]; projects: any[] }) {
+function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD" | "PC"; leads: Lead[]; summary: Summary[]; projects: any[]; latestRev: Record<string, number> }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("ALL");
   const [edit, setEdit] = useState<Lead | "new" | null>(null);
   const [convert, setConvert] = useState<Lead | null>(null);
+  const [revs, setRevs] = useState<Lead | null>(null);
+  const RevChip = ({ l }: { l: Lead }) => (
+    <button type="button" onClick={() => setRevs(l)} title="Quotation revisions"
+      className="ml-1.5 inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0 align-middle text-[10px] font-semibold text-ink-secondary hover:bg-muted">
+      <History className="h-2.5 w-2.5" /> {latestRev[l.id] != null ? `Rev ${latestRev[l.id]}` : "Rev"}
+    </button>
+  );
   const isPD = sheet === "PD";
 
   const statuses = useMemo(() => {
@@ -147,6 +160,7 @@ function Enquiries({ sheet, leads, summary, projects }: { sheet: "PD" | "PC"; le
     <DropdownMenu>
       <DropdownMenuTrigger asChild><button className="rounded p-1 text-ink-muted hover:text-ink-primary" aria-label="More"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setRevs(l)}><History className="mr-2 h-3.5 w-3.5" /> Revisions</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setEdit(l)}><Pencil className="mr-2 h-3.5 w-3.5" /> Edit</DropdownMenuItem>
         {l.converted && !projectOf(l) && <DropdownMenuItem onClick={() => undo(l)}><Undo2 className="mr-2 h-3.5 w-3.5" /> Undo converted</DropdownMenuItem>}
         <DropdownMenuItem className="text-destructive" onClick={() => del(l)}><Trash2 className="mr-2 h-3.5 w-3.5" /> Delete</DropdownMenuItem>
@@ -185,7 +199,7 @@ function Enquiries({ sheet, leads, summary, projects }: { sheet: "PD" | "PC"; le
           <div key={l.id} className="rounded-xl border border-border bg-card p-3">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-ink-primary">{l.name}{l.location ? <span className="font-normal text-ink-muted"> · {l.location}</span> : null}</p>
+                <p className="font-semibold text-ink-primary">{l.name}{l.location ? <span className="font-normal text-ink-muted"> · {l.location}</span> : null}<RevChip l={l} /></p>
                 <p className="whitespace-pre-line text-sm text-ink-secondary">{l.products ?? "—"}</p>
               </div>
               <RowMenu l={l} />
@@ -232,7 +246,7 @@ function Enquiries({ sheet, leads, summary, projects }: { sheet: "PD" | "PC"; le
                 <td className="px-3 py-2 text-ink-muted">{l.sl_no ?? ""}</td>
                 {isPD && <td className="px-3 py-2">{l.sso ?? ""}</td>}
                 <td className="px-3 py-2">
-                  <p className="font-medium text-ink-primary">{l.name}</p>
+                  <p className="font-medium text-ink-primary">{l.name}<RevChip l={l} /></p>
                   <p className="text-xs text-ink-muted">{[l.location, l.reference].filter(Boolean).join(" · ")}</p>
                 </td>
                 <td className="max-w-[16rem] whitespace-pre-line px-3 py-2">{l.products ?? ""}</td>
@@ -258,6 +272,7 @@ function Enquiries({ sheet, leads, summary, projects }: { sheet: "PD" | "PC"; le
 
       {edit && <LeadDialog sheet={sheet} lead={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
       {convert && <ConvertDialog lead={convert} onClose={() => setConvert(null)} />}
+      {revs && <RevisionsDialog lead={revs} onClose={() => setRevs(null)} />}
     </div>
   );
 }
@@ -316,9 +331,13 @@ function LeadDialog({ sheet, lead, onClose }: { sheet: "PD" | "PC"; lead: Lead |
       updated_at: new Date().toISOString(),
     };
     if (!lead) row.sort = 100000 + Math.floor(Date.now() / 1000) % 100000;
-    const { error } = lead ? await sb.from("leads").update(row).eq("id", lead.id) : await sb.from("leads").insert(row);
+    const { data: saved, error } = lead ? await sb.from("leads").update(row).eq("id", lead.id).select("id") : await sb.from("leads").insert(row).select("id");
     setSaving(false);
     if (error) return toast.error(errText(error));
+    if (!lead && saved?.[0]?.id && (row.quoted_value != null || row.final_quoted_value != null)) {
+      // the first quotation = Rev 0
+      await sb.from("lead_revisions").insert({ lead_id: saved[0].id, rev_no: 0, quoted_value: row.quoted_value, final_quoted_value: row.final_quoted_value, products: row.products, notes: "First quotation" });
+    }
     toast.success(lead ? "Lead updated" : "Lead added");
     qc.invalidateQueries({ queryKey: ["leads"] });
     onClose();
@@ -551,6 +570,140 @@ function ProjectionDialog({ month, row, onClose }: { month: { label: string; sta
           <label className="block text-xs font-medium text-ink-secondary">Remarks<Input value={remarks} onChange={(e) => setRemarks(e.target.value)} className="mt-1 h-9" placeholder="Awaiting PO" /></label>
         </div>
         <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={saving}>Save</Button></div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── quotation revisions of one lead ─────────────────────────────────────────
+function RevisionsDialog({ lead, onClose }: { lead: Lead; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data: revs = [], isLoading, error } = useQuery({
+    queryKey: ["lead-revisions", lead.id],
+    queryFn: async () => {
+      const { data, error } = await sb.from("lead_revisions").select("*").eq("lead_id", lead.id).order("rev_no", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Revision[];
+    },
+  });
+  const latest = revs[0];
+  const [adding, setAdding] = useState(false);
+  const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [quoted, setQuoted] = useState("");
+  const [finalV, setFinalV] = useState("");
+  const [products, setProducts] = useState(lead.products ?? "");
+  const [notes, setNotes] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["lead-revisions", lead.id] }); qc.invalidateQueries({ queryKey: ["leads"] }); };
+  const num = (x: string) => { const v = x.replace(/,/g, "").trim(); return v === "" || isNaN(Number(v)) ? null : Number(v); };
+
+  const startAdd = () => {
+    setQuoted(latest?.quoted_value != null ? String(latest.quoted_value) : lead.quoted_value != null ? String(lead.quoted_value) : "");
+    setFinalV(latest?.final_quoted_value != null ? String(latest.final_quoted_value) : "");
+    setProducts(latest?.products ?? lead.products ?? "");
+    setNotes(""); setFile(null); setAdding(true);
+  };
+  const save = async () => {
+    if (!notes.trim() && num(quoted) == null && !file) return toast.error("Enter what changed, the new value, or attach the quotation");
+    setSaving(true);
+    try {
+      let file_path: string | null = null;
+      if (file) {
+        file_path = `${lead.id}/${Date.now()}_${file.name.replace(/[^\w.\-]+/g, "_")}`;
+        const { error: upErr } = await supabase.storage.from("lead-files").upload(file_path, file, { contentType: file.type || undefined });
+        if (upErr) throw upErr;
+      }
+      const { error } = await sb.from("lead_revisions").insert({
+        lead_id: lead.id, rev_date: date, quoted_value: num(quoted), final_quoted_value: num(finalV),
+        products: products.trim() || null, notes: notes.trim() || null, file_path, file_name: file?.name ?? null,
+      });
+      if (error) { if (file_path) await supabase.storage.from("lead-files").remove([file_path]); throw error; }
+      toast.success("Revision added");
+      setAdding(false); refresh();
+    } catch (e: any) { toast.error(errText(e)); }
+    setSaving(false);
+  };
+  const del = async (r: Revision) => {
+    if (!confirm(`Delete Rev ${r.rev_no}?`)) return;
+    const { error } = await sb.from("lead_revisions").delete().eq("id", r.id);
+    if (error) return toast.error(errText(error));
+    if (r.file_path) await supabase.storage.from("lead-files").remove([r.file_path]);
+    refresh();
+  };
+  const open = async (path: string) => {
+    try {
+      await openFileLink(async () => {
+        const { data, error } = await supabase.storage.from("lead-files").createSignedUrl(path, 300);
+        if (error) throw error;
+        return data.signedUrl;
+      });
+    } catch (e: any) { toast.error("Could not open the file: " + (e?.message ?? "")); }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[92dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Revisions — {lead.name}</DialogTitle>
+          <DialogDescription>Every quotation revision before conversion. The lead shows the latest one.</DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Revisions aren't set up yet — run TRILO_lead_revisions.sql.</p>
+        ) : (
+          <>
+            {!adding ? (
+              <Button onClick={startAdd} className="gap-1.5"><Plus className="h-4 w-4" /> New revision {latest ? `(Rev ${latest.rev_no + 1})` : "(Rev 0)"}</Button>
+            ) : (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <p className="text-sm font-semibold">Rev {latest ? latest.rev_no + 1 : 0}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-xs font-medium text-ink-secondary">Date<Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-9" /></label>
+                  <span />
+                  <label className="block text-xs font-medium text-ink-secondary">Quoted value (₹)<Input value={quoted} onChange={(e) => setQuoted(e.target.value)} inputMode="decimal" className="mt-1 h-9" /></label>
+                  <label className="block text-xs font-medium text-ink-secondary">Final quoted (₹)<Input value={finalV} onChange={(e) => setFinalV(e.target.value)} inputMode="decimal" className="mt-1 h-9" /></label>
+                </div>
+                <label className="block text-xs font-medium text-ink-secondary">Products / scope<Textarea value={products} onChange={(e) => setProducts(e.target.value)} rows={2} className="mt-1" /></label>
+                <label className="block text-xs font-medium text-ink-secondary">What changed<Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1" placeholder="e.g. Added 2 diverters, 5% discount" /></label>
+                {file ? <PickedFile file={file} onRemove={() => setFile(null)} /> : (
+                  <div><p className="mb-1 text-xs font-medium text-ink-secondary">Quotation (optional)</p><FilePickButtons onPick={setFile} /></div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+                  <Button onClick={save} disabled={saving}>{saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Save revision</Button>
+                </div>
+              </div>
+            )}
+            {isLoading ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-ink-muted" /> : revs.length === 0 ? (
+              <p className="py-4 text-center text-sm text-ink-muted">No revisions yet.</p>
+            ) : (
+              <ol className="relative space-y-3 border-l border-border pl-4">
+                {revs.map((r, i) => (
+                  <li key={r.id} className="relative">
+                    <span className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ${i === 0 ? "bg-primary" : "bg-border"}`} />
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-ink-primary">Rev {r.rev_no}
+                          <span className="ml-2 font-normal text-ink-muted">{fmtDate(r.rev_date)}</span>
+                          {i === 0 && <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">Latest</span>}
+                        </p>
+                        <p className="text-xs text-ink-secondary">Quoted {inr(r.quoted_value)}{r.final_quoted_value != null ? ` · Final ${inr(r.final_quoted_value)}` : ""}</p>
+                        {r.products && <p className="whitespace-pre-line text-xs text-ink-muted">{r.products}</p>}
+                        {r.notes && <p className="mt-0.5 text-sm text-ink-secondary">{r.notes}</p>}
+                        {r.file_path && (
+                          <button type="button" onClick={() => open(r.file_path!)} className="mt-1 inline-flex max-w-full items-center gap-1 text-xs font-medium text-primary">
+                            <FileText className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">{r.file_name ?? "Quotation"}</span>
+                          </button>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => del(r)} className="p-1 text-ink-muted hover:text-destructive" aria-label="Delete revision"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
