@@ -268,7 +268,7 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
       </div>
       {shown.length === 0 && <p className="py-8 text-center text-sm text-ink-muted">No leads here.</p>}
 
-      <SummaryLines section={sheet} rows={summary} />
+      <SummaryLines section={sheet} rows={summary} autoTotal />
 
       {edit && <LeadDialog sheet={sheet} lead={edit === "new" ? null : edit} onClose={() => setEdit(null)} />}
       {convert && <ConvertDialog lead={convert} onClose={() => setConvert(null)} />}
@@ -386,14 +386,27 @@ function LeadDialog({ sheet, lead, onClose }: { sheet: "PD" | "PC"; lead: Lead |
 }
 
 // ── summary lines (Order bank, SUM, FWRD …) ─────────────────────────────────
-function SummaryLines({ section, rows }: { section: string; rows: Summary[] }) {
+const isTotalLabel = (l: string) => /^\s*(grand\s+)?total\s*$/i.test(l);
+
+function SummaryLines({ section, rows: allRows, autoTotal = false }: { section: string; rows: Summary[]; autoTotal?: boolean }) {
   const qc = useQueryClient();
+  // with autoTotal the "Total" line is worked out from the other lines (never typed)
+  const rows = autoTotal ? allRows.filter((r) => !isTotalLabel(r.label)) : allRows;
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const valOf = (r: Summary) => {
+    const d = drafts[r.id];
+    if (d === undefined) return Number(r.value ?? 0);
+    const n = Number(d.replace(/,/g, "").trim());
+    return isNaN(n) ? 0 : n;
+  };
+  const total = rows.reduce((t, r) => t + valOf(r), 0);
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
   const [value, setValue] = useState("");
   const refresh = () => qc.invalidateQueries({ queryKey: ["leads"] });
   const add = async () => {
     if (!label.trim()) return;
+    if (autoTotal && isTotalLabel(label)) return toast.error("Total is added up automatically");
     const v = value.replace(/,/g, "").trim();
     const { error } = await sb.from("lead_summary").insert({ section, label: label.trim(), value: v === "" ? null : Number(v), sort: rows.length + 1 });
     if (error) return toast.error(errText(error));
@@ -419,13 +432,22 @@ function SummaryLines({ section, rows }: { section: string; rows: Summary[] }) {
         {rows.map((r) => (
           <div key={r.id} className="flex items-center gap-2 py-1.5 text-sm">
             <span className="min-w-0 flex-1 truncate text-ink-secondary">{r.label}</span>
-            <Input defaultValue={r.value ?? ""} onBlur={(e) => { if (e.target.value !== String(r.value ?? "")) update(r, e.target.value); }}
+            <Input defaultValue={r.value ?? ""} onChange={(e) => setDrafts({ ...drafts, [r.id]: e.target.value })}
+              onBlur={(e) => { if (e.target.value !== String(r.value ?? "")) update(r, e.target.value); }}
               className="h-8 w-36 text-right" inputMode="decimal" />
-            <span className="hidden w-32 text-right text-xs text-ink-muted sm:inline">{inr(r.value)}</span>
+            <span className="hidden w-32 text-right text-xs text-ink-muted sm:inline">{inr(valOf(r))}</span>
             <button type="button" onClick={() => del(r)} className="p-1 text-ink-muted hover:text-destructive" aria-label="Remove"><X className="h-3.5 w-3.5" /></button>
           </div>
         ))}
       </div>
+      {autoTotal && rows.length > 0 && (
+        <div className="mt-1 flex items-center gap-2 border-t-2 border-border pt-2 text-sm">
+          <span className="min-w-0 flex-1 font-semibold text-ink-primary">Total <span className="text-xs font-normal text-ink-muted">(auto)</span></span>
+          <span className="w-36 pr-3 text-right font-semibold text-ink-primary">{inr(total)}</span>
+          <span className="hidden w-32 sm:inline" />
+          <span className="w-[22px]" />
+        </div>
+      )}
       {adding && (
         <div className="mt-2 flex gap-2">
           <Input autoFocus value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Order Bank)" className="h-8" />
