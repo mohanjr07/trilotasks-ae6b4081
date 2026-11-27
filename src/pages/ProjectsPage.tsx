@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
+import { CalendarDays,
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
   CheckSquare, ArrowLeft, IndianRupee, ReceiptText, FileStack,
@@ -18,6 +18,7 @@ import TaskDetailModal from "@/components/TaskDetailModal";
 import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/ProjectPaymentsDialog";
 import SalesOrdersDialog from "@/components/SalesOrderTracker";
 import { posOfProject, usePOAllocations } from "@/components/POShares";
+import ProjectMeetingsDialog from "@/components/ProjectMeetings";
 import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -330,6 +331,9 @@ function ProjectCard({
   };
 
   const isMemberOfProject = projectMembers.some((m) => m.user_id === currentUserId);
+  // meetings + MOM: project members and admins
+  const [meetingsOpen, setMeetingsOpen] = useState(false);
+  const canMeet = isAdmin || isMemberOfProject;
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -360,6 +364,18 @@ function ProjectCard({
                   <span className="truncate">PO {po.po_number}</span>
                 </span>
               ))}
+            </div>
+          )}
+          {canMeet && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setMeetingsOpen(true); }}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary hover:bg-muted">
+              <CalendarDays className="h-3 w-3" /> Meetings & MOM
+            </button>
+          )}
+          {meetingsOpen && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ProjectMeetingsDialog open onClose={() => setMeetingsOpen(false)} projectId={project.id} projectName={project.name}
+                members={projectMembers.map((m) => ({ user_id: m.user_id, name: m.user?.full_name ?? "Member" }))} />
             </div>
           )}
         </div>
