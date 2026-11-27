@@ -418,7 +418,7 @@ export default function AppLayout() {
           </Link>
         </header>
         )}
-        <main className="flex-1 px-4 pt-2 pb-32 md:px-8 md:py-8 max-w-[1280px] mx-auto w-full">
+        <main className={cn("flex-1 px-4 pt-2 pb-32 md:px-8 md:py-8 mx-auto w-full", location.pathname.startsWith("/leads") ? "max-w-none" : "max-w-[1280px]")}>
           <InstallAppBanner />
           <AnnouncementPopup />
           <Suspense fallback={<PageSkeleton />}>

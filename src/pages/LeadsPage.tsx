@@ -144,16 +144,16 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
   const ConvertCell = ({ l }: { l: Lead }) => {
     const p = projectOf(l);
     if (!l.converted) return (
-      <Button size="sm" variant="outline" className="h-7 gap-1 border-success/40 text-success hover:bg-success/10" onClick={() => setConvert(l)}>
+      <Button size="sm" variant="outline" className="h-7 gap-1 px-2 border-success/40 text-success hover:bg-success/10" onClick={() => setConvert(l)}>
         <CheckCircle2 className="h-3.5 w-3.5" /> Converted
       </Button>
     );
     return p ? (
-      <button type="button" onClick={() => navigate("/projects")} className="inline-flex max-w-[12rem] items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">
+      <button type="button" onClick={() => navigate("/projects")} className="inline-flex max-w-full items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success">
         <FolderKanban className="h-3 w-3 shrink-0" /> <span className="truncate">{p.name}</span>
       </button>
     ) : (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning">Converted · project pending</span>
+      <span className="inline-block rounded-lg bg-warning/15 px-2 py-0.5 text-center text-[11px] font-medium leading-tight text-warning">Converted · project pending</span>
     );
   };
   const RowMenu = ({ l }: { l: Lead }) => (
@@ -221,46 +221,63 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
         ))}
       </div>
 
-      {/* desktop: table */}
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
-        <table className="w-full text-sm">
+      {/* desktop: table — fits the page width, no sideways scrolling */}
+      <div className="hidden rounded-xl border border-border bg-card md:block">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-10" />
+            <col className="w-[22%]" />
+            <col className="w-[18%]" />
+            <col className="w-[15%]" />
+            <col className="w-[14%]" />
+            <col className="w-[16%]" />
+            <col className="w-[15%]" />
+          </colgroup>
           <thead className="bg-muted/50 text-left text-xs text-ink-muted">
             <tr>
-              <th className="px-3 py-2">#</th>
-              {isPD && <th className="px-3 py-2">SSO</th>}
-              <th className="px-3 py-2">Customer</th>
-              <th className="px-3 py-2">Products</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2 text-right">Quoted</th>
-              {isPD && <th className="px-3 py-2 text-right">Final</th>}
-              {isPD && <th className="px-3 py-2 text-right">% Cov</th>}
-              <th className="px-3 py-2">Expected</th>
-              <th className="px-3 py-2">PO</th>
-              <th className="px-3 py-2"></th>
-              <th className="px-1 py-2"></th>
+              <th className="px-2 py-2">#</th>
+              <th className="px-2 py-2">Customer</th>
+              <th className="px-2 py-2">Products</th>
+              <th className="px-2 py-2">Status</th>
+              <th className="px-2 py-2 text-right">Value</th>
+              <th className="px-2 py-2">Expected · PO</th>
+              <th className="px-2 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {shown.map((l) => (
               <tr key={l.id} className="align-top hover:bg-muted/30">
-                <td className="px-3 py-2 text-ink-muted">{l.sl_no ?? ""}</td>
-                {isPD && <td className="px-3 py-2">{l.sso ?? ""}</td>}
-                <td className="px-3 py-2">
-                  <p className="font-medium text-ink-primary">{l.name}<RevChip l={l} /></p>
-                  <p className="text-xs text-ink-muted">{[l.location, l.reference].filter(Boolean).join(" · ")}</p>
+                <td className="px-2 py-2 text-ink-muted">{l.sl_no ?? ""}</td>
+                <td className="px-2 py-2">
+                  <p className="break-words font-medium text-ink-primary">{l.name}<RevChip l={l} /></p>
+                  <p className="break-words text-xs text-ink-muted">{[isPD && l.sso ? `SSO: ${l.sso}` : null, l.location].filter(Boolean).join(" · ")}</p>
+                  {l.reference && <p className="break-all text-[11px] text-ink-muted">{l.reference}</p>}
                 </td>
-                <td className="max-w-[16rem] whitespace-pre-line px-3 py-2">{l.products ?? ""}</td>
-                <td className="px-3 py-2">
-                  {l.status && <span className={`whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(l.status)}`}>{l.status}</span>}
-                  {l.remarks && <p className="mt-1 text-xs text-ink-muted">{l.remarks}</p>}
+                <td className="whitespace-pre-line break-words px-2 py-2">{l.products ?? ""}</td>
+                <td className="px-2 py-2">
+                  {l.status && <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(l.status)}`}>{l.status}</span>}
+                  {l.remarks && <p className="mt-1 break-words text-xs text-ink-muted">{l.remarks}</p>}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right">{inr(l.quoted_value)}</td>
-                {isPD && <td className="whitespace-nowrap px-3 py-2 text-right">{inr(l.final_quoted_value)}</td>}
-                {isPD && <td className="px-3 py-2 text-right">{l.coverage_pct != null ? `${l.coverage_pct}%` : ""}</td>}
-                <td className="whitespace-nowrap px-3 py-2">{l.expected_order_date ? fmtDate(l.expected_order_date) : ""}</td>
-                <td className="px-3 py-2 text-xs">{l.po_number ?? ""}{l.po_value != null && <p className="text-ink-muted">{inr(l.po_value)}</p>}</td>
-                <td className="px-3 py-2"><ConvertCell l={l} /></td>
-                <td className="px-1 py-2"><RowMenu l={l} /></td>
+                <td className="px-2 py-2 text-right">
+                  {isPD && l.final_quoted_value != null ? (
+                    <>
+                      <p className="font-medium text-ink-primary">{inr(l.final_quoted_value)}</p>
+                      <p className="text-[11px] text-ink-muted">Quoted {inr(l.quoted_value)}</p>
+                    </>
+                  ) : <p className="font-medium text-ink-primary">{inr(l.quoted_value)}</p>}
+                  {isPD && l.coverage_pct != null && <p className="text-[11px] text-ink-muted">{l.coverage_pct}% cov</p>}
+                </td>
+                <td className="px-2 py-2 text-xs">
+                  {l.expected_order_date && <p className="text-ink-primary">{fmtDate(l.expected_order_date)}</p>}
+                  {l.po_number && <p className="break-all text-ink-secondary">{l.po_number}</p>}
+                  {l.po_value != null && <p className="text-ink-muted">{inr(l.po_value)}</p>}
+                </td>
+                <td className="px-2 py-2">
+                  <div className="flex items-start justify-end gap-1">
+                    <ConvertCell l={l} />
+                    <RowMenu l={l} />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
