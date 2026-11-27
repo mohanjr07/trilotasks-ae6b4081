@@ -36,6 +36,7 @@ type AttendanceRow = {
   company: string | null;
   employee_id: string; user_id: string | null; employee_name: string | null; work_date: string;
   punch_in: string | null; punch_out: string | null; total_hours: number | null; punch_count: number;
+  status?: string | null; source?: string | null;   // "register" = from the Sep–Oct attendance sheets (no punch times)
 };
 type DailySummaryRow = {
   company?: string | null;
@@ -297,7 +298,7 @@ export default function AttendancePage() {
     }
     if (view === "daily") {
       const r = rows as AttendanceRow[];
-      const complete = r.filter((x) => x.punch_out).length;
+      const complete = r.filter((x) => x.punch_out || x.source === "register").length;
       const withHours = r.filter((x) => x.total_hours !== null);
       const avg = withHours.length ? withHours.reduce((s, x) => s + Number(x.total_hours), 0) / withHours.length : 0;
       return [
@@ -499,10 +500,14 @@ export default function AttendancePage() {
                     </div>
                     <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-ink-primary tabular-nums">{fmtHours(r.total_hours)}</span>
                   </div>
+                  {r.source === "register" ? (
+                    <p className="mt-2"><RegisterBadge status={r.status} /></p>
+                  ) : (
                   <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg bg-success/10 px-2.5 py-1.5"><span className="text-ink-muted">In </span><span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_in)}</span></div>
                     <div className="rounded-lg bg-muted px-2.5 py-1.5"><span className="text-ink-muted">Out </span>{r.punch_out ? <span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_out)}</span> : <Missing />}</div>
                   </div>
+                  )}
                   {otOf(r) > 0 && (
                     <p className="mt-1.5 text-xs"><span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Overtime {fmtHours(otOf(r))}</span>
                       <span className="ml-1.5 text-ink-muted">after {otStart(r.punch_in)}</span></p>
@@ -521,8 +526,12 @@ export default function AttendancePage() {
                     {isAdminView
                       ? <><Td className="text-ink-muted">{r.employee_id}</Td><Td className="font-medium text-ink-primary">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</Td></>
                       : <Td className="font-medium text-ink-primary">{fmtDate(r.work_date)}</Td>}
+                    {r.source === "register" ? (
+                      <td colSpan={2} className="px-3 sm:px-4 py-3"><RegisterBadge status={r.status} /></td>
+                    ) : (<>
                     <Td>{fmtTime(r.punch_in)}</Td>
                     <Td>{r.punch_out ? fmtTime(r.punch_out) : <Missing />}</Td>
+                    </>)}
                     <Td>{fmtHours(r.total_hours)}</Td>
                     <Td><OtCell r={r} /></Td>
                   </tr>
@@ -700,6 +709,15 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
   return <td className={`px-3 sm:px-4 py-3 text-ink-secondary ${className}`} title={title}>{children}</td>;
+}
+/** A day taken from the attendance register sheet (no punch times). */
+function RegisterBadge({ status }: { status?: string | null }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <span className="rounded-pill bg-success/10 px-2 py-0.5 font-semibold text-success">{status || "Present"}</span>
+      <span className="text-ink-muted">from register · no punch times</span>
+    </span>
+  );
 }
 function Missing() {
   return <span className="text-[11px] font-semibold bg-warning-light text-warning px-2 py-0.5 rounded-pill">Not punched</span>;
