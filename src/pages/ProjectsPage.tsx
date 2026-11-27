@@ -5,6 +5,7 @@ import { CalendarDays,
   Plus, X, ChevronDown, ChevronRight, FolderKanban,
   MoreVertical, Pencil, Trash2, UserPlus, GripVertical, Check,
   CheckSquare, ArrowLeft, IndianRupee, ReceiptText, FileStack,
+  FolderOpen,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -19,6 +20,7 @@ import ProjectExpensesDialog, { EXPENSE_VIEWER_EMAILS } from "@/components/Proje
 import SalesOrdersDialog from "@/components/SalesOrderTracker";
 import { posOfProject, usePOAllocations } from "@/components/POShares";
 import ProjectMeetingsDialog from "@/components/ProjectMeetings";
+import ProjectDocumentsDialog from "@/components/ProjectDocuments";
 import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -334,6 +336,7 @@ function ProjectCard({
   // meetings + MOM: project members and admins
   const [meetingsOpen, setMeetingsOpen] = useState(false);
   const canMeet = isAdmin || isMemberOfProject;
+  const [docsOpen, setDocsOpen] = useState(false);
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
@@ -371,6 +374,18 @@ function ProjectCard({
               className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary hover:bg-muted">
               <CalendarDays className="h-3 w-3" /> Meetings & MOM
             </button>
+          )}
+          {canMeet && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setDocsOpen(true); }}
+              className="mt-1.5 ml-1.5 inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-[11px] font-medium text-ink-secondary hover:bg-muted">
+              <FolderOpen className="h-3 w-3" /> Documents
+            </button>
+          )}
+          {docsOpen && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ProjectDocumentsDialog open onClose={() => setDocsOpen(false)} projectId={project.id} projectName={project.name} isMember={isMemberOfProject}
+                members={projectMembers.map((m) => ({ user_id: m.user_id, name: m.user?.full_name ?? "Member" }))} />
+            </div>
           )}
           {meetingsOpen && (
             <div onClick={(e) => e.stopPropagation()}>
