@@ -12,7 +12,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, startOfWeek, addDays, parseISO } from "date-fns";
 import {
   Search, Users, CheckCircle2, AlertTriangle, Clock, FileSpreadsheet, Link2, Fingerprint,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Upload,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,7 +28,7 @@ import { exportRowsToExcel, ExportColumn } from "@/lib/attendanceExport";
 // New tables/views aren't in the generated Supabase types yet.
 const db = supabase as any;
 
-type ViewKey = "daily" | "dates" | "weekly" | "monthly";
+type ViewKey = "daily" | "dates" | "weekly" | "monthly" | "yearly";
 
 type Company = "all" | "Trilo" | "Mapl";
 
@@ -113,6 +113,7 @@ export default function AttendancePage() {
   const byCompany = (q: any) => (company === "all" ? q : q.eq("company", company));
   const [showLink, setShowLink] = useState(false);
   const [showRange, setShowRange] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const weekStart = format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekEnd = format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd");
@@ -125,11 +126,13 @@ export default function AttendancePage() {
         { key: "dates", label: "Date-wise" },
         { key: "weekly", label: "Weekly" },
         { key: "monthly", label: "Monthly" },
+        { key: "yearly", label: "1 Year" },
       ]
     : [
         { key: "daily", label: "Daily" },
         { key: "weekly", label: "Weekly" },
         { key: "monthly", label: "Monthly" },
+        { key: "yearly", label: "1 Year" },
       ];
 
   // ── Data ───────────────────────────────────────────────────────────────────
@@ -179,13 +182,49 @@ export default function AttendancePage() {
     },
   });
 
-  const activeQ = { daily: dailyQ, dates: datesQ, weekly: weeklyQ, monthly: monthlyQ }[view];
-
   const matches = (r: { employee_id?: string; employee_name?: string | null }) => {
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (r.employee_name ?? "").toLowerCase().includes(s) || (r.employee_id ?? "").toLowerCase().includes(s);
   };
+
+  // 1 Year: the 12 months up to the chosen month
+  const yearMonths = useMemo(() => {
+    const y = Number(month.slice(0, 4)), m = Number(month.slice(5, 7)) - 1;
+    return Array.from({ length: 12 }, (_, i) => format(new Date(y, m - 11 + i, 1), "yyyy-MM"));
+  }, [month]);
+  const yearlyQ = useQuery({
+    queryKey: ["attendance-yearly", month, company],
+    enabled: view === "yearly",
+    queryFn: async () => {
+      const all: PeriodRow[] = [];
+      for (let off = 0; off < 20000; off += 1000) {
+        const { data, error } = await byCompany(db.from("monthly_attendance").select("*"))
+          .in("month", yearMonths).order("employee_id").order("month").range(off, off + 999);
+        if (error) throw error;
+        all.push(...((data ?? []) as PeriodRow[]));
+        if (!data || data.length < 1000) break;
+      }
+      return all;
+    },
+  });
+  type YearRow = PeriodRow & { byMonth: Record<string, PeriodRow> };
+  const yearlyRows = useMemo<YearRow[]>(() => {
+    const map = new Map<string, YearRow>();
+    for (const r of yearlyQ.data ?? []) {
+      let y = map.get(r.employee_id);
+      if (!y) { y = { ...r, days_present: 0, missing_punch_out: 0, total_hours: 0, avg_hours_per_day: null, byMonth: {} }; map.set(r.employee_id, y); }
+      y.byMonth[r.month ?? ""] = r;
+      y.days_present += Number(r.days_present);
+      y.missing_punch_out += Number(r.missing_punch_out);
+      y.total_hours += Number(r.total_hours);
+      if (r.employee_name) y.employee_name = r.employee_name;
+    }
+    return [...map.values()].map((y) => ({ ...y, avg_hours_per_day: y.days_present ? y.total_hours / y.days_present : null })).filter(matches);
+  }, [yearlyQ.data, search]);
+
+  const activeQ = { daily: dailyQ, dates: datesQ, weekly: weeklyQ, monthly: monthlyQ, yearly: yearlyQ }[view];
+
 
   const dailyRows = useMemo(() => (dailyQ.data ?? []).filter(matches), [dailyQ.data, search]);
   const weeklyRows = useMemo(() => (weeklyQ.data ?? []).filter(matches), [weeklyQ.data, search]);
@@ -197,7 +236,8 @@ export default function AttendancePage() {
     const rows =
       view === "daily" ? dailyRows :
       view === "weekly" ? weeklyRows :
-      view === "monthly" ? monthlyRows : [];
+      view === "monthly" ? monthlyRows :
+      view === "yearly" ? yearlyRows : [];
     if (view === "dates") {
       const days = dateRows.length;
       const avgPresent = days ? dateRows.reduce((s, r) => s + Number(r.employees_present), 0) / days : 0;
@@ -232,7 +272,7 @@ export default function AttendancePage() {
       { title: "Missing punch-outs", value: missing, icon: AlertTriangle, warn: true },
       { title: "Total hours", value: Math.round(hours), icon: Clock, sub: fmtHours(hours) },
     ];
-  }, [view, dailyRows, weeklyRows, monthlyRows, dateRows, isAdminView]);
+  }, [view, dailyRows, weeklyRows, monthlyRows, yearlyRows, dateRows, isAdminView]);
 
   // ── Export ─────────────────────────────────────────────────────────────────
   const handleExport = async () => {
@@ -257,6 +297,20 @@ export default function AttendancePage() {
         ];
         const rows = dateRows.map((r) => ({ ...r, first: fmtTime(r.first_arrival), last: fmtTime(r.last_departure) }));
         await exportRowsToExcel(`attendance-datewise-${month}${company === "all" ? "" : "-" + company}`, "Date-wise", `Date-wise Attendance — ${format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
+      } else if (view === "yearly") {
+        const cols: ExportColumn[] = [
+          { header: "Employee ID", key: "employee_id", width: 12 }, { header: "Name", key: "name", width: 26 },
+          { header: "Company", key: "company", width: 10 },
+          ...yearMonths.map((m) => ({ header: format(parseISO(m + "-01"), "MMM yy"), key: "m_" + m, width: 8 })),
+          { header: "Days Present", key: "days_present", width: 13 }, { header: "Total Hours", key: "total_hours", width: 12 },
+          { header: "Missing Out", key: "missing_punch_out", width: 12 },
+        ];
+        const rows = yearlyRows.map((r) => ({
+          ...r, name: nameOf(r), total_hours: Math.round(r.total_hours * 100) / 100,
+          ...Object.fromEntries(yearMonths.map((m) => ["m_" + m, r.byMonth[m]?.days_present ?? 0])),
+        }));
+        const title = `Attendance — ${format(parseISO(yearMonths[0] + "-01"), "MMM yyyy")} to ${format(parseISO(month + "-01"), "MMM yyyy")} (days present)`;
+        await exportRowsToExcel(`attendance-1year-to-${month}${company === "all" ? "" : "-" + company}`, "1 Year", title, cols, rows);
       } else {
         const isWeek = view === "weekly";
         const cols: ExportColumn[] = [
@@ -289,6 +343,11 @@ export default function AttendancePage() {
           {isAdminView ? "Attendance" : "My Attendance"}
         </h1>
         <div className="flex flex-wrap gap-2">
+          {isStrictAdmin && (
+            <Button size="sm" variant="outline" onClick={() => setShowImport(true)}>
+              <Upload className="h-4 w-4 mr-1.5" /> Import old punches
+            </Button>
+          )}
           {isStrictAdmin && (
             <Button size="sm" variant="outline" onClick={() => setShowLink(true)}>
               <Link2 className="h-4 w-4 mr-1.5" /> Link Machine IDs
@@ -344,6 +403,12 @@ export default function AttendancePage() {
         )}
         {(view === "monthly" || view === "dates" || (view === "daily" && !isAdminView)) && (
           <Input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[160px]" />
+        )}
+        {view === "yearly" && (
+          <label className="flex flex-1 items-center gap-2 text-xs text-ink-muted sm:flex-none">
+            <span className="whitespace-nowrap">12 months up to</span>
+            <Input type="month" value={month} max={format(new Date(), "yyyy-MM")} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 min-w-0 sm:w-[160px]" />
+          </label>
         )}
         {isAdminView && view !== "dates" && (
           <div className="relative w-full sm:w-[200px]">
@@ -451,6 +516,66 @@ export default function AttendancePage() {
             </table>
             </>
           )
+        ) : view === "yearly" ? (
+          yearlyRows.length === 0 ? <Empty /> : (
+            <>
+            <ul className="md:hidden divide-y divide-border">
+              {yearlyRows.map((r) => (
+                <li key={r.employee_id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-primary truncate">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</p>
+                      <p className="text-xs text-ink-muted">ID {r.employee_id} · {fmtHours(r.total_hours)}{r.missing_punch_out > 0 ? ` · ${r.missing_punch_out} missing out` : ""}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-accent-light px-2.5 py-1 text-xs font-semibold text-primary">{r.days_present} days</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">
+                    {yearMonths.map((m) => (
+                      <button key={m} type="button" onClick={() => { setMonth(m); setView("monthly"); }} className="rounded-md bg-muted/60 py-1">
+                        <p className={`text-sm font-semibold ${r.byMonth[m] ? "text-ink-primary" : "text-ink-muted"}`}>{r.byMonth[m]?.days_present ?? "–"}</p>
+                        <p className="text-[10px] text-ink-muted">{format(parseISO(m + "-01"), "MMM yy")}</p>
+                      </button>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <table className="hidden md:table w-full table-fixed text-sm">
+              <thead><tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-ink-muted">
+                <th className="w-[22%] px-3 py-3 font-medium">Employee</th>
+                {yearMonths.map((m) => (
+                  <th key={m} className="px-0.5 py-3 text-center font-medium" title={format(parseISO(m + "-01"), "MMMM yyyy")}>
+                    <button type="button" onClick={() => { setMonth(m); setView("monthly"); }} className="hover:text-primary">
+                      {format(parseISO(m + "-01"), "MMM")}<span className="block text-[9px] normal-case">{format(parseISO(m + "-01"), "yy")}</span>
+                    </button>
+                  </th>
+                ))}
+                <th className="w-[7%] px-2 py-3 text-right font-medium">Days</th>
+                <th className="w-[9%] px-3 py-3 text-right font-medium">Hours</th>
+              </tr></thead>
+              <tbody>
+                {yearlyRows.map((r) => (
+                  <tr key={r.employee_id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                    <td className="px-3 py-2.5">
+                      <p className="truncate font-medium text-ink-primary">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</p>
+                      <p className="text-[11px] text-ink-muted">ID {r.employee_id}</p>
+                    </td>
+                    {yearMonths.map((m) => {
+                      const c = r.byMonth[m];
+                      return (
+                        <td key={m} className="px-0.5 py-2.5 text-center tabular-nums" title={c ? `${c.days_present} days · ${fmtHours(c.total_hours)}${c.missing_punch_out ? ` · ${c.missing_punch_out} missing out` : ""}` : "No punches"}>
+                          {c ? <span className="font-medium text-ink-primary">{c.days_present}</span> : <span className="text-ink-muted">–</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-2.5 text-right font-semibold text-ink-primary tabular-nums">{r.days_present}</td>
+                    <td className="px-3 py-2.5 text-right text-ink-secondary tabular-nums">{fmtHours(r.total_hours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </>
+          )
         ) : (
           (view === "weekly" ? weeklyRows : monthlyRows).length === 0 ? <Empty /> : (
             <>
@@ -498,6 +623,7 @@ export default function AttendancePage() {
       </div>
 
       {isStrictAdmin && <LinkMachineIdsDialog open={showLink} onOpenChange={setShowLink} />}
+      {isStrictAdmin && showImport && <ImportPunchesDialog onClose={() => setShowImport(false)} />}
       {isAdminView && <RangeExportModal open={showRange} onClose={() => setShowRange(false)} company={company} />}
     </AnimatedPage>
   );
@@ -700,6 +826,147 @@ function RangeExportModal({ open, onClose, company }: { open: boolean; onClose: 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={run} disabled={busy}>{busy ? "Exporting…" : "Download Excel"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Admin: load past punches from the eSSL machine (USB download / software export) ──
+type Punch = { c: string; t: string };   // machine ID, "YYYY-MM-DD HH:MM:SS" (India time)
+
+const pad = (n: number | string) => String(n).padStart(2, "0");
+/** Finds a date+time in one text cell / line. Accepts 2025-11-03 09:01:22, 03/11/2025 09:01, 03-11-2025 9:01 AM … */
+function findDateTime(text: string): string | null {
+  let m = text.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+  let y: number, mo: number, d: number;
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else {
+    m = text.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (!m) return null;
+    d = +m[1]; mo = +m[2]; y = +m[3];                     // India: day first
+  }
+  let h = +m[4];
+  const ap = (m[7] ?? "").toLowerCase();
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23) return null;
+  return `${y}-${pad(mo)}-${pad(d)} ${pad(h)}:${m[5]}:${pad(m[6] ?? 0)}`;
+}
+/** Header row ("Emp Code", "User ID", "Enroll No" …) → which column holds the machine ID. */
+function idColumnOf(cells: string[]): number | null {
+  const i = cells.findIndex((c) => /(emp|employee|user|enrol+|ac|badge|card)[\s._-]*(id|no|code|number)|^(id|code|e\.?code)$/i.test(String(c ?? "").trim()));
+  return i >= 0 ? i : null;
+}
+/** One row of cells → punch. ID = first short number-like cell; date+time from one cell or a date cell + a time cell. */
+function rowToPunch(cells: string[], idCol: number | null): Punch | null {
+  const clean = cells.map((c) => String(c ?? "").replace(/^"|"$/g, "").trim());
+  const t = findDateTime(clean.join(" "));
+  if (!t) return null;
+  const isId = (c: string) => /^[A-Za-z]{0,3}\d{1,9}$/.test(c);
+  const code = idCol != null && isId(clean[idCol] ?? "") ? clean[idCol] : clean.find(isId);
+  if (!code) return null;
+  return { c: code.replace(/^0+(?=\d)/, ""), t };
+}
+async function parsePunchFile(file: File): Promise<Punch[]> {
+  const out: Punch[] = [];
+  if (/\.xlsx$/i.test(file.name)) {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await file.arrayBuffer());
+    wb.worksheets.forEach((ws) => { let idCol: number | null = null; ws.eachRow((row) => {
+      const cells = (row.values as any[]).slice(1).map((v) => {
+        if (v instanceof Date) {   // Excel dates are stored as UTC clock values
+          return `${v.getUTCFullYear()}-${pad(v.getUTCMonth() + 1)}-${pad(v.getUTCDate())} ${pad(v.getUTCHours())}:${pad(v.getUTCMinutes())}:${pad(v.getUTCSeconds())}`;
+        }
+        return v && typeof v === "object" && "text" in v ? String(v.text) : String(v ?? "");
+      });
+      // a date-only cell followed by a time cell
+      if (idCol == null && !findDateTime(cells.join(" "))) { idCol = idColumnOf(cells); return; }
+      const p = rowToPunch(cells.map((c, i) => /^\d{4}-\d{2}-\d{2} 00:00:00$/.test(c) && /\d{1,2}:\d{2}/.test(cells[i + 1] ?? "") ? c.slice(0, 10) : c), idCol);
+      if (p) out.push(p);
+    }); });
+  } else {
+    const text = await file.text();
+    let idCol: number | null = null;
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const cells = line.trim().split(/\t|,|;|\s{2,}/);
+      if (idCol == null && !findDateTime(line)) { idCol = idColumnOf(cells); continue; }
+      const p = rowToPunch(cells, idCol);
+      if (p) out.push(p);
+    }
+  }
+  const seen = new Set<string>();
+  return out.filter((p) => { const k = p.c + "|" + p.t; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function ImportPunchesDialog({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [punches, setPunches] = useState<Punch[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(0);
+
+  const pick = async (f: File | undefined) => {
+    if (!f) return;
+    setFile(f); setPunches(null);
+    try { setPunches(await parsePunchFile(f)); }
+    catch (e: any) { toast.error("Could not read the file: " + (e?.message ?? "")); }
+  };
+  const range = punches?.length ? [punches.reduce((a, p) => (p.t < a ? p.t : a), punches[0].t), punches.reduce((a, p) => (p.t > a ? p.t : a), punches[0].t)] : null;
+  const ids = punches ? new Set(punches.map((p) => p.c)).size : 0;
+
+  const run = async () => {
+    if (!punches?.length) return;
+    setBusy(true); setDone(0);
+    let added = 0;
+    try {
+      for (let i = 0; i < punches.length; i += 1000) {
+        const { data, error } = await db.rpc("import_punches", { p_rows: punches.slice(i, i + 1000) });
+        if (error) throw error;
+        added += Number(data ?? 0);
+        setDone(Math.min(i + 1000, punches.length));
+      }
+      toast.success(`Imported ${added} new punches (${punches.length - added} were already there)`);
+      qc.invalidateQueries();
+      onClose();
+    } catch (e: any) {
+      const m = e?.message ?? "";
+      toast.error(/import_punches|does not exist|schema cache/i.test(m) ? "Run TRILO_attendance_history.sql first." : m);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Import old punches</DialogTitle>
+          <DialogDescription>
+            Load past attendance (up to a year or more) from the eSSL machine — the USB download (attlog .dat/.txt) or an
+            export from the eSSL software (.csv / .xlsx). Each line needs the machine ID and the punch date &amp; time.
+            Punches already in Task Flow are skipped.
+          </DialogDescription>
+        </DialogHeader>
+        <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border px-3 py-6 text-sm text-ink-secondary hover:bg-muted/40">
+          <Upload className="h-5 w-5 text-ink-muted" />
+          {file ? file.name : "Choose or drop the file"}
+          <input type="file" accept=".dat,.txt,.csv,.xlsx" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        {punches && (
+          punches.length === 0
+            ? <p className="text-sm text-destructive">No punches found in this file. Each line needs a machine ID and a date &amp; time.</p>
+            : <div className="rounded-md bg-muted/50 p-3 text-sm">
+                <p><b>{punches.length.toLocaleString("en-IN")}</b> punches · <b>{ids}</b> machine IDs</p>
+                {range && <p className="text-xs text-ink-muted">From {range[0].slice(0, 10)} to {range[1].slice(0, 10)}</p>}
+                <p className="mt-1 text-xs text-ink-muted">e.g. ID {punches[0].c} at {punches[0].t}</p>
+              </div>
+        )}
+        {busy && <p className="text-xs text-ink-muted">Importing… {done.toLocaleString("en-IN")} / {punches?.length.toLocaleString("en-IN")}</p>}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={run} disabled={busy || !punches?.length}>{busy ? "Importing…" : "Import"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
