@@ -92,7 +92,7 @@ export default function LeadsPage() {
       ) : tab === "PROJ" ? (
         <Projections rows={data?.projections ?? []} summary={data?.summary ?? []} />
       ) : (
-        <Enquiries sheet={tab} leads={leads.filter((l) => l.sheet === tab)} summary={(data?.summary ?? []).filter((s) => s.section === tab)} projects={data?.projects ?? []} latestRev={data?.latestRev ?? {}} />
+        <Enquiries key={tab} sheet={tab} leads={leads.filter((l) => l.sheet === tab)} summary={(data?.summary ?? []).filter((s) => s.section === tab)} projects={data?.projects ?? []} latestRev={data?.latestRev ?? {}} />
       )}
     </AnimatedPage>
   );
@@ -107,6 +107,7 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
   const [edit, setEdit] = useState<Lead | "new" | null>(null);
   const [convert, setConvert] = useState<Lead | null>(null);
   const [revs, setRevs] = useState<Lead | null>(null);
+  const [seeAll, setSeeAll] = useState(false);   // phones: only the 4 most recent until "See all"
   const RevChip = ({ l }: { l: Lead }) => (
     <button type="button" onClick={() => setRevs(l)} title="Quotation revisions"
       className="ml-1.5 inline-flex items-center gap-0.5 rounded-full border border-border px-1.5 py-0 align-middle text-[10px] font-semibold text-ink-secondary hover:bg-muted">
@@ -193,9 +194,10 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
         <span className="rounded-md border border-border bg-card px-2.5 py-1.5"><span className="text-ink-muted">Quoted value</span> <b>{inr(total)}</b></span>
       </div>
 
-      {/* phones: cards */}
+      {/* phones: the 4 most recent leads, then "See all" */}
       <div className="space-y-2 md:hidden">
-        {shown.map((l) => (
+        {!seeAll && shown.length > 4 && <p className="text-xs font-medium text-ink-muted">Recent leads</p>}
+        {(seeAll ? shown : [...shown].sort((a, b) => (b.sort ?? 0) - (a.sort ?? 0)).slice(0, 4)).map((l) => (
           <div key={l.id} className="rounded-xl border border-border bg-card p-3">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
@@ -219,6 +221,11 @@ function Enquiries({ sheet, leads, summary, projects, latestRev }: { sheet: "PD"
             <div className="mt-2"><ConvertCell l={l} /></div>
           </div>
         ))}
+        {shown.length > 4 && (
+          <Button variant="outline" className="h-10 w-full rounded-full" onClick={() => setSeeAll(!seeAll)}>
+            {seeAll ? "Show recent only" : `See all ${shown.length} leads`}
+          </Button>
+        )}
       </div>
 
       {/* desktop: table — fits the page width, no sideways scrolling */}
