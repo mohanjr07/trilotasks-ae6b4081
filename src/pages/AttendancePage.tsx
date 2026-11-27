@@ -57,6 +57,27 @@ function fmtTime(t: string | null | undefined) {
   const ampm = h >= 12 ? "PM" : "AM";
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${ampm}`;
 }
+/** Anything worked beyond 9 hours in a day is overtime. */
+const OT_AFTER = 9;
+const otOf = (h: number | null | undefined) => (h != null && Number(h) > OT_AFTER ? Number(h) - OT_AFTER : 0);
+/** Clock time when overtime starts: punch-in + 9 hours. */
+function otStart(punchIn: string | null | undefined) {
+  if (!punchIn) return "";
+  const [h, m] = punchIn.split(":").map(Number);
+  const t = h * 60 + m + OT_AFTER * 60;
+  return fmtTime(`${Math.floor(t / 60) % 24}:${String(t % 60).padStart(2, "0")}`);
+}
+function OtCell({ r }: { r: { total_hours: number | null; punch_in: string | null } }) {
+  const ot = otOf(r.total_hours);
+  if (!ot) return <span className="text-ink-muted">—</span>;
+  return (
+    <span>
+      <span className="font-semibold text-primary">{fmtHours(ot)}</span>
+      <span className="block text-[11px] text-ink-muted">after {otStart(r.punch_in)}</span>
+    </span>
+  );
+}
+
 function fmtHours(h: number | null | undefined) {
   if (h === null || h === undefined) return "—";
   const n = Number(h);
@@ -172,6 +193,27 @@ export default function AttendancePage() {
     },
   });
 
+  // overtime per person for the week / month / 12 months (TRILO_attendance_overtime.sql)
+  const otQ = useQuery({
+    queryKey: ["attendance-ot", view, weekStart, month, company],
+    enabled: view === "weekly" || view === "monthly" || view === "yearly",
+    queryFn: async () => {
+      const q = view === "weekly"
+        ? db.from("attendance_overtime_weekly").select("employee_id, overtime_hours, overtime_days").eq("week_start", weekStart)
+        : db.from("attendance_overtime_monthly").select("employee_id, month, overtime_hours, overtime_days")
+            .in("month", view === "monthly" ? [month] : Array.from({ length: 12 }, (_, i) => format(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 12 + i, 1), "yyyy-MM")));
+      const { data, error } = await q.range(0, 9999);
+      if (error) return {} as Record<string, { hours: number; days: number }>;     // SQL not run yet → no overtime column values
+      const m: Record<string, { hours: number; days: number }> = {};
+      for (const x of (data ?? []) as any[]) {
+        const e = (m[x.employee_id] ??= { hours: 0, days: 0 });
+        e.hours += Number(x.overtime_hours || 0); e.days += Number(x.overtime_days || 0);
+      }
+      return m;
+    },
+  });
+  const otFor = (id: string) => otQ.data?.[id];
+
   const monthlyQ = useQuery({
     queryKey: ["attendance-monthly", month, company],
     enabled: view === "monthly",
@@ -284,8 +326,11 @@ export default function AttendancePage() {
           { header: "Punch In", key: "in", width: 12 },
           { header: "Punch Out", key: "out", width: 12 },
           { header: "Hours", key: "total_hours", width: 10 },
+          { header: "Overtime (h)", key: "ot", width: 12 },
+          { header: "Overtime from", key: "ot_from", width: 13 },
         ];
-        const rows = dailyRows.map((r) => ({ ...r, name: nameOf(r), in: fmtTime(r.punch_in), out: fmtTime(r.punch_out) }));
+        const rows = dailyRows.map((r) => ({ ...r, name: nameOf(r), in: fmtTime(r.punch_in), out: fmtTime(r.punch_out),
+          ot: otOf(r.total_hours) ? Math.round(otOf(r.total_hours) * 100) / 100 : "", ot_from: otOf(r.total_hours) ? otStart(r.punch_in) : "" }));
         const label = isAdminView ? date : month;
         await exportRowsToExcel(`attendance-daily-${label}${company === "all" ? "" : "-" + company}`, "Daily", `Attendance — ${isAdminView ? fmtDate(date) : format(parseISO(monthStart), "MMMM yyyy")}`, cols, rows);
       } else if (view === "dates") {
@@ -304,9 +349,10 @@ export default function AttendancePage() {
           ...yearMonths.map((m) => ({ header: format(parseISO(m + "-01"), "MMM yy"), key: "m_" + m, width: 8 })),
           { header: "Days Present", key: "days_present", width: 13 }, { header: "Total Hours", key: "total_hours", width: 12 },
           { header: "Missing Out", key: "missing_punch_out", width: 12 },
+          { header: "Overtime (h)", key: "ot", width: 12 },
         ];
         const rows = yearlyRows.map((r) => ({
-          ...r, name: nameOf(r), total_hours: Math.round(r.total_hours * 100) / 100,
+          ...r, name: nameOf(r), total_hours: Math.round(r.total_hours * 100) / 100, ot: Math.round((otFor(r.employee_id)?.hours ?? 0) * 100) / 100,
           ...Object.fromEntries(yearMonths.map((m) => ["m_" + m, r.byMonth[m]?.days_present ?? 0])),
         }));
         const title = `Attendance — ${format(parseISO(yearMonths[0] + "-01"), "MMM yyyy")} to ${format(parseISO(month + "-01"), "MMM yyyy")} (days present)`;
@@ -319,9 +365,11 @@ export default function AttendancePage() {
           { header: "Days Present", key: "days_present", width: 13 }, { header: "Missing Out", key: "missing_punch_out", width: 12 },
           { header: "Total Hours", key: "total_hours", width: 12 }, { header: "Avg Hours/Day", key: "avg_hours_per_day", width: 14 },
           { header: "Earliest In", key: "e_in", width: 12 }, { header: "Latest In", key: "l_in", width: 12 },
+          { header: "Overtime (h)", key: "ot", width: 12 }, { header: "OT days", key: "ot_days", width: 9 },
         ];
         const src = isWeek ? weeklyRows : monthlyRows;
-        const rows = src.map((r) => ({ ...r, name: nameOf(r), e_in: fmtTime(r.earliest_in), l_in: fmtTime(r.latest_in) }));
+        const rows = src.map((r) => ({ ...r, name: nameOf(r), e_in: fmtTime(r.earliest_in), l_in: fmtTime(r.latest_in),
+          ot: Math.round((otFor(r.employee_id)?.hours ?? 0) * 100) / 100, ot_days: otFor(r.employee_id)?.days ?? 0 }));
         const title = isWeek
           ? `Weekly Attendance — ${format(parseISO(weekStart), "d MMM")} to ${format(parseISO(weekEnd), "d MMM yyyy")}`
           : `Monthly Attendance — ${format(parseISO(monthStart), "MMMM yyyy")}`;
@@ -452,13 +500,17 @@ export default function AttendancePage() {
                     <div className="rounded-lg bg-success/10 px-2.5 py-1.5"><span className="text-ink-muted">In </span><span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_in)}</span></div>
                     <div className="rounded-lg bg-muted px-2.5 py-1.5"><span className="text-ink-muted">Out </span>{r.punch_out ? <span className="font-semibold text-ink-primary tabular-nums">{fmtTime(r.punch_out)}</span> : <Missing />}</div>
                   </div>
+                  {otOf(r.total_hours) > 0 && (
+                    <p className="mt-1.5 text-xs"><span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Overtime {fmtHours(otOf(r.total_hours))}</span>
+                      <span className="ml-1.5 text-ink-muted">after {otStart(r.punch_in)}</span></p>
+                  )}
                 </li>
               ))}
             </ul>
             <table className="hidden md:table w-full text-sm">
               <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-muted">
                 {isAdminView ? <><Th>ID</Th><Th>Employee</Th></> : <Th>Date</Th>}
-                <Th>Punch In</Th><Th>Punch Out</Th><Th>Hours</Th>
+                <Th>Punch In</Th><Th>Punch Out</Th><Th>Hours</Th><Th>Overtime</Th>
               </tr></thead>
               <tbody>
                 {dailyRows.map((r) => (
@@ -469,6 +521,7 @@ export default function AttendancePage() {
                     <Td>{fmtTime(r.punch_in)}</Td>
                     <Td>{r.punch_out ? fmtTime(r.punch_out) : <Missing />}</Td>
                     <Td>{fmtHours(r.total_hours)}</Td>
+                    <Td><OtCell r={r} /></Td>
                   </tr>
                 ))}
               </tbody>
@@ -525,7 +578,7 @@ export default function AttendancePage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink-primary truncate">{nameOf(r)}{company === "all" && <CompanyBadge c={r.company} />}</p>
-                      <p className="text-xs text-ink-muted">ID {r.employee_id} · {fmtHours(r.total_hours)}{r.missing_punch_out > 0 ? ` · ${r.missing_punch_out} missing out` : ""}</p>
+                      <p className="text-xs text-ink-muted">ID {r.employee_id} · {fmtHours(r.total_hours)}{(otFor(r.employee_id)?.hours ?? 0) > 0 ? ` · OT ${fmtHours(otFor(r.employee_id)!.hours)}` : ""}{r.missing_punch_out > 0 ? ` · ${r.missing_punch_out} missing out` : ""}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-accent-light px-2.5 py-1 text-xs font-semibold text-primary">{r.days_present} days</span>
                   </div>
@@ -552,6 +605,7 @@ export default function AttendancePage() {
                 ))}
                 <th className="w-[7%] px-2 py-3 text-right font-medium">Days</th>
                 <th className="w-[9%] px-3 py-3 text-right font-medium">Hours</th>
+                <th className="w-[8%] px-3 py-3 text-right font-medium">OT</th>
               </tr></thead>
               <tbody>
                 {yearlyRows.map((r) => (
@@ -570,6 +624,7 @@ export default function AttendancePage() {
                     })}
                     <td className="px-2 py-2.5 text-right font-semibold text-ink-primary tabular-nums">{r.days_present}</td>
                     <td className="px-3 py-2.5 text-right text-ink-secondary tabular-nums">{fmtHours(r.total_hours)}</td>
+                    <td className="px-3 py-2.5 text-right font-medium text-primary tabular-nums">{(otFor(r.employee_id)?.hours ?? 0) > 0 ? fmtHours(otFor(r.employee_id)!.hours) : <span className="text-ink-muted">—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -594,13 +649,17 @@ export default function AttendancePage() {
                     <div className="rounded-lg bg-muted/60 py-1.5"><p className="text-sm font-semibold text-ink-primary">{fmtHours(r.avg_hours_per_day)}</p><p className="text-[10px] text-ink-muted">Avg / day</p></div>
                     <div className="rounded-lg bg-muted/60 py-1.5"><p className={`text-sm font-semibold ${r.missing_punch_out > 0 ? "text-warning" : "text-ink-primary"}`}>{r.missing_punch_out}</p><p className="text-[10px] text-ink-muted">Missing out</p></div>
                   </div>
+                  {(otFor(r.employee_id)?.hours ?? 0) > 0 && (
+                    <p className="mt-1.5 text-xs"><span className="rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">Overtime {fmtHours(otFor(r.employee_id)!.hours)}</span>
+                      <span className="ml-1.5 text-ink-muted">on {otFor(r.employee_id)!.days} day{otFor(r.employee_id)!.days === 1 ? "" : "s"}</span></p>
+                  )}
                   <p className="mt-2 text-[11px] text-ink-muted">Earliest in {fmtTime(r.earliest_in)} · Latest in {fmtTime(r.latest_in)}</p>
                 </li>
               ))}
             </ul>
             <table className="hidden md:table w-full text-sm">
               <thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-ink-muted">
-                <Th>ID</Th><Th>Employee</Th><Th>Days Present</Th><Th>Missing Out</Th><Th>Total Hours</Th><Th>Avg / Day</Th><Th>Earliest In</Th><Th>Latest In</Th>
+                <Th>ID</Th><Th>Employee</Th><Th>Days Present</Th><Th>Missing Out</Th><Th>Total Hours</Th><Th>Overtime</Th><Th>Avg / Day</Th><Th>Earliest In</Th><Th>Latest In</Th>
               </tr></thead>
               <tbody>
                 {(view === "weekly" ? weeklyRows : monthlyRows).map((r) => (
@@ -610,6 +669,9 @@ export default function AttendancePage() {
                     <Td>{r.days_present}</Td>
                     <Td>{r.missing_punch_out > 0 ? <span className="text-warning">{r.missing_punch_out}</span> : 0}</Td>
                     <Td>{fmtHours(r.total_hours)}</Td>
+                    <Td>{(otFor(r.employee_id)?.hours ?? 0) > 0
+                      ? <span><span className="font-semibold text-primary">{fmtHours(otFor(r.employee_id)!.hours)}</span><span className="block text-[11px] text-ink-muted">{otFor(r.employee_id)!.days} day{otFor(r.employee_id)!.days === 1 ? "" : "s"}</span></span>
+                      : <span className="text-ink-muted">—</span>}</Td>
                     <Td>{fmtHours(r.avg_hours_per_day)}</Td>
                     <Td>{fmtTime(r.earliest_in)}</Td>
                     <Td>{fmtTime(r.latest_in)}</Td>
