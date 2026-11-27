@@ -25,6 +25,8 @@ import ProjectDocumentsDialog from "@/components/ProjectDocuments";
 import { PODraftFields, emptyPODraft, savePO, usePurchaseOrders, POList, POEditDialog, KIND_LABEL, type PODraft, type PO, type OrderKind } from "@/components/PurchaseOrders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { canSeeProjectNames } from "@/lib/projectNames";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -36,6 +38,7 @@ type Project = {
   id: string; name: string; description: string | null;
   color: string; status: string; created_at: string;
   converted?: boolean | null; lead_id?: string | null;   // TRILO_leads.sql
+  project_number?: string | null;                         // TRILO_project_numbers.sql
 };
 type ProjectTeam = { id: string; project_id: string; name: string };
 type ProjectMember = {
@@ -78,6 +81,9 @@ export default function ProjectsPage() {
   // Leads → project requests (Anu creates the project for a converted lead)
   const isLeadsUser = canSeeLeads(profile as any);
   const canConvert = isLeadsUser || canEditProjects;
+  // project numbers: admins and Anu assign them; names only for some people (the rest see the number)
+  const canSetNumber = ["admin", "super_admin"].includes(profile?.role ?? "") || canEditProjects;
+  const showNames = canSeeProjectNames(profile as any);
   const [fromLead, setFromLead] = useState<Lead | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: leadRequests = [] } = useQuery<Lead[]>({
@@ -243,6 +249,8 @@ export default function ProjectsPage() {
                 isAdmin={isAdmin}
                 canEdit={canEditProjects}
                 canConvert={canConvert}
+                canSetNumber={canSetNumber}
+                showNames={showNames}
                 isExpanded={isExpanded}
                 currentUserId={user?.id ?? ""}
                 onToggle={() => toggleExpand(project.id)}
@@ -278,10 +286,12 @@ export default function ProjectsPage() {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({
   project, projectTeams, projectMembers, projectPOs = [], allProfiles,
-  isAdmin, canEdit = false, canConvert = false, isExpanded, currentUserId, onToggle, onEdit, onDelete,
+  isAdmin, canEdit = false, canConvert = false, canSetNumber = false, showNames = false, isExpanded, currentUserId, onToggle, onEdit, onDelete,
 }: {
   canEdit?: boolean;
   canConvert?: boolean;
+  canSetNumber?: boolean;
+  showNames?: boolean;
   project: Project;
   projectPOs?: PO[];
   projectTeams: ProjectTeam[];
@@ -388,6 +398,7 @@ function ProjectCard({
   // a project that isn't converted yet is only its details — no teams, members, tasks
   const converted = project.converted !== false;
   const [converting, setConverting] = useState(false);
+  const [numberOpen, setNumberOpen] = useState(false);
   const markConverted = async (value: boolean) => {
     setConverting(true);
     const { error } = await (supabase as any).rpc("set_project_converted", { p_project: project.id, p_value: value });
@@ -412,6 +423,13 @@ function ProjectCard({
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 className="font-heading text-base font-bold text-ink-primary leading-snug">{project.name}</h2>
+            {showNames && project.project_number && (
+              <span className="rounded-pill border border-primary/30 bg-primary/5 px-2 py-0.5 text-xs font-semibold text-primary">#{project.project_number}</span>
+            )}
+            {showNames && canSetNumber && !project.project_number && (
+              <button type="button" onClick={(e) => { e.stopPropagation(); setNumberOpen(true); }}
+                className="rounded-pill border border-dashed border-border px-2 py-0.5 text-xs text-ink-muted hover:bg-muted">+ Project no.</button>
+            )}
             {!converted && (
               <span className="inline-flex items-center gap-1 rounded-pill border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                 <Lock className="h-3 w-3" /> Not converted
@@ -477,7 +495,7 @@ function ProjectCard({
           )}
         </div>
 
-        {(isAdmin || canEdit) && (
+        {(isAdmin || canEdit || canSetNumber) && (
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -487,6 +505,7 @@ function ProjectCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {canEdit && <DropdownMenuItem onClick={onEdit}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Project</DropdownMenuItem>}
+                {canSetNumber && <DropdownMenuItem onClick={() => setNumberOpen(true)}><Pencil className="h-3.5 w-3.5 mr-2" />{project.project_number ? "Change project number" : "Assign project number"}</DropdownMenuItem>}
                 {isAdmin && converted && <DropdownMenuItem onClick={() => setAddTeamOpen(true)}><Plus className="h-3.5 w-3.5 mr-2" />Add Team</DropdownMenuItem>}
                 {isAdmin && <DropdownMenuItem className="text-destructive" onClick={onDelete}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete Project</DropdownMenuItem>}
               </DropdownMenuContent>
@@ -499,6 +518,11 @@ function ProjectCard({
 
       {/* Expanded content */}
       <AnimatePresence>
+        {numberOpen && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ProjectNumberDialog project={project} showName={showNames} onClose={() => setNumberOpen(false)} />
+          </div>
+        )}
         {isExpanded && !converted && (
           <div className="border-t border-border px-5 py-4">
             {project.description
@@ -942,6 +966,8 @@ function ProjectFormModal({
   const draft = lead ? leadProjectDraft(lead) : null;
   const [name, setName] = useState(project?.name ?? draft?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? draft?.description ?? "");
+  const [number, setNumber] = useState(project?.project_number ?? "");
+  const numberPatch = number.trim() !== (project?.project_number ?? "") ? { project_number: number.trim() || null } : {};
   const [color, setColor] = useState(project?.color ?? PROJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
   // Purchase Order: entered with a new project; managed (add / edit) when editing one
@@ -958,7 +984,7 @@ function ProjectFormModal({
     try {
       if (project) {
         const { data: updated, error } = await supabase.from("projects")
-          .update({ name: name.trim(), description: description.trim() || null, color, updated_at: new Date().toISOString() })
+          .update({ name: name.trim(), description: description.trim() || null, color, updated_at: new Date().toISOString(), ...numberPatch } as any)
           .eq("id", project.id).select("id");
         if (error) throw error;
         if (!updated?.length) throw new Error("You don't have permission to edit projects");
@@ -966,7 +992,7 @@ function ProjectFormModal({
       } else {
         const { data: created, error } = await supabase.from("projects")
           // from a converted lead: linked to it and converted (teams/tasks open); otherwise details only
-          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id,
+          .insert({ name: name.trim(), description: description.trim() || null, color, created_by: user!.id, ...numberPatch,
                     ...(lead ? { lead_id: lead.id, converted: true } : {}) } as any)
           .select("id").single();
         if (error) throw error;
@@ -1010,6 +1036,11 @@ function ProjectFormModal({
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Project Name *</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. VLM, Project Alpha" className="h-10" autoFocus />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink-primary">Project Number</label>
+            <Input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="e.g. TA-2026-014" className="h-10" />
+            <p className="mt-1 text-xs text-ink-muted">Most people see only this number — the name is shown to admins and the sales team.</p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-primary">Description</label>
@@ -1275,5 +1306,41 @@ function AssignMemberModal({
         </div>
       </motion.div>
     </div>
+  );
+}
+
+/** Admins and Anu: assign or change a project's number. */
+function ProjectNumberDialog({ project, showName, onClose }: { project: Project; showName: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [value, setValue] = useState(project.project_number ?? "");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    const { error } = await (supabase as any).rpc("set_project_number", { p_project: project.id, p_number: value.trim() || null });
+    setSaving(false);
+    if (error) {
+      const m = error.message ?? "";
+      toast.error(/number_taken|duplicate|unique/i.test(m) ? `Project number ${value.trim()} is already used` : /does not exist|schema cache/i.test(m) ? "Run TRILO_project_numbers.sql first." : m);
+      return;
+    }
+    toast.success("Project number saved");
+    qc.invalidateQueries({ queryKey: ["projects"] });
+    onClose();
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Project number</DialogTitle>
+          <DialogDescription>{showName ? project.name : "This project"}</DialogDescription>
+        </DialogHeader>
+        <Input autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. TA-2026-014" className="h-10"
+          onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving}>Save</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

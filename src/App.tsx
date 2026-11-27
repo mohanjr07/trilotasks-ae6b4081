@@ -15,6 +15,7 @@ const Router =
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { installProjectNameMask } from "@/lib/projectNames";
 import TriloLoader from "@/components/TriloLoader";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -58,6 +59,9 @@ const PlanTaskPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ 
 const PlanProjectPage = lazy(() => import("@/pages/PlanDetailPage").then((m) => ({ default: m.PlanProjectPage })));
 const AttendancePage = lazy(() => import("@/pages/AttendancePage"));
 import NotFound from "@/pages/NotFound";
+
+// project names: only some people see them; everyone else sees the project number
+installProjectNameMask();
 
 const queryClient = new QueryClient({
   defaultOptions: {

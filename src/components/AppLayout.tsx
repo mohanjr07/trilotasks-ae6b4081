@@ -19,6 +19,8 @@ import NotificationBell from "@/components/NotificationBell";
 import GetStartedIntro from "@/components/GetStartedIntro";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import { canSeeLeads } from "@/lib/leadsAccess";
+import { canSeeProjectNames, setProjectNameAccess } from "@/lib/projectNames";
+import { useQueryClient } from "@tanstack/react-query";
 import { syncThemeFromAccount } from "@/lib/theme";
 import ThemeToggle from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
@@ -137,6 +139,15 @@ const shortLabel: Record<string, string> = {
 
 export default function AppLayout() {
   const { profile, signOut, user: authUser } = useAuth() as any;
+  // project names vs numbers — set before the pages below fetch anything
+  const qcLayout = useQueryClient();
+  const nameAccess = canSeeProjectNames(profile);
+  setProjectNameAccess(nameAccess);
+  const nameAccessFirst = useRef(true);
+  useEffect(() => {
+    if (nameAccessFirst.current) { nameAccessFirst.current = false; return; }
+    qcLayout.invalidateQueries();      // refetch so names / numbers show correctly
+  }, [nameAccess]);
   // use the theme saved in the account (Settings → Appearance)
   useEffect(() => { syncThemeFromAccount(authUser?.user_metadata); }, [authUser?.id]);
   const pending = usePendingCounts();   // red number badges: things waiting for me
