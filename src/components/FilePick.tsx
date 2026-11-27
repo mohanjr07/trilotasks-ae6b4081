@@ -13,6 +13,7 @@ export function FilePickButtons({ onPick }: { onPick: (f: File) => void }) {
         <input type="file" accept="image/*" className="hidden" onChange={take} /></label>
       <label className={btn}><Upload className="h-5 w-5 text-ink-muted" /> Upload file
         <input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" className="hidden" onChange={take} /></label>
+      <p className="col-span-3 hidden text-center text-[11px] text-ink-muted sm:block">or drag &amp; drop a file here</p>
     </div>
   );
 }

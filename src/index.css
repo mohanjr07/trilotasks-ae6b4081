@@ -444,3 +444,11 @@ html:not(.dark) .gloss-btn {
   background-image: linear-gradient(180deg, hsl(220 12% 93%) 0%, hsl(220 10% 89%) 46%, hsl(220 9% 85%) 54%, hsl(220 9% 81%) 100%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .75), 0 4px 10px -4px rgb(0 0 0 / .25);
 }
+
+/* drag & drop: the upload area files will go to (src/lib/fileDrop.ts) */
+[data-file-drop-active] {
+  outline: 2px dashed hsl(var(--primary));
+  outline-offset: 3px;
+  border-radius: 12px;
+  background-color: hsl(var(--primary) / 0.05);
+}

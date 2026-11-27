@@ -931,6 +931,7 @@ function RequestPaymentModal({
                       <Paperclip className="h-4 w-4 text-ink-muted shrink-0" />
                       <span className="truncate text-ink-secondary">
                         {files.length ? "Add more bills" : "Tap to choose photos or PDFs of the bills"}
+                        <span className="hidden sm:inline text-ink-muted"> — or drag &amp; drop here</span>
                       </span>
                       <input
                         type="file"

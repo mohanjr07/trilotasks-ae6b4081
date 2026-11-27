@@ -16,6 +16,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { installProjectNameMask } from "@/lib/projectNames";
+import { installGlobalFileDrop } from "@/lib/fileDrop";
 import TriloLoader from "@/components/TriloLoader";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -62,6 +63,8 @@ import NotFound from "@/pages/NotFound";
 
 // project names: only some people see them; everyone else sees the project number
 installProjectNameMask();
+// drag & drop files onto any upload area
+if (typeof window !== "undefined") installGlobalFileDrop();
 
 const queryClient = new QueryClient({
   defaultOptions: {
