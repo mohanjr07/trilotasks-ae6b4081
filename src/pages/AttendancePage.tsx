@@ -928,7 +928,7 @@ function rowToPunch(cells: string[], idCol: number | null): Punch | null {
   const isId = (c: string) => /^[A-Za-z]{0,3}\d{1,9}$/.test(c);
   const code = idCol != null && isId(clean[idCol] ?? "") ? clean[idCol] : clean.find(isId);
   if (!code) return null;
-  return { c: code.replace(/^0+(?=\d)/, ""), t };
+  return { c: code, t };   // keep the ID exactly as the machine has it (005 ≠ 5)
 }
 async function parsePunchFile(file: File): Promise<Punch[]> {
   const out: Punch[] = [];
