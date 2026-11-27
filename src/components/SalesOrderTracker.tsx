@@ -24,6 +24,8 @@ import { toast } from "sonner";
 const sb = supabase as any;
 const BUCKET = "po-documents";
 const inr = (n: number) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+/** Summary tiles: whole rupees so the figure fits the box. */
+const inr0 = (n: number) => "₹" + Math.round(Number(n || 0)).toLocaleString("en-IN");
 
 export type SOEntry = {
   id: string; so_id: string; kind: "invoice" | "receipt"; entry_date: string; ref_no: string | null;
@@ -109,7 +111,7 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[92dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
+      <DialogContent className="max-w-5xl max-h-[92dvh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ReceiptText className="h-5 w-5" /> Sales Orders</DialogTitle>
           <DialogDescription>Billing and payments received against each customer Sales Order.</DialogDescription>
@@ -127,9 +129,9 @@ export default function SalesOrdersDialog({ open, onClose, projects, canEdit }: 
             ["Received", tot.received, "text-success"],
             ["Balance", tot.value - tot.received, "text-warning"],
           ] as const).map(([l, v, c]) => (
-            <div key={l} className="rounded-lg border border-border bg-card p-3">
-              <p className="text-[11px] text-ink-muted">{l}</p>
-              <p className={`font-heading text-base font-bold ${c}`}>{inr(v)}</p>
+            <div key={l} className="min-w-0 rounded-lg border border-border bg-card p-3">
+              <p className="truncate text-[11px] text-ink-muted">{l}</p>
+              <p className={`break-all font-heading text-sm font-bold leading-tight tabular-nums sm:text-base ${c}`} title={inr(v)}>{inr0(v)}</p>
             </div>
           ))}
         </div>
@@ -288,9 +290,9 @@ export function SODetailDialog({ so, projectName, entries, canEdit, onClose, onD
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {tiles.map(([l, v, c]) => (
-            <div key={l} className="rounded-lg border border-border bg-card p-3">
-              <p className="text-[11px] text-ink-muted">{l}</p>
-              <p className={`font-heading text-base font-bold ${c}`}>{inr(v)}</p>
+            <div key={l} className="min-w-0 rounded-lg border border-border bg-card p-3">
+              <p className="truncate text-[11px] text-ink-muted">{l}</p>
+              <p className={`break-all font-heading text-sm font-bold leading-tight tabular-nums sm:text-base ${c}`} title={inr(v)}>{inr0(v)}</p>
             </div>
           ))}
         </div>
