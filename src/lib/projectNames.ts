@@ -12,9 +12,12 @@ export const PROJECT_NAME_EMAILS = [
   "aiswarya.v@triloautomation.com", "thiyanesh@triloautomation.com",
 ];
 
-export function canSeeProjectNames(profile?: { role?: string | null; email?: string | null } | null): boolean {
-  if (!profile) return false;
-  return ["admin", "super_admin"].includes(profile.role ?? "") || PROJECT_NAME_EMAILS.includes((profile.email ?? "").toLowerCase());
+/** Everyone sees project names (with the number) — changed 27 Nov 2026.
+ *  To hide names again for others, return the commented-out rule instead. */
+export function canSeeProjectNames(_profile?: { role?: string | null; email?: string | null } | null): boolean {
+  return true;
+  // if (!_profile) return false;
+  // return ["admin", "super_admin"].includes(_profile.role ?? "") || PROJECT_NAME_EMAILS.includes((_profile.email ?? "").toLowerCase());
 }
 
 /** What people who can't see names see. */
@@ -24,7 +27,7 @@ export const projectNumberLabel = (num?: string | null, sub?: string | null) => 
   return n ? (s ? `${n} / ${s}` : n) : "Project (no number)";
 };
 
-let showNames = false;
+let showNames = true;
 /** Set from the layout once the signed-in profile is known; returns true if it changed. */
 export function setProjectNameAccess(value: boolean): boolean {
   const changed = value !== showNames;
