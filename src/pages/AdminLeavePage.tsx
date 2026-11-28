@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { Fragment, useState, useEffect } from "react";
 import MobileSegments from "@/components/MobileSegments";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, X, Plus, RotateCcw, FileSpreadsheet, Trash2, AlertTriangle } from "lucide-react";
@@ -135,7 +135,11 @@ export default function AdminLeavePage() {
     }
     if (search && !r.employee?.full_name?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
+  })
+  // month by month: newest leave date first, then newest request
+  .sort((a: any, b: any) => String(b.start_date ?? "").localeCompare(String(a.start_date ?? "")) || String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+  const monthOf = (r: any) => String(r.start_date ?? "").slice(0, 7);
+  const monthCount = filtered.reduce((m: Record<string, number>, r: any) => { const k = monthOf(r); m[k] = (m[k] ?? 0) + 1; return m; }, {});
 
   const pending = requests.filter((r: any) => r.status === "pending" && !r.reverted_at).length;
   const approved = requests.filter((r: any) => r.status === "approved" && !r.reverted_at).length;
@@ -203,11 +207,22 @@ export default function AdminLeavePage() {
         <LeaveBalanceTable requests={requests} search={search} />
       ) : (
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-2">
-        {filtered.map((req: any) => {
+        {filtered.map((req: any, i: number) => {
           const isReverted = !!req.reverted_at;
           const displayStatus = isReverted ? "reverted" : (req.status ?? "pending");
+          const newMonth = i === 0 || monthOf(filtered[i - 1]) !== monthOf(req);
           return (
-          <motion.div key={req.id} variants={staggerItem}
+          <Fragment key={req.id}>
+          {newMonth && (
+            <div className="flex items-center gap-2 px-1 pt-4 first:pt-0">
+              <h3 className="font-heading text-sm font-semibold text-ink-primary">
+                {req.start_date ? format(new Date(req.start_date + "T00:00:00"), "MMMM yyyy") : "No date"}
+              </h3>
+              <span className="rounded-pill bg-muted px-2 py-0.5 text-[11px] font-medium text-ink-muted">{monthCount[monthOf(req)]}</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          )}
+          <motion.div variants={staggerItem}
             className={`flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 sm:gap-4 rounded-card bg-card p-3 sm:p-4 shadow-card hover:shadow-card-hover transition-shadow cursor-pointer ${isReverted ? "opacity-70" : ""}`}
             onClick={(e) => { if ((e.target as HTMLElement).closest("button")) return; setSelectedLeave(req); }}>
             <UserAvatar name={req.employee?.full_name ?? "?"} avatarUrl={req.employee?.avatar_url} size="md" />
@@ -268,6 +283,7 @@ export default function AdminLeavePage() {
             )}
             </div>
           </motion.div>
+          </Fragment>
           );
         })}
         {filtered.length === 0 && <div className="py-16 text-center text-sm text-ink-muted">No requests found</div>}

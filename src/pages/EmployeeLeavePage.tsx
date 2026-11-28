@@ -26,7 +26,7 @@ export default function EmployeeLeavePage() {
   const { data: requests = [] } = useQuery({
     queryKey: ["my-leave", user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("leave_requests").select("*, reviewer:profiles!leave_requests_reviewed_by_fkey(full_name, avatar_url)").eq("employee_id", user!.id).order("created_at", { ascending: false });
+      const { data } = await supabase.from("leave_requests").select("*, reviewer:profiles!leave_requests_reviewed_by_fkey(full_name, avatar_url)").eq("employee_id", user!.id).order("start_date", { ascending: false }).order("created_at", { ascending: false });
       return data ?? [];
     },
     enabled: !!user,
