@@ -17,6 +17,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { installProjectNameMask } from "@/lib/projectNames";
 import { installGlobalFileDrop } from "@/lib/fileDrop";
+import { canSeeAttendance } from "@/lib/attendanceAccess";
 import TriloLoader from "@/components/TriloLoader";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -84,6 +85,14 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Attendance: all admins and Anu. */
+function AttendanceGate({ children }: { children: React.ReactNode }) {
+  const { profile } = useAuth();
+  if (!profile) return <TriloLoader />;
+  if (!canSeeAttendance(profile as any)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
 /** Payslips: only Anu until they are switched on for everyone. */
 function PayslipsGate({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
@@ -144,7 +153,7 @@ const App = () => (
               <Route path="/leave" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><AdminLeavePage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><ReportsPage /></ProtectedRoute>} />
               <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/attendance" element={<ProtectedRoute allowedRoles={["admin", "super_admin"]}><AttendancePage /></ProtectedRoute>} />
+              <Route path="/attendance" element={<ProtectedRoute><AttendanceGate><AttendancePage /></AttendanceGate></ProtectedRoute>} />
               <Route path="/teams" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><TeamsPage /></ProtectedRoute>} />
               <Route path="/team-members" element={<TeamMembersPage />} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={["admin", "manager"]}><SettingsPage /></ProtectedRoute>} />

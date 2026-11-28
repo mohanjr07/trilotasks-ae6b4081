@@ -19,6 +19,7 @@ import NotificationBell from "@/components/NotificationBell";
 import GetStartedIntro from "@/components/GetStartedIntro";
 import { useCanSeePayslips } from "@/lib/payslipsAccess";
 import { canSeeLeads } from "@/lib/leadsAccess";
+import { canSeeAttendance } from "@/lib/attendanceAccess";
 import { canSeeProjectNames, setProjectNameAccess } from "@/lib/projectNames";
 import { useQueryClient } from "@tanstack/react-query";
 import { syncThemeFromAccount } from "@/lib/theme";
@@ -169,9 +170,15 @@ export default function AppLayout() {
   const { allowed: payslipsAllowed } = useCanSeePayslips(profile?.email);
   const navPay = payslipsAllowed ? navWithOvertime : navWithOvertime.filter((n) => n.path !== "/payslips");
   // Leads: admins + the sales team, right after Projects
-  const nav = canSeeLeads(profile as any)
+  const navLeads = canSeeLeads(profile as any)
     ? navPay.flatMap((n) => (n.path === "/projects" ? [n, { label: "Leads", path: "/leads", icon: Handshake }] : [n]))
     : navPay;
+  // Attendance: all admins and Anu (whatever her role); nobody else
+  const navAtt = navLeads.filter((n) => n.path !== "/attendance");
+  const attIdx = navAtt.findIndex((n) => /^\/(leave|my-leave|calendar)$/.test(n.path));
+  const nav = canSeeAttendance(profile as any)
+    ? [...navAtt.slice(0, attIdx < 0 ? navAtt.length : attIdx), { label: "Attendance", path: "/attendance", icon: Fingerprint }, ...navAtt.slice(attIdx < 0 ? navAtt.length : attIdx)]
+    : navAtt;
   const roleKey = isAdmin ? "admin" : isManager ? "manager" : isIntern ? "intern" : "employee";
   const mobileTabs = mobileTabPaths[roleKey]
     .map((p) => nav.find((n) => n.path === p))

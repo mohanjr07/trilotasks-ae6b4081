@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { exportRowsToExcel, ExportColumn } from "@/lib/attendanceExport";
+import { canSeeAttendance } from "@/lib/attendanceAccess";
 
 // New tables/views aren't in the generated Supabase types yet.
 const db = supabase as any;
@@ -126,7 +127,8 @@ function CompanyBadge({ c }: { c?: string | null }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function AttendancePage() {
   const { user, profile } = useAuth();
-  const isAdminView = ["admin", "manager", "super_admin"].includes(profile?.role ?? "");
+  // everyone's attendance: admins, managers and Anu
+  const isAdminView = ["admin", "manager", "super_admin"].includes(profile?.role ?? "") || canSeeAttendance(profile as any);
   const isStrictAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 
   const today = format(new Date(), "yyyy-MM-dd");
